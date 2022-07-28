@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-
-	rewarder "github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder"
+	rewarder "github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
 )
 
 func main() {
