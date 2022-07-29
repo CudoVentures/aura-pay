@@ -23,3 +23,5 @@
 # IDE related
 .vscode
 .idea
+
+.env
