@@ -8,5 +8,4 @@ import (
 // filter them and extract the hashRateIds from them to be used in the pool fetching
 
 func GetAllNFTsFromHasura() {
-	HasuraURL := config
 }
