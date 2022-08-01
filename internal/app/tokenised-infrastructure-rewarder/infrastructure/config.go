@@ -6,30 +6,16 @@ import (
 	"strings"
 )
 
-type GitHubConfig struct {
-	Username string
-	APIKey   string
-}
-
 type Config struct {
-	// GitHub    GitHubConfig
-	DebugMode bool
-	// UserRoles []string
-	HasuraURL   string
-	NodeRestURL string
+	HasuraURL string
+	NodeURL   string
 }
 
-// New returns a new Config struct
-func New() *Config {
+// NewConfig New returns a new Config struct
+func NewConfig() *Config {
 	return &Config{
-		// GitHub: GitHubConfig{
-		// 	Username: getEnv("GITHUB_USERNAME", ""),
-		// 	APIKey:   getEnv("GITHUB_API_KEY", ""),
-		// },
-		DebugMode: getEnvAsBool("DEBUG_MODE", true),
-		// UserRoles: getEnvAsSlice("USER_ROLES", []string{"admin"}, ","),
-		HasuraURL:   getEnv("HASURA_URL", ""),
-		NodeRestURL: getEnv("NODE_REST_URL", ""),
+		HasuraURL: getEnv("HASURA_URL", ""),
+		NodeURL:   getEnv("NODE_URL", ""),
 	}
 }
 
