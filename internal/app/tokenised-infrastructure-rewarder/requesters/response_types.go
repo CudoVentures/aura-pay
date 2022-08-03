@@ -26,14 +26,23 @@ type NFTCollectionResponse struct {
 }
 
 type NFT struct {
-	Id    string   `json:"id"`
-	Name  string   `json:"name"`
-	Uri   string   `json:"uri"`
-	Data  DataJson `json:"data"`
-	Owner string   `json:"owner"`
+	Id       string   `json:"id"`
+	Name     string   `json:"name"`
+	Uri      string   `json:"uri"`
+	Data     string   `json:"data"`
+	DataJson DataJson `json:"data_json"` // TODO! : Fix this by having an unified json data type on both the node,bdjuno/hasura and rewarder
+	Owner    string   `json:"owner"`
 }
 
-type DataJson struct {
-	ExpirationDate int64 `json:"expirationDate"`
+type DataJson struct { // hasura response
+	ExpirationDate int64  `json:"expirationDate"`
+	MachineId      string `json:"machineId"`
+	HashRateId     string `json:"hashRateId"`
 	// possibly others as well
+}
+
+type Data struct {
+	ExpirationDate int64  `json:"expirationDate"`
+	MachineId      string `json:"machineId"`
+	HashRateId     string `json:"hashRateId"`
 }

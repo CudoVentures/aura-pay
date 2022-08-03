@@ -1,6 +1,6 @@
 package requesters
 
 type GetSpecificNFTsQuery struct {
-	denomId string
-	NFTsIds []int
+	DenomId  string   `json:"denom_id"`
+	TokenIds []string `json:"token_ids"`
 }

@@ -7,15 +7,15 @@ import (
 )
 
 type Config struct {
-	HasuraURL string
-	NodeURL   string
+	HasuraURL   string
+	NodeRestUrl string
 }
 
 // NewConfig New returns a new Config struct
 func NewConfig() *Config {
 	return &Config{
-		HasuraURL: getEnv("HASURA_URL", ""),
-		NodeURL:   getEnv("NODE_URL", ""),
+		HasuraURL:   getEnv("HASURA_URL", ""),
+		NodeRestUrl: getEnv("NODE_REST_URL", ""),
 	}
 }
 
