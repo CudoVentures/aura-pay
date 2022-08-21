@@ -2,9 +2,10 @@ package services
 
 import (
 	"fmt"
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
 	"log"
 	"time"
+
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
 )
 
 func GetNonExpiredNFTs() ([]requesters.NFT, error) {
