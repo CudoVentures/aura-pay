@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
+
 	worker "github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder"
 	"github.com/joho/godotenv"
-	"log"
 )
 
 // init is invoked before main()
