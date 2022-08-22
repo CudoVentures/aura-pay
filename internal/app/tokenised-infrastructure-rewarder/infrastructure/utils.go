@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/models"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -12,11 +12,11 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-func CreateTransaction(secret string, destination string, amount int64, txHash string) (models.Transaction, error) {
+func CreateTransaction(secret string, destination string, amount int64, txHash string) (types.Transaction, error) {
 
 	wif, err := LoadPrivateKey(secret)
 	if err != nil {
-		return models.Transaction{}, err
+		return types.Transaction{}, err
 	}
 
 	addresspubkey, _ := btcutil.NewAddressPubKey(wif.PrivKey.PubKey().SerializeUncompressed(), &chaincfg.SigNetParams)
@@ -24,26 +24,26 @@ func CreateTransaction(secret string, destination string, amount int64, txHash s
 
 	destinationAddress, err := btcutil.DecodeAddress(destination, &chaincfg.SigNetParams) // TODO add debug mode
 	if err != nil {
-		return models.Transaction{}, err
+		return types.Transaction{}, err
 	}
 
 	sourceTx, err := CreateSourceTx(wif, destination, amount, txHash, sourceAddress)
 	if err != nil {
-		return models.Transaction{}, err
+		return types.Transaction{}, err
 	}
 	sourceTxHash := sourceTx.TxHash()
 
 	redeemTx, err := CreateRedeemTx(sourceTxHash, destination, amount, destinationAddress)
 	err = SignTx(sourceTx, redeemTx, wif)
 	if err != nil {
-		return models.Transaction{}, err
+		return types.Transaction{}, err
 	}
 	err = CheckSignatureIsValid(sourceTx, redeemTx, amount)
 	if err != nil {
-		return models.Transaction{}, err
+		return types.Transaction{}, err
 	}
 
-	var transaction models.Transaction
+	var transaction types.Transaction
 	var unsignedTx bytes.Buffer
 	var signedTx bytes.Buffer
 	sourceTx.Serialize(&unsignedTx)

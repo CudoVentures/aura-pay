@@ -6,16 +6,17 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 )
 
-func GetNonExpiredNFTs() ([]requesters.NFT, error) {
+func GetNonExpiredNFTs() ([]types.NFT, error) {
 	nonExpiredNFTsFromHasura, err := getAllNonExpiredNFTsFromHasura()
 	if err != nil {
 		return nil, err
 	}
 
 	nftCollectionsFromNode, err := getNFTCollectionsFromNode(nonExpiredNFTsFromHasura)
-	var nonExpiredNFTs []requesters.NFT
+	var nonExpiredNFTs []types.NFT
 
 	for _, collection := range nftCollectionsFromNode {
 		for _, nft := range collection.Result.Collection.Nfts {
@@ -33,8 +34,8 @@ func GetNonExpiredNFTs() ([]requesters.NFT, error) {
 	return nonExpiredNFTs, nil
 }
 
-func getNFTCollectionsFromNode(nonExpiredNFTsFromHasura map[string][]int) ([]requesters.NFTCollectionResponse, error) {
-	var result []requesters.NFTCollectionResponse
+func getNFTCollectionsFromNode(nonExpiredNFTsFromHasura map[string][]int) ([]types.NFTCollectionResponse, error) {
+	var result []types.NFTCollectionResponse
 	for k, v := range nonExpiredNFTsFromHasura {
 
 		NFTCollectionResponse, err := requesters.GetNFTsByIds(k, v)
@@ -56,7 +57,7 @@ func getAllNonExpiredNFTsFromHasura() (map[string][]int, error) {
 	return groupedIdsByDenom, nil
 }
 
-func groupNFTsIdByDenomId(data requesters.NFTData) map[string][]int {
+func groupNFTsIdByDenomId(data types.NFTData) map[string][]int {
 	result := make(map[string][]int)
 	for _, elem := range data.Data.NftsByExpirationDate {
 		result[elem.DenomId] = append(result[elem.DenomId], elem.Id)
