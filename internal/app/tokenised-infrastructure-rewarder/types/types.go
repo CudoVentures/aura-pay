@@ -1,8 +1,10 @@
 package types
 
 type Farm struct {
-	BTCAddress  string       `json:"BTCAddress"`
-	Collections []Collection `json:"Collections"`
+	Id          string       `json:"id"`
+	Name        string       `json:"name"`
+	BTCWallet   string       `json:"btc_wallet"`
+	Collections []Collection `json:"collections"`
 }
 
 type Collection struct {
@@ -27,23 +29,14 @@ type NFT struct {
 }
 
 type DataJson struct { // hasura response
-	ExpirationDate int64  `json:"expirationDate"`
-	MachineId      string `json:"machineId"`
-	HashRateId     string `json:"hashRateId"`
+	ExpirationDate int64  `json:"expiration_date"`
+	HashRate       string `json:"hash_rate"`
+	TotalHashRate  string `json:"total_hash_rate"`
 	// possibly others as well
 }
 
 type Data struct {
-	ExpirationDate int64  `json:"expirationDate"`
-	MachineId      string `json:"machineId"`
-	HashRateId     string `json:"hashRateId"`
-}
-
-type Transaction struct {
-	TxId               string `json:"txid"`
-	SourceAddress      string `json:"source_address"`
-	DestinationAddress string `json:"destination_address"`
-	Amount             int64  `json:"amount"`
-	UnsignedTx         string `json:"unsignedtx"`
-	SignedTx           string `json:"signedtx"`
+	ExpirationDate int64  `json:"expiration_date"`
+	HashRate       string `json:"hash_rate"`
+	TotalHashRate  string `json:"total_hash_rate"`
 }

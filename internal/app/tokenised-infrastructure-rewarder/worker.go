@@ -1,25 +1,34 @@
 package tokenised_infrastructure_rewarder
 
-import "github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
+import (
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
+)
 
 func Start() {
+	// get nfts
 	// requesters.GetAllNonExpiredNFTsFromHasura()
 	// _, err := services.GetNonExpiredNFTs()
 	// if err != nil {
 	// 	log.Fatalln(err)
 	// }
-	services.PayRewards("tb1q2t3jkecxjgfa4e7hj79ajn0er2wc65vy3vy0j9", 0.000100000)
-	// a := btcutil.Amount(0)
-	// fmt.Println("Zero Satoshi:", a)
 
-	// a = btcutil.Amount(1e8)
-	// fmt.Println("100,000,000 Satoshis:", a)
+	// type NFT struct {
+	// 	Id       string   `json:"id"`
+	// 	Name     string   `json:"name"`
+	// 	Uri      string   `json:"uri"`
+	// 	Data     string   `json:"data"`
+	// 	DataJson DataJson `json:"data_json"` // TODO! : Fix this by having an unified json data type on both the node,bdjuno/hasura and rewarder
+	// 	Owner    string   `json:"owner"`
+	// }
 
-	// a = btcutil.Amount(1e5)
-	// fmt.Println("100,000 Satoshis:", a)
+	NftOne := types.NFT{Id: "test", Name: "testName", Uri: "", DataJson: types.DataJson{}}
+	NftTwo := types.NFT{Id: "test", Name: "testName", Uri: "", DataJson: types.DataJson{}}
+	NftThree := types.NFT{Id: "test", Name: "testName", Uri: "", DataJson: types.DataJson{}}
 
-	// test := 0.0000100000
-	// test2, _ := btcutil.NewAmount(test)
-	// a = btcutil.Amount(test2)
-	// fmt.Println("test:", a)
+	Collection := types.Collection{Denom: types.Denom{}, Nfts: []types.NFT{NftOne, NftTwo, NftThree}}
+	testFarm := types.Farm{Id: "test", Name: "test", BTCWallet: "testwallet2", Collections: []types.Collection{Collection}}
+
+	services.ProcessPaymentForFarms([]types.Farm{testFarm})
+
 }
