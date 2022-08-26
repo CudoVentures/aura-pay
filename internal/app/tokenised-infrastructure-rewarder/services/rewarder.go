@@ -1,14 +1,17 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"log"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
+	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/rpcclient"
 )
 
 func ProcessPaymentForFarms(farms []types.Farm) error {
@@ -37,31 +40,67 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 			if len(destinationAddressesWithAmount) == 0 {
 				return fmt.Errorf("No addresses found to pay for Farm %q and Collection %q", farm.Name, collection.Denom.Id)
 			}
-			payRewards(farm.BTCWallet, destinationAddressesWithAmount)
+			payRewards("11b555ac8841a86c62757a4cfb597ea51afea3b2ad2976d229391cf3bc496eaa", uint32(0), farm.BTCWallet, destinationAddressesWithAmount)
 		}
 	}
 	return nil
 }
 
-func payRewards(walletName string, destinationAddressesWithAmount map[btcutil.Address]btcutil.Amount) (*chainhash.Hash, error) {
+func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[btcutil.Address]btcutil.Amount) (*chainhash.Hash, error) {
 	rpcClient, err := infrastructure.InitBtcRpcClient()
 	if err != nil {
 		return nil, err
 	}
 	defer rpcClient.Shutdown()
 
-	txHash, err := rpcClient.SendMany(walletName, destinationAddressesWithAmount)
+	// todo: add as params and fetch it from pool
+	var outputVouts []int
+	for i := 0; i < len(destinationAddressesWithAmount); i++ {
+		outputVouts = append(outputVouts, i)
+	}
 
-	return txHash, nil
+	txInput := btcjson.TransactionInput{Txid: inputTxId, Vout: inputTxVout}
+	inputs := []btcjson.TransactionInput{txInput}
+	isWitness := false
+
+	rawTx, err := rpcClient.CreateRawTransaction(inputs, destinationAddressesWithAmount, nil)
+	if err != nil {
+		return nil, err
+	}
+	rpcClient.FundRawTransaction(rawTx, btcjson.FundRawTransactionOpts{SubtractFeeFromOutputs: outputVouts}, &isWitness)
+	rpcClient.SignRawTransactionWithWallet(rawTx)
+	res, err := rpcClient.SendRawTransaction(rawTx, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vout uint32) (btcjson.ListUnspentResult, error) {
+	unspentTxs, err := rpcClient.ListUnspent()
+	if err != nil {
+		return btcjson.ListUnspentResult{}, err
+	}
+	var matchedUTXO btcjson.ListUnspentResult
+	for _, unspentTx := range unspentTxs {
+		if unspentTx.TxID == txId && unspentTx.Vout == vout {
+			matchedUTXO = unspentTx
+		} else {
+			err = errors.New("No matching UTXO found!")
+			return btcjson.ListUnspentResult{}, err
+		}
+	}
+	return matchedUTXO, nil
 }
 
 // also handle special edge case where address is changed and you have to pay him only for the time he owned it
 func calculatePayoutAmount(nftHashRate string, totalHashRate string) (btcutil.Amount, error) {
-	amountInSatoshi, err := btcutil.NewAmount(0.0001)
+	amountInSatoshis, err := btcutil.NewAmount(0.0001)
 	if err != nil {
 		return -1, err
 	}
-	return amountInSatoshi, nil
+	return amountInSatoshis, nil
 }
 
 func getPayoutAddressesFromChain(ownerAddress string, denomId string, tokenId string, test int) (btcutil.Address, error) {
