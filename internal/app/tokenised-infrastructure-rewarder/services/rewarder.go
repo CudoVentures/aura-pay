@@ -20,7 +20,7 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 		for _, collection := range farm.Collections {
 			// Poll Foundry API if reward has been payed for the collection
 			// if not return
-			destinationAddressesWithAmount := make(map[btcutil.Address]btcutil.Amount)
+			destinationAddressesWithAmount := make(map[string]btcutil.Amount)
 			testRNG := 0
 			for _, nft := range collection.Nfts {
 				// logging + track payment progress in DB
@@ -40,13 +40,13 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 			if len(destinationAddressesWithAmount) == 0 {
 				return fmt.Errorf("No addresses found to pay for Farm %q and Collection %q", farm.Name, collection.Denom.Id)
 			}
-			payRewards("11b555ac8841a86c62757a4cfb597ea51afea3b2ad2976d229391cf3bc496eaa", uint32(0), farm.BTCWallet, destinationAddressesWithAmount)
+			payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount)
 		}
 	}
 	return nil
 }
 
-func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[btcutil.Address]btcutil.Amount) (*chainhash.Hash, error) {
+func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount) (*chainhash.Hash, error) {
 	rpcClient, err := infrastructure.InitBtcRpcClient()
 	if err != nil {
 		return nil, err
@@ -62,19 +62,47 @@ func payRewards(inputTxId string, inputTxVout uint32, walletName string, destina
 	txInput := btcjson.TransactionInput{Txid: inputTxId, Vout: inputTxVout}
 	inputs := []btcjson.TransactionInput{txInput}
 	isWitness := false
-
-	rawTx, err := rpcClient.CreateRawTransaction(inputs, destinationAddressesWithAmount, nil)
-	if err != nil {
-		return nil, err
-	}
-	rpcClient.FundRawTransaction(rawTx, btcjson.FundRawTransactionOpts{SubtractFeeFromOutputs: outputVouts}, &isWitness)
-	rpcClient.SignRawTransactionWithWallet(rawTx)
-	res, err := rpcClient.SendRawTransaction(rawTx, false)
+	transformedAddressesWithAmount, err := transformAddressesWithAmount(destinationAddressesWithAmount)
 	if err != nil {
 		return nil, err
 	}
 
-	return res, nil
+	rawTx, err := rpcClient.CreateRawTransaction(inputs, transformedAddressesWithAmount, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := rpcClient.FundRawTransaction(rawTx, btcjson.FundRawTransactionOpts{SubtractFeeFromOutputs: outputVouts}, &isWitness)
+	if err != nil {
+		return nil, err
+	}
+
+	signedTx, isSigned, err := rpcClient.SignRawTransactionWithWallet(res.Transaction)
+	if err != nil || isSigned == false {
+		return nil, err
+	}
+
+	txHash, err := rpcClient.SendRawTransaction(signedTx, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return txHash, nil
+}
+
+func transformAddressesWithAmount(destinationAddressesWithAmount map[string]btcutil.Amount) (map[btcutil.Address]btcutil.Amount, error) {
+	result := make(map[btcutil.Address]btcutil.Amount)
+
+	for address, amount := range destinationAddressesWithAmount {
+		addr, err := btcutil.DecodeAddress(address, &chaincfg.SigNetParams)
+		if err != nil {
+			log.Fatal(err)
+			return nil, err
+		}
+		result[addr] = amount
+	}
+
+	return result, nil
 }
 
 func findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vout uint32) (btcjson.ListUnspentResult, error) {
@@ -103,7 +131,7 @@ func calculatePayoutAmount(nftHashRate string, totalHashRate string) (btcutil.Am
 	return amountInSatoshis, nil
 }
 
-func getPayoutAddressesFromChain(ownerAddress string, denomId string, tokenId string, test int) (btcutil.Address, error) {
+func getPayoutAddressesFromChain(ownerAddress string, denomId string, tokenId string, test int) (string, error) {
 	// rpc call to cudos node for address once its merged
 	// http://127.0.0.1:1317/CudoVentures/cudos-node/addressbook/address/cudos1dgv5mmf4r0w3rgxxd3sy5mw3gnnxmgxmuvnqxw/BTC/1@testdenom
 	// result:
@@ -122,11 +150,11 @@ func getPayoutAddressesFromChain(ownerAddress string, denomId string, tokenId st
 	} else {
 		fakedAddress = "tb1qqpacwhsdcr4x6vt9hj228ha43kanpch2n74y5c"
 	}
-	addr, err := btcutil.DecodeAddress(fakedAddress, &chaincfg.SigNetParams)
-	if err != nil {
-		log.Fatal(err)
-		return nil, err
-	}
-	return addr, nil
+	// addr, err := btcutil.DecodeAddress(fakedAddress, &chaincfg.SigNetParams)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// 	return nil, err
+	// }
+	return fakedAddress, nil
 
 }
