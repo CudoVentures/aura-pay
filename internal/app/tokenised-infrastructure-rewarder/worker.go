@@ -22,11 +22,11 @@ func Start() {
 	// 	Owner    string   `json:"owner"`
 	// }
 
-	NftOne := types.NFT{Id: "test", Name: "testName", Uri: "", DataJson: types.DataJson{}}
-	NftTwo := types.NFT{Id: "test", Name: "testName", Uri: "", DataJson: types.DataJson{}}
-	NftThree := types.NFT{Id: "test", Name: "testName", Uri: "", DataJson: types.DataJson{}}
+	NftOne := types.NFT{Id: "1", Name: "testName", Owner: "cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq", DataJson: types.DataJson{}}
+	// NftTwo := types.NFT{Id: "test", Name: "testName", Uri: "", DataJson: types.DataJson{}}
+	// NftThree := types.NFT{Id: "test", Name: "testName", Uri: "", DataJson: types.DataJson{}}
 
-	Collection := types.Collection{Denom: types.Denom{}, Nfts: []types.NFT{NftOne, NftTwo, NftThree}}
+	Collection := types.Collection{Denom: types.Denom{Id: "test"}, Nfts: []types.NFT{NftOne}}
 	testFarm := types.Farm{Id: "test", Name: "test", BTCWallet: "testwallet2", Collections: []types.Collection{Collection}}
 
 	services.ProcessPaymentForFarms([]types.Farm{testFarm})

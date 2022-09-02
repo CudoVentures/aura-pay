@@ -14,6 +14,41 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 )
 
+func GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error) {
+	var config = infrastructure.NewConfig()
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
+	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
+
+	req, err := http.NewRequest("GET", config.NodeRestUrl+requestString, nil)
+	if err != nil {
+		log.Fatal(err)
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	res, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+		return "", err
+	}
+	bytes, err := ioutil.ReadAll(res.Body)
+
+	okStruct := types.MappedAddress{}
+
+	err = json.Unmarshal(bytes, &okStruct)
+	if err != nil {
+		log.Fatal(err)
+		return "", err
+	}
+
+	return okStruct.Address.Value, nil
+
+}
+
 func GetNFTsByIds(denomId string, tokenIds []int) (types.NFTCollectionResponse, error) {
 	var config = infrastructure.NewConfig()
 	client := &http.Client{
@@ -60,10 +95,9 @@ func GetNFTsByIds(denomId string, tokenIds []int) (types.NFTCollectionResponse, 
 			return types.NFTCollectionResponse{}, err
 		}
 		nft.DataJson = data
-		fmt.Printf("test")
 	}
 
-	return okStruct, err
+	return okStruct, nil
 }
 
 func GetAllNonExpiredNFTsFromHasura() (types.NFTData, error) {

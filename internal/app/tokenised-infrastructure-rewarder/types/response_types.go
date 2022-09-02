@@ -16,3 +16,14 @@ type NFTCollectionResponse struct {
 		Collection Collection `json:"collection"`
 	} `json:"result"`
 }
+
+type MappedAddress struct {
+	Address Address `json:"address"`
+}
+
+type Address struct {
+	Network string `json:"network"`
+	Label   string `json:"label"`
+	Value   string `json:"value"`
+	Creator string `json:"creator"`
+}

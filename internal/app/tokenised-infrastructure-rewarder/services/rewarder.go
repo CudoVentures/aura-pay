@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
@@ -13,6 +14,8 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 )
+
+const Network = "BTC"
 
 func ProcessPaymentForFarms(farms []types.Farm) error {
 	// also check if the funds have come
@@ -24,7 +27,7 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 			testRNG := 0
 			for _, nft := range collection.Nfts {
 				// logging + track payment progress in DB
-				nftPayoutAddress, err := getPayoutAddressesFromChain(nft.Owner, collection.Denom.Id, nft.Id, testRNG)
+				nftPayoutAddress, err := requesters.GetPayoutAddressFromNode(nft.Owner, Network, nft.Id, collection.Denom.Id)
 				if err != nil {
 					return err
 				}
@@ -131,30 +134,31 @@ func calculatePayoutAmount(nftHashRate string, totalHashRate string) (btcutil.Am
 	return amountInSatoshis, nil
 }
 
-func getPayoutAddressesFromChain(ownerAddress string, denomId string, tokenId string, test int) (string, error) {
-	// rpc call to cudos node for address once its merged
-	// http://127.0.0.1:1317/CudoVentures/cudos-node/addressbook/address/cudos1dgv5mmf4r0w3rgxxd3sy5mw3gnnxmgxmuvnqxw/BTC/1@testdenom
-	// result:
-	// {
-	// 	"address": {
-	// 	  "network": "BTC",
-	// 	  "label": "1@testdenom",
-	// 	  "value": "myval",
-	// 	  "creator": "cudos1dgv5mmf4r0w3rgxxd3sy5mw3gnnxmgxmuvnqxw"
-	// 	}
-	//   }
-	var fakedAddress string
-	if test == 0 || test == 1 {
-		fakedAddress = "tb1qntsxw6tlkczpueqtpmpza9kutajarctn6aee0l"
+// todo remove once testing is done
+// func getPayoutAddressesFromChain(ownerAddress string, denomId string, tokenId string, test int) (string, error) {
+// rpc call to cudos node for address once its merged
+// http://127.0.0.1:1317/CudoVentures/cudos-node/addressbook/address/cudos1dgv5mmf4r0w3rgxxd3sy5mw3gnnxmgxmuvnqxw/BTC/1@testdenom
+// result:
+// {
+// 	"address": {
+// 	  "network": "BTC",
+// 	  "label": "1@testdenom",
+// 	  "value": "myval",
+// 	  "creator": "cudos1dgv5mmf4r0w3rgxxd3sy5mw3gnnxmgxmuvnqxw"
+// 	}
+//   }
+// var fakedAddress string
+// if test == 0 || test == 1 {
+// 	fakedAddress = "tb1qntsxw6tlkczpueqtpmpza9kutajarctn6aee0l"
 
-	} else {
-		fakedAddress = "tb1qqpacwhsdcr4x6vt9hj228ha43kanpch2n74y5c"
-	}
-	// addr, err := btcutil.DecodeAddress(fakedAddress, &chaincfg.SigNetParams)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// 	return nil, err
-	// }
-	return fakedAddress, nil
+// } else {
+// 	fakedAddress = "tb1qqpacwhsdcr4x6vt9hj228ha43kanpch2n74y5c"
+// }
+// // addr, err := btcutil.DecodeAddress(fakedAddress, &chaincfg.SigNetParams)
+// // if err != nil {
+// // 	log.Fatal(err)
+// // 	return nil, err
+// // }
+// return fakedAddress, nil
 
-}
+// }
