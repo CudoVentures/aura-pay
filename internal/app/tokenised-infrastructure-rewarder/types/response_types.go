@@ -27,3 +27,11 @@ type Address struct {
 	Value   string `json:"value"`
 	Creator string `json:"creator"`
 }
+
+type NftTransferHistory []NftTransferHistoryElement
+
+type NftTransferHistoryElement struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Timestamp int64  `json:"timestamp"`
+}

@@ -24,21 +24,19 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 			// Poll Foundry API if reward has been payed for the collection
 			// if not return
 			destinationAddressesWithAmount := make(map[string]btcutil.Amount)
-			testRNG := 0
+			totalRewardForCollection, err := btcutil.NewAmount(0.0001) // where do we take this - from incoming tx or does foundry api give us this info?
 			for _, nft := range collection.Nfts {
 				// logging + track payment progress in DB
-				nftPayoutAddress, err := requesters.GetPayoutAddressFromNode(nft.Owner, Network, nft.Id, collection.Denom.Id)
 				if err != nil {
 					return err
 				}
-				payoutAmount, err := calculatePayoutAmount(nft.DataJson.HashRate, nft.DataJson.TotalHashRate)
-				if _, ok := destinationAddressesWithAmount[nftPayoutAddress]; ok { // if the address is already there then increment the amount it will receive for its next nft
-					destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
-
-				} else {
-					destinationAddressesWithAmount[nftPayoutAddress] = payoutAmount
+				nftPayoutAmount, err := calculatePayoutAmount(nft.DataJson.HashRateOwned, collection.TotalCollectionHashRate, nft.DataJson.TotalCollectionHashRateWhenMinted, totalRewardForCollection)
+				if err != nil {
+					return err
 				}
-				testRNG += 1
+				allNftOwnersForTimePeriodWithRewardPercent, err := getNftOwnersForTimePeriodWithRewardPercent(nft.Id, collection.Denom.Id, 0, 0)
+				err = distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, nftPayoutAmount, destinationAddressesWithAmount)
+
 			}
 			if len(destinationAddressesWithAmount) == 0 {
 				return fmt.Errorf("No addresses found to pay for Farm %q and Collection %q", farm.Name, collection.Denom.Id)
@@ -47,6 +45,63 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 		}
 	}
 	return nil
+}
+
+func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount) error {
+
+	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
+		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)
+		if _, ok := destinationAddressesWithAmount[nftPayoutAddress]; ok { // if the address is already there then increment the amount it will receive for its next nft
+			// log to statistics here if we are doing accumulation send for an nft
+			destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
+
+		} else {
+			destinationAddressesWithAmount[nftPayoutAddress] = payoutAmount
+		}
+	}
+
+	return nil
+}
+
+func getNftOwnersForTimePeriodWithRewardPercent(nftId string, collectionDenomId string, periodStart int64, periodEnd int64) (map[string]float64, error) {
+
+	ownersWithPercentOwnedTime := make(map[string]float64)
+	totalPeriodTimeInSeconds := periodEnd - periodStart
+
+	nftTransferHistory, err := requesters.GetNftTransferHistory(collectionDenomId, nftId, periodStart)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, transferHistoryElement := range nftTransferHistory {
+		if transferHistoryElement.Timestamp >= periodStart && transferHistoryElement.Timestamp <= periodEnd {
+			timeOwned := transferHistoryElement.Timestamp - periodStart
+			percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
+			nftPayoutAddress, err := requesters.GetPayoutAddressFromNode(transferHistoryElement.From, Network, nftId, collectionDenomId)
+			if err != nil {
+				return nil, err
+			}
+			if _, ok := ownersWithPercentOwnedTime[nftPayoutAddress]; ok {
+				ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
+
+			} else {
+				ownersWithPercentOwnedTime[nftPayoutAddress] = percentOfTimeOwned
+			}
+		}
+	}
+
+	return ownersWithPercentOwnedTime, nil
+
+	// ownedFromTimestamp := 1234 // TODO: Once events are fetchable from the chain, use them and calculate it from there
+	// ownedToTimestamp := 5678
+	// handle case where the user has been an owner for some period and then the same nft changed hands and has been owned by someone else for the remainder of the period
+	// payoutAmount represents 100% of the reward for this nft for the given time period
+	// if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
+	// so a method that returns each nft owner for the time period with the time he owned it as percent
+	// use this percent to calculate how much each one should get from the total reward
+
+	// parse the transfer events and find each owner that fits between periodStart and periodEnd
+	// for each one of them find percent of the time (periodStart, periodEnd) that he has hold it and return it alongside his address
 }
 
 func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount) (*chainhash.Hash, error) {
@@ -125,14 +180,36 @@ func findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vout uint32) (bt
 	return matchedUTXO, nil
 }
 
-// also handle special edge case where address is changed and you have to pay him only for the time he owned it
-func calculatePayoutAmount(nftHashRate string, totalHashRate string) (btcutil.Amount, error) {
-	amountInSatoshis, err := btcutil.NewAmount(0.0001)
-	if err != nil {
-		return -1, err
+func calculatePayoutAmount(nftHashRate int64, totalCollectionHashRate int64, nftHashRateAtTimeOfMinting int64, totalReward btcutil.Amount) (btcutil.Amount, error) {
+
+	var payoutRewardPercent float64
+	// handle case where the collection hash power has decreased
+	if totalCollectionHashRate < nftHashRateAtTimeOfMinting {
+		// take nft.HashPower as percent of nft.TotalHashPower
+		payoutRewardPercent = float64(nftHashRate) / float64(nftHashRateAtTimeOfMinting) * 100
+	} else {
+		// totalHashRate is the same or increased - then we do nothing as the percent is the same or has proportionally decreased in terms of total hash power
+		payoutRewardPercent = float64(nftHashRate) / float64(totalCollectionHashRate) * 100
 	}
-	return amountInSatoshis, nil
+
+	// result := float64(totalReward) * payoutRewardPercent / 100
+	// result := payoutRewardPercent / 100 * float64(totalReward)
+	// returns float64 of percent of totalReward
+	// possible problems: what is the foundry tx denomination - in satoshis?
+	// think about if we can lose precision here as float64 is  53-bit precision..maybe use math/big type Float with more precision
+	// or this: https://github.com/shopspring/decimal
+	result := totalReward.MulF64(payoutRewardPercent / 100)
+
+	return result, nil
 }
+
+// func calculatePayoutAmountTest(nftHashRate string, totalHashRate string, ownedFromTimestamp string, ownedToTimestamp string) (btcutil.Amount, error) {
+// 	amountInSatoshis, err := btcutil.NewAmount(0.0001)
+// 	if err != nil {
+// 		return -1, err
+// 	}
+// 	return amountInSatoshis, nil
+// }
 
 // todo remove once testing is done
 // func getPayoutAddressesFromChain(ownerAddress string, denomId string, tokenId string, test int) (string, error) {

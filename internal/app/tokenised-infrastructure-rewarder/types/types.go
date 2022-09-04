@@ -8,8 +8,9 @@ type Farm struct {
 }
 
 type Collection struct {
-	Denom Denom `json:"denom"`
-	Nfts  []NFT `json:"nfts"`
+	Denom                   Denom `json:"denom"`
+	Nfts                    []NFT `json:"nfts"`
+	TotalCollectionHashRate int64 `json:"total_collection_hash_rate"`
 }
 
 type Denom struct {
@@ -29,14 +30,14 @@ type NFT struct {
 }
 
 type DataJson struct { // hasura response
-	ExpirationDate int64  `json:"expiration_date"`
-	HashRate       string `json:"hash_rate"`
-	TotalHashRate  string `json:"total_hash_rate"`
+	ExpirationDate                    int64 `json:"expiration_date"`
+	HashRateOwned                     int64 `json:"hash_rate_owned"`
+	TotalCollectionHashRateWhenMinted int64 `json:"total_collection_hash_rate_when_minted"`
 	// possibly others as well
 }
 
 type Data struct {
-	ExpirationDate int64  `json:"expiration_date"`
-	HashRate       string `json:"hash_rate"`
-	TotalHashRate  string `json:"total_hash_rate"`
+	ExpirationDate                    int64 `json:"expiration_date"`
+	HashRateOwned                     int64 `json:"hash_rate_owned"`
+	TotalCollectionHashRateWhenMinted int64 `json:"total_collection_hash_rate_when_minted"`
 }

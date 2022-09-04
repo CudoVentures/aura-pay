@@ -136,3 +136,22 @@ func GetAllNonExpiredNFTsFromHasura() (types.NFTData, error) {
 	}
 	return res, nil
 }
+
+func GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
+	// /transfer-events?denom={denom-id}&nft={nft-id}&since={timestamp}
+	// [
+	//   {
+	// 	"from": "cudos14h7pdf8g2kkjgum5dntz80s5lhtrw3lk2uswk0"
+	// 	"to": "cudos1fzt4kr4t2f342m9zgw85gfd7cah405czg4lu6a"
+	// 	"timestamp": 1662018059
+	//   },
+	//   {
+	// 	"from": "cudos14h7pdf8g2kkjgum5dntz80s5lhtrw3lk2uswk0"
+	// 	"to": "cudos1fzt4kr4t2f342m9zgw85gfd7cah405czg4lu6a"
+	// 	"timestamp": 1662018059
+	//   }
+	//   ...
+	// ]
+
+	return nil, nil
+}
