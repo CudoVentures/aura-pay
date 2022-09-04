@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
@@ -35,8 +36,7 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 					return err
 				}
 				allNftOwnersForTimePeriodWithRewardPercent, err := getNftOwnersForTimePeriodWithRewardPercent(nft.Id, collection.Denom.Id, 0, 0)
-				err = distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, nftPayoutAmount, destinationAddressesWithAmount)
-
+				distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, nftPayoutAmount, destinationAddressesWithAmount)
 			}
 			if len(destinationAddressesWithAmount) == 0 {
 				return fmt.Errorf("No addresses found to pay for Farm %q and Collection %q", farm.Name, collection.Denom.Id)
@@ -47,8 +47,7 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 	return nil
 }
 
-func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount) error {
-
+func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
 		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)
 		if _, ok := destinationAddressesWithAmount[nftPayoutAddress]; ok { // if the address is already there then increment the amount it will receive for its next nft
@@ -59,14 +58,16 @@ func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPay
 			destinationAddressesWithAmount[nftPayoutAddress] = payoutAmount
 		}
 	}
-
-	return nil
 }
 
+// if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
+// so a method that returns each nft owner for the time period with the time he owned it as percent
+// use this percent to calculate how much each one should get from the total reward
 func getNftOwnersForTimePeriodWithRewardPercent(nftId string, collectionDenomId string, periodStart int64, periodEnd int64) (map[string]float64, error) {
 
 	ownersWithPercentOwnedTime := make(map[string]float64)
 	totalPeriodTimeInSeconds := periodEnd - periodStart
+	var transferHistoryForTimePeriod []types.NftTransferHistoryElement
 
 	nftTransferHistory, err := requesters.GetNftTransferHistory(collectionDenomId, nftId, periodStart)
 	if err != nil {
@@ -75,33 +76,39 @@ func getNftOwnersForTimePeriodWithRewardPercent(nftId string, collectionDenomId 
 
 	for _, transferHistoryElement := range nftTransferHistory {
 		if transferHistoryElement.Timestamp >= periodStart && transferHistoryElement.Timestamp <= periodEnd {
-			timeOwned := transferHistoryElement.Timestamp - periodStart
-			percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
-			nftPayoutAddress, err := requesters.GetPayoutAddressFromNode(transferHistoryElement.From, Network, nftId, collectionDenomId)
-			if err != nil {
-				return nil, err
-			}
-			if _, ok := ownersWithPercentOwnedTime[nftPayoutAddress]; ok {
-				ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
+			transferHistoryForTimePeriod = append(transferHistoryForTimePeriod, transferHistoryElement)
+		}
+	}
 
-			} else {
-				ownersWithPercentOwnedTime[nftPayoutAddress] = percentOfTimeOwned
-			}
+	// sort in ascending order by timestamp
+	sort.Slice(transferHistoryForTimePeriod, func(i, j int) bool {
+		return transferHistoryForTimePeriod[i].Timestamp < transferHistoryForTimePeriod[j].Timestamp
+	})
+
+	for i := 0; i < len(transferHistoryForTimePeriod); i++ {
+		var timeOwned int64
+
+		if i == 0 {
+			timeOwned = transferHistoryForTimePeriod[i].Timestamp - periodStart
+		} else {
+			timeOwned = transferHistoryForTimePeriod[i].Timestamp - transferHistoryForTimePeriod[i-1].Timestamp
+		}
+
+		percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
+		nftPayoutAddress, err := requesters.GetPayoutAddressFromNode(transferHistoryForTimePeriod[i].From, Network, nftId, collectionDenomId)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, ok := ownersWithPercentOwnedTime[nftPayoutAddress]; ok { // if the nft has been bought, sold and bought again by the same owner in the same period - accumulate
+			ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
+
+		} else {
+			ownersWithPercentOwnedTime[nftPayoutAddress] = percentOfTimeOwned
 		}
 	}
 
 	return ownersWithPercentOwnedTime, nil
-
-	// ownedFromTimestamp := 1234 // TODO: Once events are fetchable from the chain, use them and calculate it from there
-	// ownedToTimestamp := 5678
-	// handle case where the user has been an owner for some period and then the same nft changed hands and has been owned by someone else for the remainder of the period
-	// payoutAmount represents 100% of the reward for this nft for the given time period
-	// if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
-	// so a method that returns each nft owner for the time period with the time he owned it as percent
-	// use this percent to calculate how much each one should get from the total reward
-
-	// parse the transfer events and find each owner that fits between periodStart and periodEnd
-	// for each one of them find percent of the time (periodStart, periodEnd) that he has hold it and return it alongside his address
 }
 
 func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount) (*chainhash.Hash, error) {
