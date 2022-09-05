@@ -7,23 +7,27 @@ import (
 )
 
 type Config struct {
-	HasuraURL           string
-	NodeRestUrl         string
-	BitcoinNodeUrl      string
-	BitcoinNodePort     string
-	BitcoinNodeUserName string
-	BitcoinNodePassword string
+	HasuraURL             string
+	NodeRestUrl           string
+	BitcoinNodeUrl        string
+	BitcoinNodePort       string
+	BitcoinNodeUserName   string
+	BitcoinNodePassword   string
+	FoundryPoolAPIBaseURL string
+	FoundryPoolAPIKey     string
 }
 
 // NewConfig New returns a new Config struct
 func NewConfig() *Config {
 	return &Config{
-		HasuraURL:           getEnv("HASURA_URL", ""),
-		NodeRestUrl:         getEnv("NODE_REST_URL", ""),
-		BitcoinNodeUrl:      getEnv("BITCOIN_NODE_URL", ""),
-		BitcoinNodePort:     getEnv("BITCOIN_NODE_PORT", ""),
-		BitcoinNodeUserName: getEnv("BITCOIN_NODE_USER_NAME", ""),
-		BitcoinNodePassword: getEnv("BITCOIN_NODE_PASSWORD", ""),
+		HasuraURL:             getEnv("HASURA_URL", ""),
+		NodeRestUrl:           getEnv("NODE_REST_URL", ""),
+		BitcoinNodeUrl:        getEnv("BITCOIN_NODE_URL", ""),
+		BitcoinNodePort:       getEnv("BITCOIN_NODE_PORT", ""),
+		BitcoinNodeUserName:   getEnv("BITCOIN_NODE_USER_NAME", ""),
+		BitcoinNodePassword:   getEnv("BITCOIN_NODE_PASSWORD", ""),
+		FoundryPoolAPIBaseURL: getEnv("FoundryPoolAPIBaseURL", ""),
+		FoundryPoolAPIKey:     getEnv("FoundryPoolAPIKey", ""),
 	}
 }
 

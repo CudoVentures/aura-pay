@@ -1,16 +1,17 @@
 package types
 
 type Farm struct {
-	Id          string       `json:"id"`
-	Name        string       `json:"name"`
-	BTCWallet   string       `json:"btc_wallet"`
-	Collections []Collection `json:"collections"`
+	Id             string       `json:"id"`
+	SubAccountName string       `json:"sub_account_name"`
+	BTCWallet      string       `json:"btc_wallet"`
+	Collections    []Collection `json:"collections"`
 }
 
 type Collection struct {
-	Denom                   Denom `json:"denom"`
-	Nfts                    []NFT `json:"nfts"`
-	TotalCollectionHashRate int64 `json:"total_collection_hash_rate"`
+	Denom              Denom `json:"denom"`
+	Nfts               []NFT `json:"nfts"`
+	HashRate           int64 `json:"hash_rate"`
+	HashRateAtCreation int64 `json:"hash_rate_at_creation"`
 }
 
 type Denom struct {

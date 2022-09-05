@@ -155,3 +155,39 @@ func GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp
 
 	return nil, nil
 }
+
+// todo: discuss how to calculate farm hash rate - take the value from today or go back and do an approximation for the period ?
+func GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (int64, error) {
+	var config = infrastructure.NewConfig()
+	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/subaccount_hashrate_day/%s", farmName)
+
+	req, err := http.NewRequest("GET", config.FoundryPoolAPIBaseURL+requestString, nil)
+	if err != nil {
+		log.Fatal(err)
+		return -1, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-KEY", config.FoundryPoolAPIKey)
+	q := req.URL.Query()           // Get a copy of the query values.
+	q.Add("start", sinceTimestamp) // Add a new value to the set.
+	req.URL.RawQuery = q.Encode()  // Encode and assign back to the original query.
+
+	client := &http.Client{Timeout: time.Second * 10}
+	res, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+		return -1, err
+	}
+	bytes, err := ioutil.ReadAll(res.Body)
+
+	okStruct := types.FarmHashRate{}
+
+	err = json.Unmarshal(bytes, &okStruct)
+	if err != nil {
+		log.Fatal(err)
+		return -1, err
+	}
+
+	return okStruct[0].HashrateAccepted, nil
+}

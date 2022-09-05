@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
@@ -18,20 +19,41 @@ import (
 
 const Network = "BTC"
 
+//TODO:
+// Integrate with foundry
+// Save data in the sql for statistics
+// Test the new payout code
+
 func ProcessPaymentForFarms(farms []types.Farm) error {
 	// also check if the funds have come
 	for _, farm := range farms {
+		rpcClient, err := infrastructure.InitBtcRpcClient()
+		if err != nil {
+			return err
+		}
+		defer rpcClient.Shutdown()
+
+		totalRewardForFarm, err := rpcClient.GetBalance(farm.SubAccountName)
+		if err != nil {
+			return err
+		}
+		if totalRewardForFarm == 0 {
+			return fmt.Errorf("Farm with name %s balance is 0..skipping this farm", farm.SubAccountName)
+		}
+
+		totalHashPowerForFarm, err := requesters.GetFarmTotalHashPowerFromPoolToday(farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+		if err != nil {
+			return err
+		}
 		for _, collection := range farm.Collections {
-			// Poll Foundry API if reward has been payed for the collection
-			// if not return
 			destinationAddressesWithAmount := make(map[string]btcutil.Amount)
-			totalRewardForCollection, err := btcutil.NewAmount(0.0001) // where do we take this - from incoming tx or does foundry api give us this info?
+			totalRewardForCollection, err := calculatePayout(collection.HashRate, totalHashPowerForFarm, collection.HashRateAtCreation, totalRewardForFarm)
+			if err != nil {
+				return err
+			}
 			for _, nft := range collection.Nfts {
 				// logging + track payment progress in DB
-				if err != nil {
-					return err
-				}
-				nftPayoutAmount, err := calculatePayoutAmount(nft.DataJson.HashRateOwned, collection.TotalCollectionHashRate, nft.DataJson.TotalCollectionHashRateWhenMinted, totalRewardForCollection)
+				nftPayoutAmount, err := calculatePayout(nft.DataJson.HashRateOwned, collection.HashRate, nft.DataJson.TotalCollectionHashRateWhenMinted, totalRewardForCollection)
 				if err != nil {
 					return err
 				}
@@ -39,8 +61,9 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 				distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, nftPayoutAmount, destinationAddressesWithAmount)
 			}
 			if len(destinationAddressesWithAmount) == 0 {
-				return fmt.Errorf("No addresses found to pay for Farm %q and Collection %q", farm.Name, collection.Denom.Id)
+				return fmt.Errorf("No addresses found to pay for Farm %q and Collection %q", farm.SubAccountName, collection.Denom.Id)
 			}
+			// how and where to fetch tx input id/vout for payment? Get the first available that matches the current balance?
 			payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount)
 		}
 	}
@@ -187,17 +210,21 @@ func findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vout uint32) (bt
 	return matchedUTXO, nil
 }
 
-func calculatePayoutAmount(nftHashRate int64, totalCollectionHashRate int64, nftHashRateAtTimeOfMinting int64, totalReward btcutil.Amount) (btcutil.Amount, error) {
+func calculatePayout(hashRate int64, totalHashRate int64, staticHashRate int64, totalReward btcutil.Amount) (btcutil.Amount, error) {
 
 	var payoutRewardPercent float64
 	// handle case where the collection hash power has decreased
-	if totalCollectionHashRate < nftHashRateAtTimeOfMinting {
-		// take nft.HashPower as percent of nft.TotalHashPower
-		payoutRewardPercent = float64(nftHashRate) / float64(nftHashRateAtTimeOfMinting) * 100
+	if totalHashRate < staticHashRate {
+		// take hashPower as percent of staticHashRate
+		payoutRewardPercent = float64(hashRate) / float64(staticHashRate) * 100
 	} else {
 		// totalHashRate is the same or increased - then we do nothing as the percent is the same or has proportionally decreased in terms of total hash power
-		payoutRewardPercent = float64(nftHashRate) / float64(totalCollectionHashRate) * 100
+		payoutRewardPercent = float64(hashRate) / float64(totalHashRate) * 100
 	}
+
+	result := totalReward.MulF64(payoutRewardPercent / 100)
+
+	return result, nil
 
 	// result := float64(totalReward) * payoutRewardPercent / 100
 	// result := payoutRewardPercent / 100 * float64(totalReward)
@@ -205,9 +232,6 @@ func calculatePayoutAmount(nftHashRate int64, totalCollectionHashRate int64, nft
 	// possible problems: what is the foundry tx denomination - in satoshis?
 	// think about if we can lose precision here as float64 is  53-bit precision..maybe use math/big type Float with more precision
 	// or this: https://github.com/shopspring/decimal
-	result := totalReward.MulF64(payoutRewardPercent / 100)
-
-	return result, nil
 }
 
 // func calculatePayoutAmountTest(nftHashRate string, totalHashRate string, ownedFromTimestamp string, ownedToTimestamp string) (btcutil.Amount, error) {

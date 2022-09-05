@@ -35,3 +35,14 @@ type NftTransferHistoryElement struct {
 	To        string `json:"to"`
 	Timestamp int64  `json:"timestamp"`
 }
+
+type FarmHashRate []FarmHashRateElement
+
+type FarmHashRateElement struct {
+	Time             string  `json:"time"`
+	UnixTime         int64   `json:"unixTime"`
+	AverageWorkers   float64 `json:"averageWorkers"`
+	HashrateAccepted int64   `json:"hashrateAccepted"`
+	HashrateStale    int64   `json:"hashrateStale"`
+	HashrateRejected int64   `json:"hashrateRejected"`
+}
