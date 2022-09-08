@@ -3,9 +3,10 @@ package services
 import (
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
@@ -20,40 +21,52 @@ import (
 const Network = "BTC"
 
 //TODO:
-// Integrate with foundry
+// Integrate with foundry - Done
 // Save data in the sql for statistics
 // Test the new payout code
 
+// collectionTotalHahsPower = sum of all nft hashpower
+// collection is fetched from chain and holds reference to farm id
+// totalOwnershipTime = nextPaymentTime - previousPaymentTime // except when first - then mint
+
 func ProcessPaymentForFarms(farms []types.Farm) error {
 	// also check if the funds have come
-	for _, farm := range farms {
-		rpcClient, err := infrastructure.InitBtcRpcClient()
-		if err != nil {
-			return err
-		}
-		defer rpcClient.Shutdown()
 
+	rpcClient, err := infrastructure.InitBtcRpcClient()
+	if err != nil {
+		return err
+	}
+	defer rpcClient.Shutdown()
+
+	for _, farm := range farms {
+		log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
 		totalRewardForFarm, err := rpcClient.GetBalance(farm.SubAccountName)
 		if err != nil {
 			return err
 		}
 		if totalRewardForFarm == 0 {
-			return fmt.Errorf("Farm with name %s balance is 0..skipping this farm", farm.SubAccountName)
+			return fmt.Errorf("Reward for farm %s is 0....exiting", farm.SubAccountName)
 		}
+		log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
 
 		totalHashPowerForFarm, err := requesters.GetFarmTotalHashPowerFromPoolToday(farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
 		if err != nil {
 			return err
 		}
+		log.Debug().Msgf("Total hash power for farm %s: %s", farm.SubAccountName, totalHashPowerForFarm)
+
 		for _, collection := range farm.Collections {
+			log.Debug().Msgf("Processing collection with Id %s from farm with name %s", collection.Denom.Id, farm.SubAccountName)
 			destinationAddressesWithAmount := make(map[string]btcutil.Amount)
 			totalRewardForCollection, err := calculatePayout(collection.HashRate, totalHashPowerForFarm, collection.HashRateAtCreation, totalRewardForFarm)
+			log.Debug().Msgf("Total reward for collection with Id %s from farm with name %s: %s", collection.Denom.Id, farm.SubAccountName, totalRewardForCollection)
 			if err != nil {
 				return err
 			}
 			for _, nft := range collection.Nfts {
-				// logging + track payment progress in DB
+				log.Debug().Msgf("Processing nft with Id %s from collection %s", nft.Id, collection.Denom.Id)
 				nftPayoutAmount, err := calculatePayout(nft.DataJson.HashRateOwned, collection.HashRate, nft.DataJson.TotalCollectionHashRateWhenMinted, totalRewardForCollection)
+				log.Debug().Msgf("Payout amount for nft with Id %s from collection %s is %s", nft.Id, collection.Denom.Id, nftPayoutAmount)
 				if err != nil {
 					return err
 				}
@@ -63,8 +76,9 @@ func ProcessPaymentForFarms(farms []types.Farm) error {
 			if len(destinationAddressesWithAmount) == 0 {
 				return fmt.Errorf("No addresses found to pay for Farm %q and Collection %q", farm.SubAccountName, collection.Denom.Id)
 			}
+			log.Debug().Msgf("Destionation addresses with amount for collection %s: %s", collection.Denom.Id, fmt.Sprint(destinationAddressesWithAmount))
 			// how and where to fetch tx input id/vout for payment? Get the first available that matches the current balance?
-			payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount)
+			payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, collection.Denom.Id)
 		}
 	}
 	return nil
@@ -134,7 +148,7 @@ func getNftOwnersForTimePeriodWithRewardPercent(nftId string, collectionDenomId 
 	return ownersWithPercentOwnedTime, nil
 }
 
-func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount) (*chainhash.Hash, error) {
+func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount, collectionId string) (*chainhash.Hash, error) {
 	rpcClient, err := infrastructure.InitBtcRpcClient()
 	if err != nil {
 		return nil, err
@@ -175,6 +189,7 @@ func payRewards(inputTxId string, inputTxVout uint32, walletName string, destina
 		return nil, err
 	}
 
+	log.Debug().Msgf("Tx hash for collection %s: %s", collectionId, txHash)
 	return txHash, nil
 }
 
@@ -184,7 +199,6 @@ func transformAddressesWithAmount(destinationAddressesWithAmount map[string]btcu
 	for address, amount := range destinationAddressesWithAmount {
 		addr, err := btcutil.DecodeAddress(address, &chaincfg.SigNetParams)
 		if err != nil {
-			log.Fatal(err)
 			return nil, err
 		}
 		result[addr] = amount
