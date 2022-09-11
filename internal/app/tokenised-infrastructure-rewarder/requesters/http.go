@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -25,14 +26,14 @@ func GetPayoutAddressFromNode(cudosAddress string, network string, tokenId strin
 
 	req, err := http.NewRequest("GET", config.NodeRestUrl+requestString, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return "", err
 	}
 	bytes, err := ioutil.ReadAll(res.Body)
@@ -41,7 +42,7 @@ func GetPayoutAddressFromNode(cudosAddress string, network string, tokenId strin
 
 	err = json.Unmarshal(bytes, &okStruct)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return "", err
 	}
 
@@ -49,7 +50,11 @@ func GetPayoutAddressFromNode(cudosAddress string, network string, tokenId strin
 
 }
 
-func GetNFTsByIds(denomId string, tokenIds []int) (types.NFTCollectionResponse, error) {
+func GetAllNFTsForCollection(denomId string) ([]types.NFT, error) {
+	panic("GetNFTsForCollectionFromChain() not implemented")
+}
+
+func GetNFTsByIdsFromChain(denomId string, tokenIds []int) (types.NFTCollectionResponse, error) {
 	var config = infrastructure.NewConfig()
 	client := &http.Client{
 		Timeout: 60 * time.Second,
@@ -64,13 +69,13 @@ func GetNFTsByIds(denomId string, tokenIds []int) (types.NFTCollectionResponse, 
 
 	reqBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return types.NFTCollectionResponse{}, err
 	}
 
 	req, err := http.NewRequest("POST", config.NodeRestUrl+"/nft/nftsByIds", bytes.NewBuffer(reqBytes))
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return types.NFTCollectionResponse{}, err
 	}
 
@@ -82,16 +87,16 @@ func GetNFTsByIds(denomId string, tokenIds []int) (types.NFTCollectionResponse, 
 
 	err = json.Unmarshal(bytes, &okStruct)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return types.NFTCollectionResponse{}, err
 	}
 
 	for i := 0; i < len(okStruct.Result.Collection.Nfts); i++ {
-		data := types.DataJson{}
+		data := types.DataJsonNFT{}
 		nft := &okStruct.Result.Collection.Nfts[i]
 		err := json.Unmarshal([]byte(nft.Data), &data)
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Msg(err.Error())
 			return types.NFTCollectionResponse{}, err
 		}
 		nft.DataJson = data
@@ -118,20 +123,20 @@ func GetAllNonExpiredNFTsFromHasura() (types.NFTData, error) {
 	client := &http.Client{Timeout: time.Second * 10}
 	response, err := client.Do(request)
 	if err != nil {
-		log.Fatalf("The HTTP request failed with error %s\n", err)
+		log.Error().Msgf("The HTTP request failed with error %s\n", err)
 		return types.NFTData{}, nil
 	}
 	defer response.Body.Close()
 	data, err := ioutil.ReadAll(response.Body)
 
 	if err != nil {
-		log.Fatalf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.NFTData{}, err
 	}
 	var res types.NFTData
 	err = json.Unmarshal(data, &res)
 	if err != nil {
-		log.Fatalf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.NFTData{}, err
 	}
 	return res, nil
@@ -153,17 +158,17 @@ func GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp
 	//   ...
 	// ]
 
-	return nil, nil
+	panic("GetNftTransferHistory() not implemented")
 }
 
 // todo: discuss how to calculate farm hash rate - take the value from today or go back and do an approximation for the period ?
-func GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (int64, error) {
+func GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (float64, error) {
 	var config = infrastructure.NewConfig()
 	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/subaccount_hashrate_day/%s", farmName)
 
 	req, err := http.NewRequest("GET", config.FoundryPoolAPIBaseURL+requestString, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return -1, err
 	}
 
@@ -176,7 +181,7 @@ func GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) 
 	client := &http.Client{Timeout: time.Second * 10}
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return -1, err
 	}
 	bytes, err := ioutil.ReadAll(res.Body)
@@ -185,9 +190,57 @@ func GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) 
 
 	err = json.Unmarshal(bytes, &okStruct)
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Msg(err.Error())
 		return -1, err
 	}
 
 	return okStruct[0].HashrateAccepted, nil
+}
+
+func GetFarmCollectionsFromHasura(farmId string) (types.CollectionData, error) {
+	var config = infrastructure.NewConfig()
+	jsonData := map[string]string{
+		"query": fmt.Sprintf(`
+            {
+                denoms_by_data_property(args: {property_name: "farm_id", property_value: "%s"}) {
+                    id,
+                    data_json
+                }
+            }
+        `, farmId),
+	}
+	jsonValue, _ := json.Marshal(jsonData)
+	request, err := http.NewRequest("POST", config.HasuraURL, bytes.NewBuffer(jsonValue))
+	client := &http.Client{Timeout: time.Second * 10}
+	response, err := client.Do(request)
+	if err != nil {
+		log.Error().Msgf("The HTTP request failed with error %s\n", err)
+		return types.CollectionData{}, nil
+	}
+	defer response.Body.Close()
+	data, err := ioutil.ReadAll(response.Body)
+
+	if err != nil {
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return types.CollectionData{}, err
+	}
+	var res types.CollectionData
+	err = json.Unmarshal(data, &res)
+	if err != nil {
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return types.CollectionData{}, err
+	}
+	return res, nil
+}
+
+func GetFarms() ([]types.Farm, error) {
+	panic("GetFarms() not implemented")
+}
+
+func VerifyCollection(denomId string) (bool, error) {
+	panic("VerifyCollection() not implemented")
+}
+
+func GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error) {
+	panic("GetFarmCollectionWithNFTs() not implemented")
 }

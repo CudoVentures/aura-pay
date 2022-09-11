@@ -26,7 +26,7 @@ const Network = "BTC"
 // Test the new payout code
 
 // collectionTotalHahsPower = sum of all nft hashpower
-// collection is fetched from chain and holds reference to farm id
+// collection is fetched from chain and holds reference to farm id - cannot be done, in this way anyone cant mint such a collection and get paid
 // totalOwnershipTime = nextPaymentTime - previousPaymentTime // except when first - then mint
 
 func ProcessPaymentForFarms(farms []types.Farm) error {

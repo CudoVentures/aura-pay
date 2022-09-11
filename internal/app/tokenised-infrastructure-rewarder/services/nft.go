@@ -38,7 +38,7 @@ func getNFTCollectionsFromNode(nonExpiredNFTsFromHasura map[string][]int) ([]typ
 	var result []types.NFTCollectionResponse
 	for k, v := range nonExpiredNFTsFromHasura {
 
-		NFTCollectionResponse, err := requesters.GetNFTsByIds(k, v)
+		NFTCollectionResponse, err := requesters.GetNFTsByIdsFromChain(k, v)
 		if err != nil {
 			return nil, err
 		}
