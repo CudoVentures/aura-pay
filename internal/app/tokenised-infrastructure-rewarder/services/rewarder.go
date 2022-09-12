@@ -224,7 +224,7 @@ func findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vout uint32) (bt
 	return matchedUTXO, nil
 }
 
-func calculatePayout(hashRate int64, totalHashRate int64, staticHashRate int64, totalReward btcutil.Amount) (btcutil.Amount, error) {
+func calculatePayout(hashRate float64, totalHashRate float64, staticHashRate float64, totalReward btcutil.Amount) (btcutil.Amount, error) {
 
 	var payoutRewardPercent float64
 	// handle case where the collection hash power has decreased

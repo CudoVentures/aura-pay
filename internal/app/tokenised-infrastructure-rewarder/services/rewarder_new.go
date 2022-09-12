@@ -54,6 +54,11 @@ func ProcessPayment() error {
 		}
 		mintedHashPowerForFarm := SumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
 
+		hasHashPowerIncrease, leftoverAmount, err := HasHashPowerIncreased(currentHashPowerForFarm, mintedHashPowerForFarm)
+		if err != nil {
+			return nil
+		}
+
 		for _, collection := range farmCollectionsWithNFTs {
 			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
 			for _, nft := range collection.Nfts {
@@ -76,17 +81,34 @@ func ProcessPayment() error {
 					distributeRewardsToOwnersNew(allNftOwnersForTimePeriodWithRewardPercent, rewardForNft, destinationAddressesWithAmount)
 
 					leftoverReward, err := CalculatePercent(currentHashPowerForFarm, currentHashPowerForFarm-mintedHashPowerForFarm, float64(totalRewardForFarm))
-
-					//  we calculate the percent of hash power of each nft that has been minted based on the total current minted hash power (ex: 100+100+100...)
-					//  then we find what is the reward (out of the totalReward) for the current minted hash power in this way: currentMintedHashPowerAsPercent = current minted hash power as percent from totalCurrentFarmHashPower (ex 1000 from 2000 = 50%)
-					//  then we pay the percent for each nft from the currentMintedHashPowerAsPercent from totalReward ( ex: 50% from 2000=1000, for 10 nfts: 10% from 1000)
-					//  then after we have finished paying the nft owners take the difference between totalCurrentFarmHashPower - current minted hash power
-					//  then we calculate this difference as percent from the totalCurrentFarmHashPower (ex: 40% from 2000)
-					//  then we take this percent from the totalReward to the owner of the farm collection to a default payout address provided by him
+					addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, leftoverReward, farm.DefaultBTCPayoutAddress)
 				}
 			}
 
 		}
+	}
+
+	return nil
+}
+
+func HasHashPowerIncreased(currentHashPowerForFarm float64, mintedHashPowerForFarm float64) (bool, btcutil.Amount, error) {
+	if currentHashPowerForFarm > mintedHashPowerForFarm {
+		leftOverAmount, err := btcutil.NewAmount(currentHashPowerForFarm - mintedHashPowerForFarm)
+		if err != nil {
+			return false, -1, err
+		}
+		return true, leftOverAmount, nil
+	}
+
+	return false, -1, nil
+}
+
+func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]btcutil.Amount, leftoverReward btcutil.Amount, farmDefaultPayoutAddress string) {
+	if _, ok := destinationAddressesWithAmount[farmDefaultPayoutAddress]; ok {
+		// log to statistics here if we are doing accumulation send for an nft
+		destinationAddressesWithAmount[farmDefaultPayoutAddress] += leftoverReward
+	} else {
+		destinationAddressesWithAmount[farmDefaultPayoutAddress] = leftoverReward
 	}
 }
 

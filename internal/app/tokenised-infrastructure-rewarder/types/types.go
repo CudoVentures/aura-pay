@@ -1,10 +1,11 @@
 package types
 
 type Farm struct {
-	Id             string       `json:"id"`
-	SubAccountName string       `json:"sub_account_name"`
-	BTCWallet      string       `json:"btc_wallet"`
-	Collections    []Collection `json:"collections"`
+	Id                      string       `json:"id"`
+	SubAccountName          string       `json:"sub_account_name"`
+	BTCWallet               string       `json:"btc_wallet"`
+	DefaultBTCPayoutAddress string       `json:"default_btc_payout_address"`
+	Collections             []Collection `json:"collections"`
 }
 
 type Collection struct {
