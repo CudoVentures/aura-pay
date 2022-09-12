@@ -10,7 +10,7 @@ func Start() error {
 
 	farms := getDummyData() // replace with call to backend once it is done
 	log.Info().Msgf("Farms fetched from backend: %s", farms)
-	err := services.ProcessPaymentForFarms([]types.Farm{farms})
+	err := services.ProcessPayment()
 	return err
 	// return nil
 }

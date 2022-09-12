@@ -3,10 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"time"
-
-	"github.com/rs/zerolog/log"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
@@ -16,77 +13,156 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/rs/zerolog/log"
 )
 
-const Network = "BTC"
-
-//TODO:
-// Integrate with foundry - Done
-// Save data in the sql for statistics
-// Test the new payout code
-
-// collectionTotalHahsPower = sum of all nft hashpower
-// collection is fetched from chain and holds reference to farm id - cannot be done, in this way anyone cant mint such a collection and get paid
-// totalOwnershipTime = nextPaymentTime - previousPaymentTime // except when first - then mint
-
-func ProcessPaymentForFarms(farms []types.Farm) error {
-	// also check if the funds have come
-
+func ProcessPayment() error {
+	// bitcoin rpc client init
 	rpcClient, err := infrastructure.InitBtcRpcClient()
 	if err != nil {
 		return err
 	}
 	defer rpcClient.Shutdown()
 
+	farms, err := requesters.GetFarms()
+	if err != nil {
+		return err
+	}
+
 	for _, farm := range farms {
 		log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
+		destinationAddressesWithAmount := make(map[string]btcutil.Amount)
 		totalRewardForFarm, err := rpcClient.GetBalance(farm.SubAccountName)
 		if err != nil {
 			return err
 		}
 		if totalRewardForFarm == 0 {
-			return fmt.Errorf("Reward for farm %s is 0....exiting", farm.SubAccountName)
+			return fmt.Errorf("Reward for farm %s is 0....skipping this farm", farm.SubAccountName)
 		}
 		log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
-
-		totalHashPowerForFarm, err := requesters.GetFarmTotalHashPowerFromPoolToday(farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+		collections, err := requesters.GetFarmCollectionsFromHasura(farm.SubAccountName)
 		if err != nil {
 			return err
 		}
-		log.Debug().Msgf("Total hash power for farm %s: %s", farm.SubAccountName, totalHashPowerForFarm)
+		currentHashPowerForFarm, err := requesters.GetFarmTotalHashPowerFromPoolToday(farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+		if err != nil {
+			return err
+		}
+		log.Debug().Msgf("Total hash power for farm %s: %s", farm.SubAccountName, currentHashPowerForFarm)
+		verifiedDenomIds, err := verifyCollectionIds(collections)
+		if err != nil {
+			return err
+		}
+		log.Debug().Msgf("Verified collections for farm %s: %s", farm.SubAccountName, fmt.Sprintf("%v", verifiedDenomIds))
+		farmCollectionsWithNFTs, err := requesters.GetFarmCollectionWithNFTs(verifiedDenomIds)
+		if err != nil {
+			return err
+		}
+		mintedHashPowerForFarm := SumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
+		log.Debug().Msgf("Minted hash for farm %s: %s", farm.SubAccountName, mintedHashPowerForFarm)
 
-		for _, collection := range farm.Collections {
-			log.Debug().Msgf("Processing collection with Id %s from farm with name %s", collection.Denom.Id, farm.SubAccountName)
-			destinationAddressesWithAmount := make(map[string]btcutil.Amount)
-			totalRewardForCollection, err := calculatePayout(collection.HashRate, totalHashPowerForFarm, collection.HashRateAtCreation, totalRewardForFarm)
-			log.Debug().Msgf("Total reward for collection with Id %s from farm with name %s: %s", collection.Denom.Id, farm.SubAccountName, totalRewardForCollection)
-			if err != nil {
-				return err
-			}
+		hasHashPowerIncreased, leftoverAmount, err := HasHashPowerIncreased(currentHashPowerForFarm, mintedHashPowerForFarm)
+		if err != nil {
+			return err
+		}
+		log.Debug().Msgf("hasHashPowerIncreased : %s, leftoverAmount: ", hasHashPowerIncreased, leftoverAmount)
+
+		rewardForNftOwners := totalRewardForFarm
+		if hasHashPowerIncreased {
+			rewardForNftOwners, err = CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, float64(totalRewardForFarm))
+		}
+		log.Debug().Msgf("Reward for nft owners : %s", rewardForNftOwners)
+
+		for _, collection := range farmCollectionsWithNFTs {
+			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
 			for _, nft := range collection.Nfts {
-				log.Debug().Msgf("Processing nft with Id %s from collection %s", nft.Id, collection.Denom.Id)
-				nftPayoutAmount, err := calculatePayout(nft.DataJson.HashRateOwned, collection.HashRate, nft.DataJson.TotalCollectionHashRateWhenMinted, totalRewardForCollection)
-				log.Debug().Msgf("Payout amount for nft with Id %s from collection %s is %s", nft.Id, collection.Denom.Id, nftPayoutAmount)
+				if time.Now().Unix() > nft.DataJson.ExpirationDate {
+					log.Debug().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%s} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
+					continue
+				}
+				rewardForNft, err := CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, float64(rewardForNftOwners))
+				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNft)
 				if err != nil {
 					return err
 				}
-				allNftOwnersForTimePeriodWithRewardPercent, err := getNftOwnersForTimePeriodWithRewardPercent(nft.Id, collection.Denom.Id, 0, 0)
-				distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, nftPayoutAmount, destinationAddressesWithAmount)
+
+				allNftOwnersForTimePeriodWithRewardPercent, err := calculateNftOwnersForTimePeriodWithRewardPercent(collection.Denom.Id, nft.Id, 0, 0)
+				if err != nil {
+					return err
+				}
+				distributeRewardsToOwnersNew(allNftOwnersForTimePeriodWithRewardPercent, rewardForNft, destinationAddressesWithAmount)
 			}
-			if len(destinationAddressesWithAmount) == 0 {
-				return fmt.Errorf("No addresses found to pay for Farm %q and Collection %q", farm.SubAccountName, collection.Denom.Id)
-			}
-			log.Debug().Msgf("Destionation addresses with amount for collection %s: %s", collection.Denom.Id, fmt.Sprint(destinationAddressesWithAmount))
-			// how and where to fetch tx input id/vout for payment? Get the first available that matches the current balance?
-			payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, collection.Denom.Id)
 		}
+
+		if hasHashPowerIncreased {
+			leftoverReward, err := CalculatePercent(currentHashPowerForFarm, leftoverAmount, float64(totalRewardForFarm))
+			if err != nil {
+				return err
+			}
+			addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, leftoverReward, farm.DefaultBTCPayoutAddress)
+			log.Debug().Msgf("Leftover reward with for farm with Id {%s} amount {%s} is added for return to the farm admin with address {%s}", farm.SubAccountName, leftoverReward, farm.DefaultBTCPayoutAddress)
+		}
+
+		if len(destinationAddressesWithAmount) == 0 {
+			return fmt.Errorf("No addresses found to pay for Farm {%s}", farm.SubAccountName)
+		}
+		log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
+
+		//TODO:how to get the correct tx?
+		payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount)
+
 	}
+
 	return nil
 }
 
-func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount) {
+func HasHashPowerIncreased(currentHashPowerForFarm float64, mintedHashPowerForFarm float64) (bool, float64, error) {
+	if currentHashPowerForFarm > mintedHashPowerForFarm {
+		leftOverAmount := currentHashPowerForFarm - mintedHashPowerForFarm
+		return true, leftOverAmount, nil
+	}
+
+	return false, -1, nil
+}
+
+func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]btcutil.Amount, leftoverReward btcutil.Amount, farmDefaultPayoutAddress string) {
+	if _, ok := destinationAddressesWithAmount[farmDefaultPayoutAddress]; ok {
+		// log to statistics here if we are doing accumulation send for an nft
+		destinationAddressesWithAmount[farmDefaultPayoutAddress] += leftoverReward
+	} else {
+		destinationAddressesWithAmount[farmDefaultPayoutAddress] = leftoverReward
+	}
+}
+
+func verifyCollectionIds(collections types.CollectionData) ([]string, error) {
+	var verifiedCollectionIds []string
+	for _, collection := range collections.Data.DenomsByDataProperty {
+		isVerified, err := requesters.VerifyCollection(collection.Id)
+		if err != nil {
+			return nil, err
+		}
+
+		if isVerified {
+			verifiedCollectionIds = append(verifiedCollectionIds, collection.Id)
+		} else {
+			log.Error().Msgf("Collection with denomId %s is not verified", collection.Id)
+		}
+	}
+
+	return verifiedCollectionIds, nil
+}
+
+func sumCollectionHashPower(collectionNFTs []types.NFT) float64 {
+	var collectionHashPower float64
+	for _, nft := range collectionNFTs {
+		collectionHashPower += nft.DataJson.HashRateOwned
+	}
+	return collectionHashPower
+}
+
+func distributeRewardsToOwnersNew(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
-		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)
+		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)    // TODO: Change this to normal float64 percent as MULF64 is rounding
 		if _, ok := destinationAddressesWithAmount[nftPayoutAddress]; ok { // if the address is already there then increment the amount it will receive for its next nft
 			// log to statistics here if we are doing accumulation send for an nft
 			destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
@@ -97,58 +173,7 @@ func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPay
 	}
 }
 
-// if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
-// so a method that returns each nft owner for the time period with the time he owned it as percent
-// use this percent to calculate how much each one should get from the total reward
-func getNftOwnersForTimePeriodWithRewardPercent(nftId string, collectionDenomId string, periodStart int64, periodEnd int64) (map[string]float64, error) {
-
-	ownersWithPercentOwnedTime := make(map[string]float64)
-	totalPeriodTimeInSeconds := periodEnd - periodStart
-	var transferHistoryForTimePeriod []types.NftTransferHistoryElement
-
-	nftTransferHistory, err := requesters.GetNftTransferHistory(collectionDenomId, nftId, periodStart)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, transferHistoryElement := range nftTransferHistory {
-		if transferHistoryElement.Timestamp >= periodStart && transferHistoryElement.Timestamp <= periodEnd {
-			transferHistoryForTimePeriod = append(transferHistoryForTimePeriod, transferHistoryElement)
-		}
-	}
-
-	// sort in ascending order by timestamp
-	sort.Slice(transferHistoryForTimePeriod, func(i, j int) bool {
-		return transferHistoryForTimePeriod[i].Timestamp < transferHistoryForTimePeriod[j].Timestamp
-	})
-
-	for i := 0; i < len(transferHistoryForTimePeriod); i++ {
-		var timeOwned int64
-
-		if i == 0 {
-			timeOwned = transferHistoryForTimePeriod[i].Timestamp - periodStart
-		} else {
-			timeOwned = transferHistoryForTimePeriod[i].Timestamp - transferHistoryForTimePeriod[i-1].Timestamp
-		}
-
-		percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
-		nftPayoutAddress, err := requesters.GetPayoutAddressFromNode(transferHistoryForTimePeriod[i].From, Network, nftId, collectionDenomId)
-		if err != nil {
-			return nil, err
-		}
-
-		if _, ok := ownersWithPercentOwnedTime[nftPayoutAddress]; ok { // if the nft has been bought, sold and bought again by the same owner in the same period - accumulate
-			ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
-
-		} else {
-			ownersWithPercentOwnedTime[nftPayoutAddress] = percentOfTimeOwned
-		}
-	}
-
-	return ownersWithPercentOwnedTime, nil
-}
-
-func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount, collectionId string) (*chainhash.Hash, error) {
+func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount) (*chainhash.Hash, error) {
 	rpcClient, err := infrastructure.InitBtcRpcClient()
 	if err != nil {
 		return nil, err
@@ -189,7 +214,6 @@ func payRewards(inputTxId string, inputTxVout uint32, walletName string, destina
 		return nil, err
 	}
 
-	log.Debug().Msgf("Tx hash for collection %s: %s", collectionId, txHash)
 	return txHash, nil
 }
 
@@ -223,64 +247,3 @@ func findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vout uint32) (bt
 	}
 	return matchedUTXO, nil
 }
-
-func calculatePayout(hashRate float64, totalHashRate float64, staticHashRate float64, totalReward btcutil.Amount) (btcutil.Amount, error) {
-
-	var payoutRewardPercent float64
-	// handle case where the collection hash power has decreased
-	if totalHashRate < staticHashRate {
-		// take hashPower as percent of staticHashRate
-		payoutRewardPercent = float64(hashRate) / float64(staticHashRate) * 100
-	} else {
-		// totalHashRate is the same or increased - then we do nothing as the percent is the same or has proportionally decreased in terms of total hash power
-		payoutRewardPercent = float64(hashRate) / float64(totalHashRate) * 100
-	}
-
-	result := totalReward.MulF64(payoutRewardPercent / 100)
-
-	return result, nil
-
-	// result := float64(totalReward) * payoutRewardPercent / 100
-	// result := payoutRewardPercent / 100 * float64(totalReward)
-	// returns float64 of percent of totalReward
-	// possible problems: what is the foundry tx denomination - in satoshis?
-	// think about if we can lose precision here as float64 is  53-bit precision..maybe use math/big type Float with more precision
-	// or this: https://github.com/shopspring/decimal
-}
-
-// func calculatePayoutAmountTest(nftHashRate string, totalHashRate string, ownedFromTimestamp string, ownedToTimestamp string) (btcutil.Amount, error) {
-// 	amountInSatoshis, err := btcutil.NewAmount(0.0001)
-// 	if err != nil {
-// 		return -1, err
-// 	}
-// 	return amountInSatoshis, nil
-// }
-
-// todo remove once testing is done
-// func getPayoutAddressesFromChain(ownerAddress string, denomId string, tokenId string, test int) (string, error) {
-// rpc call to cudos node for address once its merged
-// http://127.0.0.1:1317/CudoVentures/cudos-node/addressbook/address/cudos1dgv5mmf4r0w3rgxxd3sy5mw3gnnxmgxmuvnqxw/BTC/1@testdenom
-// result:
-// {
-// 	"address": {
-// 	  "network": "BTC",
-// 	  "label": "1@testdenom",
-// 	  "value": "myval",
-// 	  "creator": "cudos1dgv5mmf4r0w3rgxxd3sy5mw3gnnxmgxmuvnqxw"
-// 	}
-//   }
-// var fakedAddress string
-// if test == 0 || test == 1 {
-// 	fakedAddress = "tb1qntsxw6tlkczpueqtpmpza9kutajarctn6aee0l"
-
-// } else {
-// 	fakedAddress = "tb1qqpacwhsdcr4x6vt9hj228ha43kanpch2n74y5c"
-// }
-// // addr, err := btcutil.DecodeAddress(fakedAddress, &chaincfg.SigNetParams)
-// // if err != nil {
-// // 	log.Fatal(err)
-// // 	return nil, err
-// // }
-// return fakedAddress, nil
-
-// }
