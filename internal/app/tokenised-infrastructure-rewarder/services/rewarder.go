@@ -94,8 +94,6 @@ func ProcessPayment(config *infrastructure.Config) error {
 					return err
 				}
 
-				tx := db.MustBegin()
-
 				// fetch payment times from db and pass them to method below : algorithm: arr[i]-arr[i-1]
 
 				nftTransferHistory, err := getNftTransferHistory(collection.Denom.Id, nft.Id)
@@ -114,7 +112,9 @@ func ProcessPayment(config *infrastructure.Config) error {
 				}
 				distributeRewardsToOwnersNew(allNftOwnersForTimePeriodWithRewardPercent, rewardForNft, destinationAddressesWithAmount)
 
+				tx := db.MustBegin()
 				sql_db.SetPayoutTimesForNFT(tx, nft.Id, time.Now().Unix(), rewardForNft.ToBTC()) // // problem: real payment happens in the pay() function below and this could be potentially misleading and wrong
+				tx.Commit()
 			}
 		}
 
