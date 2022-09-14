@@ -3,26 +3,34 @@ package services
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
 
-func ProcessPayment() error {
+func ProcessPayment(config *infrastructure.Config) error {
 	// bitcoin rpc client init
-	rpcClient, err := infrastructure.InitBtcRpcClient()
+	rpcClient, err := infrastructure.InitBtcRpcClient(config)
 	if err != nil {
 		return err
 	}
 	defer rpcClient.Shutdown()
+
+	db, err := sqlx.Connect(fmt.Sprintf("%s", config.DbDriverName), fmt.Sprintf("user=%s dbname=%s sslmode=disable", config.DbUserNameWithPassword, config.DbName))
+	if err != nil {
+		return err
+	}
 
 	farms, err := requesters.GetFarms()
 	if err != nil {
@@ -76,21 +84,37 @@ func ProcessPayment() error {
 		for _, collection := range farmCollectionsWithNFTs {
 			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
 			for _, nft := range collection.Nfts {
-				if time.Now().Unix() > nft.DataJson.ExpirationDate {
-					log.Debug().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%s} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
+				if time.Now().Unix() > nft.Data.ExpirationDate {
+					log.Debug().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%s} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.Data.ExpirationDate)
 					continue
 				}
-				rewardForNft, err := CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, float64(rewardForNftOwners))
+				rewardForNft, err := CalculatePercent(mintedHashPowerForFarm, nft.Data.HashRateOwned, float64(rewardForNftOwners))
 				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNft)
 				if err != nil {
 					return err
 				}
 
-				allNftOwnersForTimePeriodWithRewardPercent, err := calculateNftOwnersForTimePeriodWithRewardPercent(collection.Denom.Id, nft.Id, 0, 0)
+				tx := db.MustBegin()
+
+				// fetch payment times from db and pass them to method below : algorithm: arr[i]-arr[i-1]
+
+				nftTransferHistory, err := getNftTransferHistory(collection.Denom.Id, nft.Id)
+				if err != nil {
+					return err
+				}
+				payoutTimes, err := sql_db.GetPayoutTimesForNFT(db, nft.Id)
+				if err != nil {
+					return err
+				}
+				periodStart, periodEnd, err := findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+
+				allNftOwnersForTimePeriodWithRewardPercent, err := calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd)
 				if err != nil {
 					return err
 				}
 				distributeRewardsToOwnersNew(allNftOwnersForTimePeriodWithRewardPercent, rewardForNft, destinationAddressesWithAmount)
+
+				sql_db.SetPayoutTimesForNFT(tx, nft.Id, time.Now().Unix(), rewardForNft.ToBTC()) // // problem: real payment happens in the pay() function below and this could be potentially misleading and wrong
 			}
 		}
 
@@ -109,11 +133,40 @@ func ProcessPayment() error {
 		log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
 
 		//TODO:how to get the correct tx?
-		payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount)
+		payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, rpcClient)
 
 	}
 
 	return nil
+}
+
+func getNftTransferHistory(collectionDenomId, nftId string) (types.NftTransferHistory, error) {
+	nftTransferHistory, err := requesters.GetNftTransferHistory(collectionDenomId, nftId, 0) // all transfer events
+	if err != nil {
+		return nil, err
+	}
+
+	// sort in ascending order by timestamp
+	sort.Slice(nftTransferHistory, func(i, j int) bool {
+		return nftTransferHistory[i].Timestamp < nftTransferHistory[j].Timestamp
+	})
+
+	return nftTransferHistory, nil
+}
+
+func findCurrentPayoutPeriod(payoutTimes []types.NFTPayoutTime, nftTransferHistory types.NftTransferHistory) (int64, int64, error) {
+	if len(payoutTimes) == 0 { // first time payment - start time is time of minting, end time is now
+		return nftTransferHistory[0].Timestamp, time.Now().Unix(), nil
+	}
+
+	if len(payoutTimes) == 1 {
+		return payoutTimes[0].Time, time.Now().Unix(), nil
+	}
+
+	l := len(payoutTimes)
+
+	return payoutTimes[l-2].Time, payoutTimes[l-1].Time, nil
+
 }
 
 func HasHashPowerIncreased(currentHashPowerForFarm float64, mintedHashPowerForFarm float64) (bool, float64, error) {
@@ -155,7 +208,7 @@ func verifyCollectionIds(collections types.CollectionData) ([]string, error) {
 func sumCollectionHashPower(collectionNFTs []types.NFT) float64 {
 	var collectionHashPower float64
 	for _, nft := range collectionNFTs {
-		collectionHashPower += nft.DataJson.HashRateOwned
+		collectionHashPower += nft.Data.HashRateOwned
 	}
 	return collectionHashPower
 }
@@ -173,13 +226,7 @@ func distributeRewardsToOwnersNew(ownersWithPercentOwned map[string]float64, nft
 	}
 }
 
-func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount) (*chainhash.Hash, error) {
-	rpcClient, err := infrastructure.InitBtcRpcClient()
-	if err != nil {
-		return nil, err
-	}
-	defer rpcClient.Shutdown()
-
+func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount, rpcClient *rpcclient.Client) (*chainhash.Hash, error) {
 	// todo: add as params and fetch it from pool
 	var outputVouts []int
 	for i := 0; i < len(destinationAddressesWithAmount); i++ {

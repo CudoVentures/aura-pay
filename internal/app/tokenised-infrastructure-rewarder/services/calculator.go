@@ -15,7 +15,7 @@ func SumMintedHashPowerForAllCollections(collections []types.Collection) float64
 
 	for _, collection := range collections {
 		for _, nft := range collection.Nfts {
-			totalMintedHashPowerForAllCollections += nft.DataJson.HashRateOwned
+			totalMintedHashPowerForAllCollections += nft.Data.HashRateOwned
 		}
 	}
 
@@ -90,21 +90,11 @@ func GetNftOwnersForTimePeriodWithRewardPercent(nftId string, collectionDenomId 
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
-func calculateNftOwnersForTimePeriodWithRewardPercent(collectionDenomId string, nftId string, periodStart int64, periodEnd int64) (map[string]float64, error) {
+func calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory types.NftTransferHistory, collectionDenomId string, nftId string, periodStart int64, periodEnd int64) (map[string]float64, error) {
 
 	ownersWithPercentOwnedTime := make(map[string]float64)
 	totalPeriodTimeInSeconds := periodEnd - periodStart
 	var transferHistoryForTimePeriod []types.NftTransferHistoryElement
-
-	nftTransferHistory, err := requesters.GetNftTransferHistory(collectionDenomId, nftId, 0) // all transfer events
-	if err != nil {
-		return nil, err
-	}
-
-	// sort in ascending order by timestamp
-	sort.Slice(nftTransferHistory, func(i, j int) bool {
-		return nftTransferHistory[i].Timestamp < nftTransferHistory[j].Timestamp
-	})
 
 	for _, transferHistoryElement := range nftTransferHistory {
 		if transferHistoryElement.Timestamp >= periodStart && transferHistoryElement.Timestamp <= periodEnd {

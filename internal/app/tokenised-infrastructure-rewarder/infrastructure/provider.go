@@ -5,8 +5,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func InitBtcRpcClient() (*rpcclient.Client, error) {
-	config := NewConfig()
+func InitBtcRpcClient(config *Config) (*rpcclient.Client, error) {
 	connCfg := &rpcclient.ConnConfig{
 		Host:         config.BitcoinNodeUrl + ":" + config.BitcoinNodePort + "/",
 		User:         config.BitcoinNodeUserName,

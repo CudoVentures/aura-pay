@@ -1,31 +1,5 @@
 package types
 
-type NFTData struct {
-	Data struct {
-		NftsByExpirationDate []struct {
-			Id       int         `json:"id"`
-			DenomId  string      `json:"denom_id"`
-			DataJson DataJsonNFT `json:"data_json"`
-		} `json:"nfts_by_expiration_date"`
-	} `json:"data"`
-}
-
-type CollectionData struct {
-	Data struct {
-		DenomsByDataProperty []struct {
-			Id       string             `json:"id"`
-			DataJson DataJsonCollection `json:"data_json"`
-		} `json:"denoms_by_data_property"`
-	} `json:"data"`
-}
-
-type NFTCollectionResponse struct {
-	Height string `json:"height"`
-	Result struct {
-		Collection Collection `json:"collection"`
-	} `json:"result"`
-}
-
 type MappedAddress struct {
 	Address Address `json:"address"`
 }
@@ -68,4 +42,18 @@ type CollectionResult struct {
 type CollectionClass struct {
 	Denom Denom `json:"denom"`
 	Nfts  []NFT `json:"nfts"`
+}
+
+type CollectionData struct {
+	Data struct {
+		DenomsByDataProperty []struct {
+			Id       string             `json:"id"`
+			DataJson DataJsonCollection `json:"data_json"`
+		} `json:"denoms_by_data_property"`
+	} `json:"data"`
+}
+
+type DataJsonCollection struct { // hasura response
+	FarmId string `json:"farm_id"`
+	Owner  string `json:"owner"`
 }
