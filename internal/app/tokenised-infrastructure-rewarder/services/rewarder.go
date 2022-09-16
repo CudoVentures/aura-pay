@@ -94,8 +94,6 @@ func ProcessPayment(config *infrastructure.Config) error {
 					return err
 				}
 
-				// fetch payment times from db and pass them to method below : algorithm: arr[i]-arr[i-1]
-
 				nftTransferHistory, err := getNftTransferHistory(collection.Denom.Id, nft.Id)
 				if err != nil {
 					return err

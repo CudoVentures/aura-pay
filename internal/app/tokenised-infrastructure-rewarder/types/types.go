@@ -9,10 +9,8 @@ type Farm struct {
 }
 
 type Collection struct {
-	Denom              Denom `json:"denom"`
-	Nfts               []NFT `json:"nfts"`
-	HashRate           int64 `json:"hash_rate"`
-	HashRateAtCreation int64 `json:"hash_rate_at_creation"`
+	Denom Denom `json:"denom"`
+	Nfts  []NFT `json:"nfts"`
 }
 
 type Denom struct {

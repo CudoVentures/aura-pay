@@ -9,6 +9,12 @@ import (
 
 func Start() error {
 
+	// TODO:
+	// Implement methods + expose methods in the node
+	// Statistics
+	// Test config replacement for foundry
+	// Test all of this
+
 	farms := getDummyData() // replace with call to backend once it is done
 	log.Info().Msgf("Farms fetched from backend: %s", farms)
 	config := infrastructure.NewConfig()
