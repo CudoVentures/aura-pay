@@ -69,10 +69,7 @@ func ProcessPayment(config *infrastructure.Config) error {
 		mintedHashPowerForFarm := SumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
 		log.Debug().Msgf("Minted hash for farm %s: %s", farm.SubAccountName, mintedHashPowerForFarm)
 
-		hasHashPowerIncreased, leftoverAmount, err := HasHashPowerIncreased(currentHashPowerForFarm, mintedHashPowerForFarm)
-		if err != nil {
-			return err
-		}
+		hasHashPowerIncreased, leftoverAmount := HasHashPowerIncreased(currentHashPowerForFarm, mintedHashPowerForFarm)
 		log.Debug().Msgf("hasHashPowerIncreased : %s, leftoverAmount: ", hasHashPowerIncreased, leftoverAmount)
 
 		rewardForNftOwners := totalRewardForFarm
@@ -167,13 +164,13 @@ func findCurrentPayoutPeriod(payoutTimes []types.NFTPayoutTime, nftTransferHisto
 
 }
 
-func HasHashPowerIncreased(currentHashPowerForFarm float64, mintedHashPowerForFarm float64) (bool, float64, error) {
+func HasHashPowerIncreased(currentHashPowerForFarm float64, mintedHashPowerForFarm float64) (bool, float64) {
 	if currentHashPowerForFarm > mintedHashPowerForFarm {
 		leftOverAmount := currentHashPowerForFarm - mintedHashPowerForFarm
-		return true, leftOverAmount, nil
+		return true, leftOverAmount
 	}
 
-	return false, -1, nil
+	return false, -1
 }
 
 func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]btcutil.Amount, leftoverReward btcutil.Amount, farmDefaultPayoutAddress string) {

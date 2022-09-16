@@ -18,6 +18,7 @@ type Config struct {
 	DbDriverName           string
 	DbUserNameWithPassword string
 	DbName                 string
+	HasuraActionsURL       string
 }
 
 // NewConfig New returns a new Config struct
@@ -29,11 +30,12 @@ func NewConfig() *Config {
 		BitcoinNodePort:        getEnv("BITCOIN_NODE_PORT", ""),
 		BitcoinNodeUserName:    getEnv("BITCOIN_NODE_USER_NAME", ""),
 		BitcoinNodePassword:    getEnv("BITCOIN_NODE_PASSWORD", ""),
-		FoundryPoolAPIBaseURL:  getEnv("FoundryPoolAPIBaseURL", ""),
-		FoundryPoolAPIKey:      getEnv("FoundryPoolAPIKey", ""),
-		DbDriverName:           getEnv("DDriverName", ""),
-		DbUserNameWithPassword: getEnv("DbUserNameWithPassword", ""),
-		DbName:                 getEnv("DbName", ""),
+		FoundryPoolAPIBaseURL:  getEnv("FOUNDRY_POOL_API_BASE_URL", ""),
+		FoundryPoolAPIKey:      getEnv("FOUNDRY_POOL_API_KEY", ""),
+		DbDriverName:           getEnv("DB_DRIVER_NAME", ""),
+		DbUserNameWithPassword: getEnv("DB_USER_NAME_WITH_PASSWORD", ""),
+		DbName:                 getEnv("DB_NAME", ""),
+		HasuraActionsURL:       getEnv("HASURA_ACTIONS_URL", ""),
 	}
 }
 

@@ -65,7 +65,36 @@ func GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp
 	//   ...
 	// ]
 
-	panic("GetNftTransferHistory() not implemented")
+	var config = infrastructure.NewConfig()
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	requestString := fmt.Sprintf("/transfer-events?denom=%s&nft=%s", collectionDenomId, nftId)
+
+	req, err := http.NewRequest("GET", config.HasuraActionsURL+requestString, nil)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	res, err := client.Do(req)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+	bytes, err := ioutil.ReadAll(res.Body)
+
+	okStruct := types.NftTransferHistory{}
+
+	err = json.Unmarshal(bytes, &okStruct)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	return okStruct, nil
 }
 
 // todo: discuss how to calculate farm hash rate - take the value from today or go back and do an approximation for the period ?
