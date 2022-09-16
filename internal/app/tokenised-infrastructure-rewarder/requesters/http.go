@@ -190,5 +190,43 @@ func VerifyCollection(denomId string) (bool, error) {
 }
 
 func GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error) {
-	panic("GetFarmCollectionWithNFTs() not implemented")
+	var config = infrastructure.NewConfig()
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	var idsArray []string
+	for _, id := range denomIds {
+		idsArray = append(idsArray, id)
+	}
+
+	reqBody := struct {
+		DenomIds []string `json:"denom_ids"`
+	}{DenomIds: idsArray}
+
+	reqBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", config.NodeRestUrl+"/nft/collectionsByDenomIds", bytes.NewBuffer(reqBytes))
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	res, err := client.Do(req)
+	bytes, err := ioutil.ReadAll(res.Body)
+
+	okStruct := types.CollectionResponse{}
+
+	err = json.Unmarshal(bytes, &okStruct)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	return okStruct.Result.Collections, nil
 }

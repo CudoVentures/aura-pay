@@ -36,12 +36,7 @@ type CollectionResponse struct {
 }
 
 type CollectionResult struct {
-	Collection CollectionClass `json:"collection"`
-}
-
-type CollectionClass struct {
-	Denom Denom `json:"denom"`
-	Nfts  []NFT `json:"nfts"`
+	Collections []Collection `json:"collections"`
 }
 
 type CollectionData struct {
