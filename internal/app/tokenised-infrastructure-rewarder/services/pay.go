@@ -53,16 +53,24 @@ func ProcessPayment(config *infrastructure.Config) error {
 		if err != nil {
 			return err
 		}
-		currentHashPowerForFarm, err := requesters.GetFarmTotalHashPowerFromPoolToday(farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
-		if err != nil {
-			return err
+
+		var currentHashPowerForFarm float64
+		if config.IsTesting {
+			currentHashPowerForFarm = 1200 // hardcoded for testing & QA
+		} else {
+			currentHashPowerForFarm, err = requesters.GetFarmTotalHashPowerFromPoolToday(farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+			if err != nil {
+				return err
+			}
 		}
 		log.Debug().Msgf("Total hash power for farm %s: %s", farm.SubAccountName, currentHashPowerForFarm)
+
 		verifiedDenomIds, err := verifyCollectionIds(collections)
 		if err != nil {
 			return err
 		}
 		log.Debug().Msgf("Verified collections for farm %s: %s", farm.SubAccountName, fmt.Sprintf("%v", verifiedDenomIds))
+
 		farmCollectionsWithNFTs, err := requesters.GetFarmCollectionWithNFTs(verifiedDenomIds)
 		if err != nil {
 			return err

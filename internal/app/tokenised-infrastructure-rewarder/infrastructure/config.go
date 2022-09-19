@@ -19,6 +19,7 @@ type Config struct {
 	DbUserNameWithPassword string
 	DbName                 string
 	HasuraActionsURL       string
+	IsTesting              bool
 }
 
 // NewConfig New returns a new Config struct
@@ -36,6 +37,7 @@ func NewConfig() *Config {
 		DbUserNameWithPassword: getEnv("DB_USER_NAME_WITH_PASSWORD", ""),
 		DbName:                 getEnv("DB_NAME", ""),
 		HasuraActionsURL:       getEnv("HASURA_ACTIONS_URL", ""),
+		IsTesting:              getEnvAsBool("IS_TESTING", true),
 	}
 }
 

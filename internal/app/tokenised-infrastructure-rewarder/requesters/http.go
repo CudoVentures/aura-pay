@@ -100,7 +100,7 @@ func GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp
 // todo: discuss how to calculate farm hash rate - take the value from today or go back and do an approximation for the period ?
 func GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (float64, error) {
 	var config = infrastructure.NewConfig()
-	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/subaccount_hashrate_day/%s", farmName)
+	requestString := fmt.Sprintf("/subaccount_hashrate_day/%s", farmName)
 
 	req, err := http.NewRequest("GET", config.FoundryPoolAPIBaseURL+requestString, nil)
 	if err != nil {
