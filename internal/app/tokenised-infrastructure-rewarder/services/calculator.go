@@ -104,7 +104,7 @@ func calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory types.N
 
 	for i := 0; i < len(transferHistoryForTimePeriod); i++ {
 		var timeOwned int64
-		statisticsAdditionalData := types.StatisticsAdditionalData{}
+		statisticsAdditionalData := types.NFTOwnerInformation{}
 		nftPayoutAddress, err := requesters.GetPayoutAddressFromNode(transferHistoryForTimePeriod[i].From, NETWORK, nftId, collectionDenomId)
 		if i == 0 {
 			timeOwned = transferHistoryForTimePeriod[i].Timestamp - periodStart
@@ -131,7 +131,7 @@ func calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory types.N
 		} else {
 			ownersWithPercentOwnedTime[nftPayoutAddress] = percentOfTimeOwned
 		}
-		statistics.AdditionalData = append(statistics.AdditionalData, statisticsAdditionalData)
+		statistics.NFTOwnersForPeriod = append(statistics.NFTOwnersForPeriod, statisticsAdditionalData)
 	}
 
 	return ownersWithPercentOwnedTime, nil
