@@ -137,11 +137,25 @@ func ProcessPayment(config *infrastructure.Config) error {
 		txHash, err := payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, rpcClient)
 		// NFTStatistics - save nft statistics - object from above
 		// Farm Statistics - save everything about the farm - including addresses
-		saveStatistics(txHash, destinationAddressesWithAmount)
-
+		sql_tx := db.MustBegin()
+		saveStatistics(txHash, destinationAddressesWithAmount, statistics, sql_tx, farm.Id)
+		sql_tx.Commit()
 	}
 
 	return nil
+}
+
+func saveStatistics(txHash *chainhash.Hash, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, sql_tx *sqlx.Tx, farmId string) {
+	for address, amount := range destinationAddressesWithAmount {
+		sql_db.SaveDestionAddressesWithAmountHistory(sql_tx, address, amount, txHash.String(), farmId)
+	}
+
+	for _, nftStatistic := range statistics {
+		sql_db.SaveNftInformationHistory(sql_tx, nftStatistic.TokenId, nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.RewardForNFT, txHash.String())
+		for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
+			sql_db.SaveNFTOwnersForPeriodHistory(sql_tx, ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned, ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward)
+		}
+	}
 }
 
 func getNftTransferHistory(collectionDenomId, nftId string) (types.NftTransferHistory, error) {
@@ -230,8 +244,8 @@ func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPay
 }
 
 func addPaymentAmountToStatistics(amount btcutil.Amount, payoutAddress string, nftStatistics types.NFTStatistics) {
-	for i := 0; i < len(nftStatistics.AdditionalData); i++ {
-		additionalData := nftStatistics.AdditionalData[i]
+	for i := 0; i < len(nftStatistics.NFTOwnersForPeriod); i++ {
+		additionalData := nftStatistics.NFTOwnersForPeriod[i]
 		if additionalData.PayoutAddress == payoutAddress {
 			additionalData.Reward = amount
 		}

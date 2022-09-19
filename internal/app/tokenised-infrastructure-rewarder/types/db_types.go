@@ -9,14 +9,14 @@ type NFTPayoutTime struct {
 }
 
 type NFTStatistics struct {
-	TokenId           string
-	PayoutPeriodStart int64
-	PayoutPeriodEnd   int64
-	RewardForNFT      btcutil.Amount
-	AdditionalData    []StatisticsAdditionalData
+	TokenId            string
+	PayoutPeriodStart  int64
+	PayoutPeriodEnd    int64
+	RewardForNFT       btcutil.Amount
+	NFTOwnersForPeriod []NFTOwnerInformation
 }
 
-type StatisticsAdditionalData struct {
+type NFTOwnerInformation struct {
 	TimeOwnedFrom      int64
 	TimeOwnedTo        int64
 	TotalTimeOwned     int64
