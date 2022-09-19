@@ -13,15 +13,15 @@ func SetPayoutTimesForNFT(tx *sqlx.Tx, nftId string, payoutTime int64, payoutAmo
 }
 
 func SaveDestionAddressesWithAmountHistory(tx *sqlx.Tx, address string, amount btcutil.Amount, txHash string, farmId string) {
-	tx.MustExec("INSERT INTO statistics_destination_addresses_with_amount (address, amount, txHash, farmId, time) VALUES ($1, $2, $3, $4, $5)", address, amount, txHash, farmId, time.Now().Unix())
+	tx.MustExec("INSERT INTO statistics_destination_addresses_with_amount (address, amount, tx_hash, farm_id, time) VALUES ($1, $2, $3, $4, $5)", address, amount, txHash, farmId, time.Now().Unix())
 }
 
 func SaveNftInformationHistory(tx *sqlx.Tx, tokenId string, payoutPeriodStart int64, payoutPeriodEnd int64, reward btcutil.Amount, txHash string) {
-	tx.MustExec("INSERT INTO statistics_nft_payout_history (tokenId, payoutPeriodStart, payoutPeriodEnd, reward, txHash) VALUES ($1, $2, $3, $4, $5)", tokenId, payoutPeriodStart, payoutPeriodEnd, reward, txHash)
+	tx.MustExec("INSERT INTO statistics_nft_payout_history (token_id, payout_period_start, payout_period_end, reward, tx_hash) VALUES ($1, $2, $3, $4, $5)", tokenId, payoutPeriodStart, payoutPeriodEnd, reward, txHash)
 
 }
 
 func SaveNFTOwnersForPeriodHistory(tx *sqlx.Tx, timedOwnedFrom int64, timedOwnedTo int64, totalTimeOwned int64, percentOfTimeOwned float64, owner string, payoutAddress string, reward btcutil.Amount) {
-	tx.MustExec("INSERT INTO statistics_nft_owners_payout_history (timedOwnedFrom, timedOwnedTo, totalTimeOwned, percentOfTimeOwned,owner, payoutAddress, reward ) VALUES ($1, $2, $3, $4, $5, $6, S7)",
+	tx.MustExec("INSERT INTO statistics_nft_owners_payout_history (time_owned_from, time_owned_to, total_time_owned, percent_of_time_owned ,owner, payout_address, reward ) VALUES ($1, $2, $3, $4, $5, $6, S7)",
 		timedOwnedFrom, timedOwnedTo, totalTimeOwned, percentOfTimeOwned, owner, payoutAddress, reward)
 }
