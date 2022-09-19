@@ -2,6 +2,7 @@ package tokenised_infrastructure_rewarder
 
 import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/rs/zerolog/log"
@@ -10,7 +11,7 @@ import (
 func Start() error {
 
 	// TODO:
-	// Implement methods + expose methods in the node
+	// Implement methods + expose methods in the node - done
 	// Statistics
 	// Test config replacement for foundry
 	// Test all of this
@@ -18,7 +19,9 @@ func Start() error {
 	farms := getDummyData() // replace with call to backend once it is done
 	log.Info().Msgf("Farms fetched from backend: %s", farms)
 	config := infrastructure.NewConfig()
-	err := services.ProcessPayment(config)
+	requestClient := requesters.NewRequester(*config)
+	payService := services.NewServices(requestClient)
+	err := payService.ProcessPayment(config)
 	return err
 	// return nil
 }

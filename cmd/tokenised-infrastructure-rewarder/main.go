@@ -16,5 +16,9 @@ func init() {
 
 func main() {
 	log.Info().Msg("Application started")
-	worker.Start()
+	err := worker.Start()
+	if err != nil {
+
+	}
+
 }

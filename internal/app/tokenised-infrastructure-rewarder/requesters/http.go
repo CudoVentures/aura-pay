@@ -14,8 +14,15 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 )
 
-func GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error) {
-	var config = infrastructure.NewConfig()
+func NewRequester(config infrastructure.Config) *requester {
+	return &requester{config: config}
+}
+
+type requester struct {
+	config infrastructure.Config
+}
+
+func (r *requester) GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
@@ -23,7 +30,7 @@ func GetPayoutAddressFromNode(cudosAddress string, network string, tokenId strin
 	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
 	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
 
-	req, err := http.NewRequest("GET", config.NodeRestUrl+requestString, nil)
+	req, err := http.NewRequest("GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return "", err
@@ -49,30 +56,14 @@ func GetPayoutAddressFromNode(cudosAddress string, network string, tokenId strin
 
 }
 
-func GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
-	// /transfer-events?denom={denom-id}&nft={nft-id}&since={timestamp}
-	// [
-	//   {
-	// 	"from": "cudos14h7pdf8g2kkjgum5dntz80s5lhtrw3lk2uswk0"
-	// 	"to": "cudos1fzt4kr4t2f342m9zgw85gfd7cah405czg4lu6a"
-	// 	"timestamp": 1662018059
-	//   },
-	//   {
-	// 	"from": "cudos14h7pdf8g2kkjgum5dntz80s5lhtrw3lk2uswk0"
-	// 	"to": "cudos1fzt4kr4t2f342m9zgw85gfd7cah405czg4lu6a"
-	// 	"timestamp": 1662018059
-	//   }
-	//   ...
-	// ]
-
-	var config = infrastructure.NewConfig()
+func (r *requester) GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
 
 	requestString := fmt.Sprintf("/transfer-events?denom=%s&nft=%s", collectionDenomId, nftId)
 
-	req, err := http.NewRequest("GET", config.HasuraActionsURL+requestString, nil)
+	req, err := http.NewRequest("GET", r.config.HasuraActionsURL+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return nil, err
@@ -97,19 +88,17 @@ func GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp
 	return okStruct, nil
 }
 
-// todo: discuss how to calculate farm hash rate - take the value from today or go back and do an approximation for the period ?
-func GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (float64, error) {
-	var config = infrastructure.NewConfig()
+func (r *requester) GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (float64, error) {
 	requestString := fmt.Sprintf("/subaccount_hashrate_day/%s", farmName)
 
-	req, err := http.NewRequest("GET", config.FoundryPoolAPIBaseURL+requestString, nil)
+	req, err := http.NewRequest("GET", r.config.FoundryPoolAPIBaseURL+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return -1, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-KEY", config.FoundryPoolAPIKey)
+	req.Header.Set("X-API-KEY", r.config.FoundryPoolAPIKey)
 	q := req.URL.Query()           // Get a copy of the query values.
 	q.Add("start", sinceTimestamp) // Add a new value to the set.
 	req.URL.RawQuery = q.Encode()  // Encode and assign back to the original query.
@@ -133,8 +122,7 @@ func GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) 
 	return okStruct[0].HashrateAccepted, nil
 }
 
-func GetFarmCollectionsFromHasura(farmId string) (types.CollectionData, error) {
-	var config = infrastructure.NewConfig()
+func (r *requester) GetFarmCollectionsFromHasura(farmId string) (types.CollectionData, error) {
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
             {
@@ -146,7 +134,7 @@ func GetFarmCollectionsFromHasura(farmId string) (types.CollectionData, error) {
         `, farmId),
 	}
 	jsonValue, _ := json.Marshal(jsonData)
-	request, err := http.NewRequest("POST", config.HasuraURL, bytes.NewBuffer(jsonValue))
+	request, err := http.NewRequest("POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
 	client := &http.Client{Timeout: time.Second * 10}
 	response, err := client.Do(request)
 	if err != nil {
@@ -169,7 +157,7 @@ func GetFarmCollectionsFromHasura(farmId string) (types.CollectionData, error) {
 	return res, nil
 }
 
-func GetFarms() ([]types.Farm, error) {
+func (r *requester) GetFarms() ([]types.Farm, error) {
 	//TODO: implement once backend is finished
 	// panic("GetFarms() not implemented")
 
@@ -178,15 +166,14 @@ func GetFarms() ([]types.Farm, error) {
 	return []types.Farm{testFarm}, nil
 }
 
-func VerifyCollection(denomId string) (bool, error) {
-	var config = infrastructure.NewConfig()
+func (r *requester) VerifyCollection(denomId string) (bool, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
 
 	requestString := fmt.Sprintf("/CudoVentures/cudos-node/marketplace/collection_by_denom_id/%s", denomId)
 
-	req, err := http.NewRequest("GET", config.NodeRestUrl+requestString, nil)
+	req, err := http.NewRequest("GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return false, err
@@ -218,8 +205,7 @@ func VerifyCollection(denomId string) (bool, error) {
 	return okStruct.Collection.Verified, nil
 }
 
-func GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error) {
-	var config = infrastructure.NewConfig()
+func (r *requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
@@ -239,7 +225,7 @@ func GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", config.NodeRestUrl+"/nft/collectionsByDenomIds", bytes.NewBuffer(reqBytes))
+	req, err := http.NewRequest("POST", r.config.NodeRestUrl+"/nft/collectionsByDenomIds", bytes.NewBuffer(reqBytes))
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return nil, err
