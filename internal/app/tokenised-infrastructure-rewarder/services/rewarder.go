@@ -40,6 +40,7 @@ func ProcessPayment(config *infrastructure.Config) error {
 	for _, farm := range farms {
 		log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
 		destinationAddressesWithAmount := make(map[string]btcutil.Amount)
+		var statistics []types.NFTStatistics
 		totalRewardForFarm, err := rpcClient.GetBalance(farm.SubAccountName)
 		if err != nil {
 			return err
@@ -82,14 +83,18 @@ func ProcessPayment(config *infrastructure.Config) error {
 			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
 			for _, nft := range collection.Nfts {
 				if time.Now().Unix() > nft.Data.ExpirationDate {
-					log.Debug().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%s} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.Data.ExpirationDate)
+					log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%s} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.Data.ExpirationDate)
 					continue
 				}
+				var nftStatistics types.NFTStatistics
+				nftStatistics.TokenId = nft.Id
+
 				rewardForNft, err := CalculatePercent(mintedHashPowerForFarm, nft.Data.HashRateOwned, float64(rewardForNftOwners))
 				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNft)
 				if err != nil {
 					return err
 				}
+				nftStatistics.RewardForNFT = rewardForNft
 
 				nftTransferHistory, err := getNftTransferHistory(collection.Denom.Id, nft.Id)
 				if err != nil {
@@ -100,15 +105,17 @@ func ProcessPayment(config *infrastructure.Config) error {
 					return err
 				}
 				periodStart, periodEnd, err := findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+				nftStatistics.PayoutPeriodStart = periodStart
+				nftStatistics.PayoutPeriodEnd = periodEnd
 
-				allNftOwnersForTimePeriodWithRewardPercent, err := calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd)
+				allNftOwnersForTimePeriodWithRewardPercent, err := calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, nftStatistics)
 				if err != nil {
 					return err
 				}
-				distributeRewardsToOwnersNew(allNftOwnersForTimePeriodWithRewardPercent, rewardForNft, destinationAddressesWithAmount)
+				distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNft, destinationAddressesWithAmount, nftStatistics)
 
 				tx := db.MustBegin()
-				sql_db.SetPayoutTimesForNFT(tx, nft.Id, time.Now().Unix(), rewardForNft.ToBTC()) // // problem: real payment happens in the pay() function below and this could be potentially misleading and wrong
+				sql_db.SetPayoutTimesForNFT(tx, nft.Id, time.Now().Unix(), rewardForNft.ToBTC())
 				tx.Commit()
 			}
 		}
@@ -127,8 +134,10 @@ func ProcessPayment(config *infrastructure.Config) error {
 		}
 		log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
 
-		//TODO:how to get the correct tx?
-		payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, rpcClient)
+		txHash, err := payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, rpcClient)
+		// NFTStatistics - save nft statistics - object from above
+		// Farm Statistics - save everything about the farm - including addresses
+		saveStatistics(txHash, destinationAddressesWithAmount)
 
 	}
 
@@ -208,21 +217,28 @@ func sumCollectionHashPower(collectionNFTs []types.NFT) float64 {
 	return collectionHashPower
 }
 
-func distributeRewardsToOwnersNew(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount) {
+func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount, statistics types.NFTStatistics) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
 		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)    // TODO: Change this to normal float64 percent as MULF64 is rounding
 		if _, ok := destinationAddressesWithAmount[nftPayoutAddress]; ok { // if the address is already there then increment the amount it will receive for its next nft
-			// log to statistics here if we are doing accumulation send for an nft
 			destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
-
 		} else {
 			destinationAddressesWithAmount[nftPayoutAddress] = payoutAmount
+		}
+		addPaymentAmountToStatistics(payoutAmount, nftPayoutAddress, statistics)
+	}
+}
+
+func addPaymentAmountToStatistics(amount btcutil.Amount, payoutAddress string, nftStatistics types.NFTStatistics) {
+	for i := 0; i < len(nftStatistics.AdditionalData); i++ {
+		additionalData := nftStatistics.AdditionalData[i]
+		if additionalData.PayoutAddress == payoutAddress {
+			additionalData.Reward = amount
 		}
 	}
 }
 
 func payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount, rpcClient *rpcclient.Client) (*chainhash.Hash, error) {
-	// todo: add as params and fetch it from pool
 	var outputVouts []int
 	for i := 0; i < len(destinationAddressesWithAmount); i++ {
 		outputVouts = append(outputVouts, i)
