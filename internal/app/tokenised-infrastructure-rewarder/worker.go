@@ -19,8 +19,9 @@ func Start() error {
 	farms := getDummyData() // replace with call to backend once it is done
 	log.Info().Msgf("Farms fetched from backend: %s", farms)
 	config := infrastructure.NewConfig()
+	provider := infrastructure.NewProvider(config)
 	requestClient := requesters.NewRequester(*config)
-	payService := services.NewServices(requestClient)
+	payService := services.NewServices(requestClient, provider)
 	err := payService.ProcessPayment(config)
 	return err
 	// return nil

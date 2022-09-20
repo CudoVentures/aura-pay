@@ -18,17 +18,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func NewServices(apiRequester apiRequester) *services {
-	return &services{apiRequester: apiRequester}
+func NewServices(apiRequester apiRequester, provider provider) *services {
+	return &services{apiRequester: apiRequester, provider: provider}
 }
 
 type services struct {
 	apiRequester apiRequester
+	provider     provider
 }
 
 func (s *services) ProcessPayment(config *infrastructure.Config) error {
 	// bitcoin rpc client init
-	rpcClient, err := infrastructure.InitBtcRpcClient(config)
+	rpcClient, err := s.provider.InitBtcRpcClient()
 	if err != nil {
 		return err
 	}
@@ -349,4 +350,8 @@ type apiRequester interface {
 	VerifyCollection(denomId string) (bool, error)
 
 	GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error)
+}
+
+type provider interface {
+	InitBtcRpcClient() (*rpcclient.Client, error)
 }

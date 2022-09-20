@@ -5,11 +5,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func InitBtcRpcClient(config *Config) (*rpcclient.Client, error) {
+func NewProvider(config *Config) *provider {
+	return &provider{config: *config}
+}
+
+type provider struct {
+	config Config
+}
+
+func (p *provider) InitBtcRpcClient() (*rpcclient.Client, error) {
 	connCfg := &rpcclient.ConnConfig{
-		Host:         config.BitcoinNodeUrl + ":" + config.BitcoinNodePort + "/",
-		User:         config.BitcoinNodeUserName,
-		Pass:         config.BitcoinNodePassword,
+		Host:         p.config.BitcoinNodeUrl + ":" + p.config.BitcoinNodePort + "/",
+		User:         p.config.BitcoinNodeUserName,
+		Pass:         p.config.BitcoinNodePassword,
 		HTTPPostMode: true, // Bitcoin core only supports HTTP POST mode
 		DisableTLS:   true, // Bitcoin core does not provide TLS by default
 	}
