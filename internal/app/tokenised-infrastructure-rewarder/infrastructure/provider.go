@@ -1,7 +1,10 @@
 package infrastructure
 
 import (
+	"fmt"
+
 	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,4 +36,13 @@ func (p *provider) InitBtcRpcClient() (*rpcclient.Client, error) {
 	log.Debug().Msgf("rpcClient initiated with host: %s", connCfg.Host)
 
 	return client, err
+}
+
+func (p *provider) InitDBConnection() (*sqlx.DB, error) {
+	db, err := sqlx.Connect(fmt.Sprintf("%s", p.config.DbDriverName), fmt.Sprintf("user=%s dbname=%s sslmode=disable", p.config.DbUserNameWithPassword, p.config.DbName))
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }

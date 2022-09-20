@@ -35,7 +35,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 	}
 	defer rpcClient.Shutdown()
 
-	db, err := sqlx.Connect(fmt.Sprintf("%s", config.DbDriverName), fmt.Sprintf("user=%s dbname=%s sslmode=disable", config.DbUserNameWithPassword, config.DbName))
+	db, err := s.provider.InitDBConnection()
 	if err != nil {
 		return err
 	}
@@ -354,4 +354,5 @@ type apiRequester interface {
 
 type provider interface {
 	InitBtcRpcClient() (*rpcclient.Client, error)
+	InitDBConnection() (*sqlx.DB, error)
 }
