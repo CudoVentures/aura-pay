@@ -8,15 +8,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func NewProvider(config *Config) *provider {
-	return &provider{config: *config}
+func NewProvider(config *Config) *Provider {
+	return &Provider{config: *config}
 }
 
-type provider struct {
+type Provider struct {
 	config Config
 }
 
-func (p *provider) InitBtcRpcClient() (*rpcclient.Client, error) {
+func (p *Provider) InitBtcRpcClient() (*rpcclient.Client, error) {
 	connCfg := &rpcclient.ConnConfig{
 		Host:         p.config.BitcoinNodeUrl + ":" + p.config.BitcoinNodePort + "/",
 		User:         p.config.BitcoinNodeUserName,
@@ -38,7 +38,7 @@ func (p *provider) InitBtcRpcClient() (*rpcclient.Client, error) {
 	return client, err
 }
 
-func (p *provider) InitDBConnection() (*sqlx.DB, error) {
+func (p *Provider) InitDBConnection() (*sqlx.DB, error) {
 	db, err := sqlx.Connect(fmt.Sprintf("%s", p.config.DbDriverName), fmt.Sprintf("user=%s dbname=%s sslmode=disable", p.config.DbUserNameWithPassword, p.config.DbName))
 	if err != nil {
 		return nil, err

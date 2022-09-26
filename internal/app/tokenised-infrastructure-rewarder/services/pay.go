@@ -18,13 +18,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func NewServices(apiRequester apiRequester, provider provider) *services {
+func NewServices(apiRequester ApiRequester, provider Provider) *services {
 	return &services{apiRequester: apiRequester, provider: provider}
 }
 
 type services struct {
-	apiRequester apiRequester
-	provider     provider
+	apiRequester ApiRequester
+	provider     Provider
 }
 
 func (s *services) ProcessPayment(config *infrastructure.Config) error {
@@ -336,7 +336,7 @@ func (s *services) findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vo
 	return matchedUTXO, nil
 }
 
-type apiRequester interface {
+type ApiRequester interface {
 	GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error)
 
 	GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error)
@@ -352,7 +352,7 @@ type apiRequester interface {
 	GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error)
 }
 
-type provider interface {
+type Provider interface {
 	InitBtcRpcClient() (*rpcclient.Client, error)
 	InitDBConnection() (*sqlx.DB, error)
 }

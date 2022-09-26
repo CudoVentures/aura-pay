@@ -14,15 +14,15 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 )
 
-func NewRequester(config infrastructure.Config) *requester {
-	return &requester{config: config}
+func NewRequester(config infrastructure.Config) *Requester {
+	return &Requester{config: config}
 }
 
-type requester struct {
+type Requester struct {
 	config infrastructure.Config
 }
 
-func (r *requester) GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error) {
+func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
@@ -56,7 +56,7 @@ func (r *requester) GetPayoutAddressFromNode(cudosAddress string, network string
 
 }
 
-func (r *requester) GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
+func (r *Requester) GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
@@ -88,7 +88,7 @@ func (r *requester) GetNftTransferHistory(collectionDenomId string, nftId string
 	return okStruct, nil
 }
 
-func (r *requester) GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (float64, error) {
+func (r *Requester) GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (float64, error) {
 	requestString := fmt.Sprintf("/subaccount_hashrate_day/%s", farmName)
 
 	req, err := http.NewRequest("GET", r.config.FoundryPoolAPIBaseURL+requestString, nil)
@@ -122,7 +122,7 @@ func (r *requester) GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTim
 	return okStruct[0].HashrateAccepted, nil
 }
 
-func (r *requester) GetFarmCollectionsFromHasura(farmId string) (types.CollectionData, error) {
+func (r *Requester) GetFarmCollectionsFromHasura(farmId string) (types.CollectionData, error) {
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
             {
@@ -157,16 +157,46 @@ func (r *requester) GetFarmCollectionsFromHasura(farmId string) (types.Collectio
 	return res, nil
 }
 
-func (r *requester) GetFarms() ([]types.Farm, error) {
-	//TODO: implement once backend is finished
-	// panic("GetFarms() not implemented")
+func (r *Requester) GetFarms() ([]types.Farm, error) {
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
 
-	Collection := types.Collection{Denom: types.Denom{Id: "test"}, Nfts: []types.NFT{}}
-	testFarm := types.Farm{Id: "test", SubAccountName: "test", BTCWallet: "testwallet2", Collections: []types.Collection{Collection}}
-	return []types.Farm{testFarm}, nil
+	requestString := "getController/GetAllFarms" // change once you know what it is
+
+	req, err := http.NewRequest("GET", r.config.AuraPoolBackEndUrl+requestString, nil)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	res, err := client.Do(req)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+	bytes, err := ioutil.ReadAll(res.Body)
+
+	okStruct := []types.Farm{}
+
+	err = json.Unmarshal(bytes, &okStruct)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	if r.config.IsTesting { //TODO: Remove once backend is up
+		Collection := types.Collection{Denom: types.Denom{Id: "test"}, Nfts: []types.NFT{}}
+		testFarm := types.Farm{Id: "test", SubAccountName: "test", BTCWallet: "testwallet2", Collections: []types.Collection{Collection}}
+		return []types.Farm{testFarm}, nil
+	}
+
+	return okStruct, nil
+
 }
 
-func (r *requester) VerifyCollection(denomId string) (bool, error) {
+func (r *Requester) VerifyCollection(denomId string) (bool, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
@@ -205,7 +235,7 @@ func (r *requester) VerifyCollection(denomId string) (bool, error) {
 	return okStruct.Collection.Verified, nil
 }
 
-func (r *requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error) {
+func (r *Requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
