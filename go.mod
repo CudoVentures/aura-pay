@@ -2,10 +2,12 @@ module github.com/CudoVentures/tokenised-infrastructure-rewarder
 
 go 1.18
 
-require github.com/joho/godotenv v1.4.0
+require (
+	github.com/joho/godotenv v1.4.0
+	github.com/lib/pq v1.10.2
+)
 
 require (
-	github.com/lib/pq v1.10.2 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/stretchr/testify v1.8.0 // indirect

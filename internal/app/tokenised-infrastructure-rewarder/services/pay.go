@@ -15,6 +15,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
 
@@ -49,12 +50,16 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
 		destinationAddressesWithAmount := make(map[string]btcutil.Amount)
 		var statistics []types.NFTStatistics
-		totalRewardForFarm, err := rpcClient.GetBalance(farm.SubAccountName)
+		_, err := rpcClient.LoadWallet(farm.SubAccountName)
+		if err != nil {
+			return err
+		}
+		totalRewardForFarm, err := rpcClient.GetBalance("*")
 		if err != nil {
 			return err
 		}
 		if totalRewardForFarm == 0 {
-			return fmt.Errorf("Reward for farm %s is 0....skipping this farm", farm.SubAccountName)
+			return fmt.Errorf("reward for farm %s is 0....skipping this farm", farm.SubAccountName)
 		}
 		log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
 		collections, err := s.apiRequester.GetFarmCollectionsFromHasura(farm.SubAccountName)
@@ -92,8 +97,22 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		rewardForNftOwners := totalRewardForFarm
 		if hasHashPowerIncreased {
 			rewardForNftOwners, err = s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, float64(totalRewardForFarm))
+			if err != nil {
+				return err
+			}
 		}
 		log.Debug().Msgf("Reward for nft owners : %s", rewardForNftOwners)
+
+		// test to here!
+		// test to here!
+		// test to here!
+		// test to here!
+		// test to here!
+		// test to here!
+		// test to here!
+		// test to here!
+		// test to here!
+		// test to here!
 
 		for _, collection := range farmCollectionsWithNFTs {
 			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
@@ -121,6 +140,9 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 					return err
 				}
 				periodStart, periodEnd, err := s.findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+				if err != nil {
+					return err
+				}
 				nftStatistics.PayoutPeriodStart = periodStart
 				nftStatistics.PayoutPeriodEnd = periodEnd
 
@@ -146,13 +168,15 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		}
 
 		if len(destinationAddressesWithAmount) == 0 {
-			return fmt.Errorf("No addresses found to pay for Farm {%s}", farm.SubAccountName)
+			return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
 		}
 		log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
 
 		txHash, err := s.payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, rpcClient)
-		// NFTStatistics - save nft statistics - object from above
-		// Farm Statistics - save everything about the farm - including addresses
+		if err != nil {
+			return err
+		}
+
 		sql_tx := db.MustBegin()
 		s.saveStatistics(txHash, destinationAddressesWithAmount, statistics, sql_tx, farm.Id)
 		sql_tx.Commit()
@@ -232,7 +256,7 @@ func (s *services) verifyCollectionIds(collections types.CollectionData) ([]stri
 		if isVerified {
 			verifiedCollectionIds = append(verifiedCollectionIds, collection.Id)
 		} else {
-			log.Error().Msgf("Collection with denomId %s is not verified", collection.Id)
+			log.Info().Msgf("Collection with denomId %s is not verified", collection.Id)
 		}
 	}
 

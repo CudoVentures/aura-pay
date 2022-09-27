@@ -158,6 +158,13 @@ func (r *Requester) GetFarmCollectionsFromHasura(farmId string) (types.Collectio
 }
 
 func (r *Requester) GetFarms() ([]types.Farm, error) {
+
+	if r.config.IsTesting { //TODO: Remove once backend is up
+		Collection := types.Collection{Denom: types.Denom{Id: "test"}, Nfts: []types.NFT{}}
+		testFarm := types.Farm{Id: "test", SubAccountName: "testwallet2", BTCWallet: "testwallet2", Collections: []types.Collection{Collection}}
+		return []types.Farm{testFarm}, nil
+	}
+
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
@@ -184,12 +191,6 @@ func (r *Requester) GetFarms() ([]types.Farm, error) {
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return nil, err
-	}
-
-	if r.config.IsTesting { //TODO: Remove once backend is up
-		Collection := types.Collection{Denom: types.Denom{Id: "test"}, Nfts: []types.NFT{}}
-		testFarm := types.Farm{Id: "test", SubAccountName: "test", BTCWallet: "testwallet2", Collections: []types.Collection{Collection}}
-		return []types.Farm{testFarm}, nil
 	}
 
 	return okStruct, nil

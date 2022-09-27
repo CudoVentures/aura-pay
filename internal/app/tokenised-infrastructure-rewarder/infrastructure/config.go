@@ -7,39 +7,45 @@ import (
 )
 
 type Config struct {
-	HasuraURL              string
-	NodeRestUrl            string
-	BitcoinNodeUrl         string
-	BitcoinNodePort        string
-	BitcoinNodeUserName    string
-	BitcoinNodePassword    string
-	FoundryPoolAPIBaseURL  string
-	FoundryPoolAPIKey      string
-	DbDriverName           string
-	DbUserNameWithPassword string
-	DbName                 string
-	HasuraActionsURL       string
-	IsTesting              bool
-	AuraPoolBackEndUrl     string
+	HasuraURL             string
+	NodeRestUrl           string
+	BitcoinNodeUrl        string
+	BitcoinNodePort       string
+	BitcoinNodeUserName   string
+	BitcoinNodePassword   string
+	FoundryPoolAPIBaseURL string
+	FoundryPoolAPIKey     string
+	DbDriverName          string
+	DbHost                string
+	DbPort                string
+	DbUser                string
+	DbPassword            string
+	DbName                string
+	HasuraActionsURL      string
+	IsTesting             bool
+	AuraPoolBackEndUrl    string
 }
 
 // NewConfig New returns a new Config struct
 func NewConfig() *Config {
 	return &Config{
-		HasuraURL:              getEnv("HASURA_URL", ""),
-		NodeRestUrl:            getEnv("NODE_REST_URL", ""),
-		BitcoinNodeUrl:         getEnv("BITCOIN_NODE_URL", ""),
-		BitcoinNodePort:        getEnv("BITCOIN_NODE_PORT", ""),
-		BitcoinNodeUserName:    getEnv("BITCOIN_NODE_USER_NAME", ""),
-		BitcoinNodePassword:    getEnv("BITCOIN_NODE_PASSWORD", ""),
-		FoundryPoolAPIBaseURL:  getEnv("FOUNDRY_POOL_API_BASE_URL", ""),
-		FoundryPoolAPIKey:      getEnv("FOUNDRY_POOL_API_KEY", ""),
-		DbDriverName:           getEnv("DB_DRIVER_NAME", ""),
-		DbUserNameWithPassword: getEnv("DB_USER_NAME_WITH_PASSWORD", ""),
-		DbName:                 getEnv("DB_NAME", ""),
-		HasuraActionsURL:       getEnv("HASURA_ACTIONS_URL", ""),
-		IsTesting:              getEnvAsBool("IS_TESTING", true),
-		AuraPoolBackEndUrl:     getEnv("AURA_POOL_BACKEND_URL", ""),
+		HasuraURL:             getEnv("HASURA_URL", ""),
+		NodeRestUrl:           getEnv("NODE_REST_URL", ""),
+		BitcoinNodeUrl:        getEnv("BITCOIN_NODE_URL", ""),
+		BitcoinNodePort:       getEnv("BITCOIN_NODE_PORT", ""),
+		BitcoinNodeUserName:   getEnv("BITCOIN_NODE_USER_NAME", ""),
+		BitcoinNodePassword:   getEnv("BITCOIN_NODE_PASSWORD", ""),
+		FoundryPoolAPIBaseURL: getEnv("FOUNDRY_POOL_API_BASE_URL", ""),
+		FoundryPoolAPIKey:     getEnv("FOUNDRY_POOL_API_KEY", ""),
+		DbDriverName:          getEnv("DB_DRIVER_NAME", ""),
+		DbHost:                getEnv("DB_HOST", ""),
+		DbPort:                getEnv("DB_PORT", ""),
+		DbUser:                getEnv("DB_USER", ""),
+		DbPassword:            getEnv("DB_PASSWORD", ""),
+		DbName:                getEnv("DB_NAME", ""),
+		HasuraActionsURL:      getEnv("HASURA_ACTIONS_URL", ""),
+		IsTesting:             getEnvAsBool("IS_TESTING", true),
+		AuraPoolBackEndUrl:    getEnv("AURA_POOL_BACKEND_URL", ""),
 	}
 }
 
