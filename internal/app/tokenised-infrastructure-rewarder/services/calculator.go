@@ -44,7 +44,8 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 	for i := 0; i < len(transferHistoryForTimePeriod); i++ {
 		var timeOwned int64
 		statisticsAdditionalData := types.NFTOwnerInformation{}
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(transferHistoryForTimePeriod[i].From, NETWORK, nftId, collectionDenomId)
+
+		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(transferHistoryForTimePeriod[i], NETWORK, nftId, collectionDenomId)
 		if i == 0 {
 			timeOwned = transferHistoryForTimePeriod[i].Timestamp - periodStart
 			statisticsAdditionalData.TimeOwnedFrom = transferHistoryForTimePeriod[i].Timestamp

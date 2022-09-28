@@ -357,7 +357,7 @@ func (s *services) findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vo
 }
 
 type ApiRequester interface {
-	GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error)
+	GetPayoutAddressFromNode(nftTransferEvent types.NftTransferEvent, network string, tokenId string, denomId string) (string, error)
 
 	GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error)
 

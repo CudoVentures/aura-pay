@@ -22,9 +22,16 @@ type Requester struct {
 	config infrastructure.Config
 }
 
-func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error) {
+func (r *Requester) GetPayoutAddressFromNode(nftTransferEvent types.NftTransferEvent, network string, tokenId string, denomId string) (string, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
+	}
+
+	var cudosAddress string
+	if nftTransferEvent.From == "0x0" { // "0x0" means no transfers and thus the from address is empty; only the to address is populated with the receiver addr
+		cudosAddress = nftTransferEvent.To
+	} else {
+		cudosAddress = nftTransferEvent.From
 	}
 
 	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
