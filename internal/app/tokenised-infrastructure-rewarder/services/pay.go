@@ -55,7 +55,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		if err != nil {
 			return err
 		}
-		totalRewardForFarm, err := rpcClient.GetBalance("*")
+		totalRewardForFarm, err := rpcClient.GetBalance("*") // returns the total balance in satoshis
 		if err != nil {
 			return err
 		}
@@ -97,23 +97,12 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 
 		rewardForNftOwners := totalRewardForFarm
 		if hasHashPowerIncreased {
-			rewardForNftOwners, err = s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, float64(totalRewardForFarm))
+			rewardForNftOwners = s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
 			if err != nil {
 				return err
 			}
 		}
 		log.Debug().Msgf("Reward for nft owners : %s", rewardForNftOwners)
-
-		// test to here!
-		// test to here!
-		// test to here!
-		// test to here!
-		// test to here!
-		// test to here!
-		// test to here!
-		// test to here!
-		// test to here!
-		// test to here!
 
 		for _, collection := range farmCollectionsWithNFTs {
 			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
@@ -125,7 +114,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				var nftStatistics types.NFTStatistics
 				nftStatistics.TokenId = nft.Id
 
-				rewardForNft, err := s.CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, float64(rewardForNftOwners))
+				rewardForNft := s.CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
 				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNft)
 				if err != nil {
 					return err
@@ -166,7 +155,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 
 		if hasHashPowerIncreased {
-			leftoverReward, err := s.CalculatePercent(currentHashPowerForFarm, leftoverAmount, float64(totalRewardForFarm))
+			leftoverReward := s.CalculatePercent(currentHashPowerForFarm, leftoverAmount, totalRewardForFarm)
 			if err != nil {
 				return err
 			}

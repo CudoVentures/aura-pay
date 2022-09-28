@@ -21,18 +21,11 @@ func (s *services) SumMintedHashPowerForAllCollections(collections []types.Colle
 	return totalMintedHashPowerForAllCollections
 }
 
-func (s *services) CalculatePercent(available float64, actual float64, reward float64) (btcutil.Amount, error) {
-	payoutRewardPercent := float64(available) / float64(actual) * 100 // ex 100 from 1000 = 10%
+func (s *services) CalculatePercent(available float64, actual float64, reward btcutil.Amount) btcutil.Amount {
+	payoutRewardPercent := float64(actual) / float64(available) * 100 // ex 100 from 1000 = 10%
 	calculatedReward := float64(reward) * payoutRewardPercent / 100   // ex 10% from 1000 = 100
-	btcReward, err := btcutil.NewAmount(calculatedReward)
-	if err != nil {
-		return -1, err
-	}
-	return btcReward, nil
-
-	// possible problems: what is the foundry tx denomination - in satoshis?
-	// think about if we can lose precision here as float64 is  53-bit precision..maybe use math/big type Float with more precision
-	// or this: https://github.com/shopspring/decimal
+	rewardInSatoshis := btcutil.Amount(calculatedReward)              // btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
+	return rewardInSatoshis
 }
 
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
