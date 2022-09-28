@@ -57,35 +57,53 @@ func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string
 }
 
 func (r *Requester) GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
-	client := &http.Client{
-		Timeout: 60 * time.Second,
+	// jsonData := map[string]string{
+	// 	"query": fmt.Sprintf(`
+	//         {
+	//             denoms_by_data_property(args: {property_name: "farm_id", property_value: "%s"}) {
+	//                 id,
+	//                 data_json
+	//             }
+	//         }
+	//     `, farmId),
+	// }
+
+	jsonData := map[string]string{
+		"query": fmt.Sprintf(`
+		{
+			action_nft_transfer_events(denom_id: "%s", token_id: %s, from_time: %d, to_time: %d) {
+			  events
+			}
+		}
+        `, collectionDenomId, nftId, fromTimestamp, time.Now().Unix()),
 	}
 
-	requestString := fmt.Sprintf("/transfer-events?denom=%s&nft=%s", collectionDenomId, nftId)
-
-	req, err := http.NewRequest("GET", r.config.HasuraActionsURL+requestString, nil)
+	jsonValue, _ := json.Marshal(jsonData)
+	request, err := http.NewRequest("POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
 	if err != nil {
-		log.Error().Msg(err.Error())
-		return nil, err
+		return types.NftTransferHistory{}, err
 	}
-
-	req.Header.Set("Content-Type", "application/json")
-	res, err := client.Do(req)
+	client := &http.Client{Timeout: time.Second * 10}
+	response, err := client.Do(request)
 	if err != nil {
-		log.Error().Msg(err.Error())
-		return nil, err
+		log.Error().Msgf("The HTTP request failed with error %s\n", err)
+		return types.NftTransferHistory{}, nil
 	}
-	bytes, err := ioutil.ReadAll(res.Body)
+	defer response.Body.Close()
+	data, err := ioutil.ReadAll(response.Body)
 
-	okStruct := types.NftTransferHistory{}
-
-	err = json.Unmarshal(bytes, &okStruct)
 	if err != nil {
-		log.Error().Msg(err.Error())
-		return nil, err
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return types.NftTransferHistory{}, err
+	}
+	var res types.NftTransferHistory
+	err = json.Unmarshal(data, &res)
+	if err != nil {
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return types.NftTransferHistory{}, err
 	}
 
-	return okStruct, nil
+	return res, nil
 }
 
 func (r *Requester) GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (float64, error) {

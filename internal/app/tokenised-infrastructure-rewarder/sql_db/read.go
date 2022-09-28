@@ -7,7 +7,7 @@ import (
 
 func GetPayoutTimesForNFT(db *sqlx.DB, nftId string) ([]types.NFTPayoutTime, error) {
 	payoutTimes := []types.NFTPayoutTime{}
-	err := db.Select(&payoutTimes, "SELECT * FROM nft_payout_times WHERE token_id=$1 ORDER BY Time ASC)", nftId)
+	err := db.Select(&payoutTimes, "SELECT * FROM nft_payout_times WHERE token_id=$1 ORDER BY payout_time_at ASC", nftId)
 	if err != nil {
 		return nil, err
 	}

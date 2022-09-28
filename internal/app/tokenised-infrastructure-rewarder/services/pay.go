@@ -195,14 +195,14 @@ func (s *services) saveStatistics(txHash *chainhash.Hash, destinationAddressesWi
 }
 
 func (s *services) getNftTransferHistory(collectionDenomId, nftId string) (types.NftTransferHistory, error) {
-	nftTransferHistory, err := s.apiRequester.GetNftTransferHistory(collectionDenomId, nftId, 0) // all transfer events
+	nftTransferHistory, err := s.apiRequester.GetNftTransferHistory(collectionDenomId, nftId, 1) // all transfer events
 	if err != nil {
-		return nil, err
+		return types.NftTransferHistory{}, err
 	}
 
 	// sort in ascending order by timestamp
-	sort.Slice(nftTransferHistory, func(i, j int) bool {
-		return nftTransferHistory[i].Timestamp < nftTransferHistory[j].Timestamp
+	sort.Slice(nftTransferHistory.Data.NestedData.Events, func(i, j int) bool {
+		return nftTransferHistory.Data.NestedData.Events[i].Timestamp < nftTransferHistory.Data.NestedData.Events[j].Timestamp
 	})
 
 	return nftTransferHistory, nil
@@ -210,16 +210,16 @@ func (s *services) getNftTransferHistory(collectionDenomId, nftId string) (types
 
 func (s *services) findCurrentPayoutPeriod(payoutTimes []types.NFTPayoutTime, nftTransferHistory types.NftTransferHistory) (int64, int64, error) {
 	if len(payoutTimes) == 0 { // first time payment - start time is time of minting, end time is now
-		return nftTransferHistory[0].Timestamp, time.Now().Unix(), nil
+		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, time.Now().Unix(), nil
 	}
 
 	if len(payoutTimes) == 1 {
-		return payoutTimes[0].Time, time.Now().Unix(), nil
+		return payoutTimes[0].PayoutTimeAt, time.Now().Unix(), nil
 	}
 
 	l := len(payoutTimes)
 
-	return payoutTimes[l-2].Time, payoutTimes[l-1].Time, nil
+	return payoutTimes[l-2].PayoutTimeAt, payoutTimes[l-1].PayoutTimeAt, nil
 
 }
 

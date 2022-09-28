@@ -35,14 +35,14 @@ func (s *services) GetNftOwnersForTimePeriodWithRewardPercent(nftId string, coll
 
 	ownersWithPercentOwnedTime := make(map[string]float64)
 	totalPeriodTimeInSeconds := periodEnd - periodStart
-	var transferHistoryForTimePeriod []types.NftTransferHistoryElement
+	var transferHistoryForTimePeriod []types.NftTransferEvent
 
 	nftTransferHistory, err := s.apiRequester.GetNftTransferHistory(collectionDenomId, nftId, periodStart)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, transferHistoryElement := range nftTransferHistory {
+	for _, transferHistoryElement := range nftTransferHistory.Data.NestedData.Events {
 		if transferHistoryElement.Timestamp >= periodStart && transferHistoryElement.Timestamp <= periodEnd {
 			transferHistoryForTimePeriod = append(transferHistoryForTimePeriod, transferHistoryElement)
 		}
@@ -86,9 +86,9 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 
 	ownersWithPercentOwnedTime := make(map[string]float64)
 	totalPeriodTimeInSeconds := periodEnd - periodStart
-	var transferHistoryForTimePeriod []types.NftTransferHistoryElement
+	var transferHistoryForTimePeriod []types.NftTransferEvent
 
-	for _, transferHistoryElement := range nftTransferHistory {
+	for _, transferHistoryElement := range nftTransferHistory.Data.NestedData.Events {
 		if transferHistoryElement.Timestamp >= periodStart && transferHistoryElement.Timestamp <= periodEnd {
 			transferHistoryForTimePeriod = append(transferHistoryForTimePeriod, transferHistoryElement)
 		}
