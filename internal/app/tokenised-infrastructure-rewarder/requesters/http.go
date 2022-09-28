@@ -154,6 +154,7 @@ func (r *Requester) GetFarmCollectionsFromHasura(farmId string) (types.Collectio
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.CollectionData{}, err
 	}
+
 	return res, nil
 }
 
@@ -184,6 +185,9 @@ func (r *Requester) GetFarms() ([]types.Farm, error) {
 		return nil, err
 	}
 	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	okStruct := []types.Farm{}
 
@@ -242,9 +246,7 @@ func (r *Requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collec
 	}
 
 	var idsArray []string
-	for _, id := range denomIds {
-		idsArray = append(idsArray, id)
-	}
+	idsArray = append(idsArray, denomIds...)
 
 	reqBody := struct {
 		DenomIds []string `json:"denom_ids"`
@@ -264,14 +266,29 @@ func (r *Requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collec
 
 	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
 	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	okStruct := types.CollectionResponse{}
 
 	err = json.Unmarshal(bytes, &okStruct)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return nil, err
+	}
+
+	for i := 0; i < len(okStruct.Result.Collections); i++ {
+		for j := 0; j < len(okStruct.Result.Collections[i].Nfts); j++ {
+			var nftDataJson types.NFTDataJson
+			if err := json.Unmarshal([]byte(okStruct.Result.Collections[i].Nfts[j].Data), &nftDataJson); err != nil {
+				return nil, err
+			}
+			okStruct.Result.Collections[i].Nfts[j].DataJson = nftDataJson
+		}
 	}
 
 	return okStruct.Result.Collections, nil

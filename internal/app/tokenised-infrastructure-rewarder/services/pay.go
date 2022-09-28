@@ -51,6 +51,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		destinationAddressesWithAmount := make(map[string]btcutil.Amount)
 		var statistics []types.NFTStatistics
 		_, err := rpcClient.LoadWallet(farm.SubAccountName)
+		log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.SubAccountName)
 		if err != nil {
 			return err
 		}
@@ -117,14 +118,14 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		for _, collection := range farmCollectionsWithNFTs {
 			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
 			for _, nft := range collection.Nfts {
-				if time.Now().Unix() > nft.Data.ExpirationDate {
-					log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%s} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.Data.ExpirationDate)
+				if time.Now().Unix() > nft.DataJson.ExpirationDate {
+					log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%s} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
 					continue
 				}
 				var nftStatistics types.NFTStatistics
 				nftStatistics.TokenId = nft.Id
 
-				rewardForNft, err := s.CalculatePercent(mintedHashPowerForFarm, nft.Data.HashRateOwned, float64(rewardForNftOwners))
+				rewardForNft, err := s.CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, float64(rewardForNftOwners))
 				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNft)
 				if err != nil {
 					return err
@@ -158,6 +159,12 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 			}
 		}
 
+		err = rpcClient.UnloadWallet(&farm.SubAccountName)
+		if err != nil {
+			return err
+		}
+		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
+
 		if hasHashPowerIncreased {
 			leftoverReward, err := s.CalculatePercent(currentHashPowerForFarm, leftoverAmount, float64(totalRewardForFarm))
 			if err != nil {
@@ -171,7 +178,6 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 			return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
 		}
 		log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
-
 		txHash, err := s.payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, rpcClient)
 		if err != nil {
 			return err
@@ -180,6 +186,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		sql_tx := db.MustBegin()
 		s.saveStatistics(txHash, destinationAddressesWithAmount, statistics, sql_tx, farm.Id)
 		sql_tx.Commit()
+
 	}
 
 	return nil
@@ -266,7 +273,7 @@ func (s *services) verifyCollectionIds(collections types.CollectionData) ([]stri
 func (s *services) sumCollectionHashPower(collectionNFTs []types.NFT) float64 {
 	var collectionHashPower float64
 	for _, nft := range collectionNFTs {
-		collectionHashPower += nft.Data.HashRateOwned
+		collectionHashPower += nft.DataJson.HashRateOwned
 	}
 	return collectionHashPower
 }

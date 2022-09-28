@@ -14,7 +14,7 @@ func (s *services) SumMintedHashPowerForAllCollections(collections []types.Colle
 
 	for _, collection := range collections {
 		for _, nft := range collection.Nfts {
-			totalMintedHashPowerForAllCollections += nft.Data.HashRateOwned
+			totalMintedHashPowerForAllCollections += nft.DataJson.HashRateOwned
 		}
 	}
 
