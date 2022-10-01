@@ -22,21 +22,15 @@ type Requester struct {
 	config infrastructure.Config
 }
 
-func (r *Requester) GetPayoutAddressFromNode(nftTransferEvent types.NftTransferEvent, network string, tokenId string, denomId string) (string, error) {
+func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
 
-	var cudosAddress string
-	if nftTransferEvent.From == "0x0" { // "0x0" means no transfers and thus the from address is empty; only the to address is populated with the receiver addr
-		cudosAddress = nftTransferEvent.To
-	} else {
-		cudosAddress = nftTransferEvent.From
-	}
-
 	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
-	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
-
+	// requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
+	//TODO: uncomment above line once testing is done
+	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s", cudosAddress, network, denomId)
 	req, err := http.NewRequest("GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
@@ -50,6 +44,9 @@ func (r *Requester) GetPayoutAddressFromNode(nftTransferEvent types.NftTransferE
 		return "", err
 	}
 	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
 
 	okStruct := types.MappedAddress{}
 

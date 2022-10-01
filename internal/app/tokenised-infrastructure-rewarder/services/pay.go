@@ -113,6 +113,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				}
 				var nftStatistics types.NFTStatistics
 				nftStatistics.TokenId = nft.Id
+				nftStatistics.DenomId = collection.Denom.Id
 
 				rewardForNft := s.CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
 				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNft)
@@ -136,14 +137,14 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				nftStatistics.PayoutPeriodStart = periodStart
 				nftStatistics.PayoutPeriodEnd = periodEnd
 
-				allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, nftStatistics)
+				allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, nftStatistics, nft.Owner)
 				if err != nil {
 					return err
 				}
 				s.distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNft, destinationAddressesWithAmount, nftStatistics)
 
 				tx := db.MustBegin()
-				sql_db.SetPayoutTimesForNFT(tx, nft.Id, time.Now().Unix(), rewardForNft.ToBTC())
+				sql_db.SetPayoutTimesForNFT(tx, collection.Denom.Id, nft.Id, time.Now().Unix(), rewardForNft.ToBTC())
 				tx.Commit()
 			}
 		}
@@ -187,7 +188,7 @@ func (s *services) saveStatistics(txHash *chainhash.Hash, destinationAddressesWi
 	}
 
 	for _, nftStatistic := range statistics {
-		sql_db.SaveNftInformationHistory(sql_tx, nftStatistic.TokenId, nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.RewardForNFT, txHash.String())
+		sql_db.SaveNftInformationHistory(sql_tx, nftStatistic.DenomId, nftStatistic.TokenId, nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.RewardForNFT, txHash.String())
 		for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
 			sql_db.SaveNFTOwnersForPeriodHistory(sql_tx, ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned, ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward)
 		}
@@ -357,7 +358,7 @@ func (s *services) findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vo
 }
 
 type ApiRequester interface {
-	GetPayoutAddressFromNode(nftTransferEvent types.NftTransferEvent, network string, tokenId string, denomId string) (string, error)
+	GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error)
 
 	GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error)
 

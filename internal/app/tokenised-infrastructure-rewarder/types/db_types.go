@@ -13,6 +13,7 @@ type NFTPayoutTime struct {
 
 type NFTStatistics struct {
 	TokenId            string
+	DenomId            string
 	PayoutPeriodStart  int64
 	PayoutPeriodEnd    int64
 	RewardForNFT       btcutil.Amount
