@@ -3,7 +3,7 @@ package types
 type Farm struct {
 	Id                      string       `json:"id"`
 	SubAccountName          string       `json:"sub_account_name"`
-	BTCWallet               string       `json:"btc_wallet"`
+	MiningPoolBTCAddress    string       `json:"mining_pool_btc_wallet"` // Address set in the mining pool that receives the farm rewards
 	DefaultBTCPayoutAddress string       `json:"default_btc_payout_address"`
 	Collections             []Collection `json:"collections"`
 }

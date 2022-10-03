@@ -168,7 +168,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 			return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
 		}
 		log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
-		txHash, err := s.payRewards("bf4961e4259c9d9c7bdf4862fdeeb0337d06479737c2c63e4af360913b11277f", uint32(1), farm.BTCWallet, destinationAddressesWithAmount, rpcClient)
+		txHash, err := s.payRewards(farm.MiningPoolBTCAddress, destinationAddressesWithAmount, rpcClient, totalRewardForFarm, farm.SubAccountName)
 		if err != nil {
 			return err
 		}
@@ -289,14 +289,40 @@ func (s *services) addPaymentAmountToStatistics(amount btcutil.Amount, payoutAdd
 	}
 }
 
-func (s *services) payRewards(inputTxId string, inputTxVout uint32, walletName string, destinationAddressesWithAmount map[string]btcutil.Amount, rpcClient *rpcclient.Client) (*chainhash.Hash, error) {
+func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesWithAmount map[string]btcutil.Amount, rpcClient *rpcclient.Client, totalRewardForFarm btcutil.Amount, farmName string) (*chainhash.Hash, error) {
 	var outputVouts []int
 	for i := 0; i < len(destinationAddressesWithAmount); i++ {
 		outputVouts = append(outputVouts, i)
 	}
 
-	txInput := btcjson.TransactionInput{Txid: inputTxId, Vout: inputTxVout}
+	// todo: add if else config for testnet, signet and mainnet
+	addr, err := btcutil.DecodeAddress(miningPoolBTCAddress, &chaincfg.SigNetParams)
+	if err != nil {
+		return nil, err
+	}
+	unspentTxsForAddress, err := rpcClient.ListUnspentMinMaxAddresses(6, 99999999, []btcutil.Address{addr})
+	if err != nil {
+		return nil, err
+	}
+	if len(unspentTxsForAddress) > 1 {
+		return nil, fmt.Errorf("farm {%s} has more then one unspent transaction", farmName)
+	}
+
+	err = EnsureTotalRewardIsEqualToAmountBeingSent(destinationAddressesWithAmount, totalRewardForFarm, farmName)
+	if err != nil {
+		return nil, err
+	}
+
+	inputTx := unspentTxsForAddress[0]
+	if inputTx.Amount != totalRewardForFarm.ToBTC() {
+		err = fmt.Errorf("input tx with hash {%s} has different amount (%v) then the total reward ({%v}) for farm {%s} ", inputTx.TxID, inputTx.Amount, totalRewardForFarm.ToBTC(), farmName)
+		return nil, err
+
+	}
+
+	txInput := btcjson.TransactionInput{Txid: inputTx.TxID, Vout: inputTx.Vout}
 	inputs := []btcjson.TransactionInput{txInput}
+
 	isWitness := false
 	transformedAddressesWithAmount, err := s.transformAddressesWithAmount(destinationAddressesWithAmount)
 	if err != nil {
@@ -326,10 +352,26 @@ func (s *services) payRewards(inputTxId string, inputTxVout uint32, walletName s
 	return txHash, nil
 }
 
+func EnsureTotalRewardIsEqualToAmountBeingSent(destinationAddressesWithAmount map[string]btcutil.Amount, totalRewardForFarm btcutil.Amount, farmName string) error {
+	var totalRewardToSend btcutil.Amount
+
+	for _, v := range destinationAddressesWithAmount {
+		totalRewardToSend += v
+	}
+	if totalRewardToSend != totalRewardForFarm {
+		return fmt.Errorf("mismatch between totalRewardAForFarm {%s} and totalRewardToSend {%s}. Farm name {%s}", totalRewardForFarm, totalRewardToSend, farmName)
+
+	}
+
+	return nil
+
+}
+
 func (s *services) transformAddressesWithAmount(destinationAddressesWithAmount map[string]btcutil.Amount) (map[btcutil.Address]btcutil.Amount, error) {
 	result := make(map[btcutil.Address]btcutil.Amount)
 
 	for address, amount := range destinationAddressesWithAmount {
+		// todo: add test param for signet, testnet and mainnet
 		addr, err := btcutil.DecodeAddress(address, &chaincfg.SigNetParams)
 		if err != nil {
 			return nil, err
