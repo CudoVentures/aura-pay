@@ -4,6 +4,7 @@ import "github.com/btcsuite/btcd/btcutil"
 
 type NFTPayoutTime struct {
 	Id           int    `db:"id"`
+	DenomId      string `db:"denom_id"`
 	TokenId      string `db:"token_id"`
 	PayoutTimeAt int64  `db:"payout_time_at"`
 	Amount       string

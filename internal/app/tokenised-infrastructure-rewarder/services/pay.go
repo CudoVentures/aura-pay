@@ -190,7 +190,7 @@ func (s *services) saveStatistics(txHash *chainhash.Hash, destinationAddressesWi
 	for _, nftStatistic := range statistics {
 		sql_db.SaveNftInformationHistory(sql_tx, nftStatistic.DenomId, nftStatistic.TokenId, nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.RewardForNFT, txHash.String())
 		for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
-			sql_db.SaveNFTOwnersForPeriodHistory(sql_tx, ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned, ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward)
+			sql_db.SaveNFTOwnersForPeriodHistory(sql_tx, nftStatistic.DenomId, nftStatistic.TokenId, ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned, ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward)
 		}
 	}
 }
