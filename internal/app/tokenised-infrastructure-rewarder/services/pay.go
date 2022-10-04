@@ -28,6 +28,7 @@ type services struct {
 	provider     Provider
 }
 
+// missing:
 func (s *services) ProcessPayment(config *infrastructure.Config) error {
 	// bitcoin rpc client init
 	rpcClient, err := s.provider.InitBtcRpcClient()

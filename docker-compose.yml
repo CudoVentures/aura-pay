@@ -1,0 +1,27 @@
+version: '3.6'
+services:
+  aura-pay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      HASURA_URL: ${HASURA_URL}
+      NODE_REST_URL: ${NODE_REST_URL}
+      BITCOIN_NODE_URL: ${BITCOIN_NODE_URL}
+      BITCOIN_NODE_PORT: ${BITCOIN_NODE_PORT}
+      BITCOIN_NODE_USER_NAME: ${BITCOIN_NODE_USER_NAME}
+      BITCOIN_NODE_PASSWORD: ${BITCOIN_NODE_PASSWORD}
+      FoundryPoolAPIBaseURL: ${FoundryPoolAPIBaseURL}
+      FoundryPoolAPIKey: ${FoundryPoolAPIKey}
+      DB_DRIVER_NAME: ${DB_DRIVER_NAME}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_NAME: ${DB_NAME}
+      AURA_POOL_BACKEND_URL: ${AURA_POOL_BACKEND_URL}
+      IS_TESTING: ${IS_TESTING}
+
+

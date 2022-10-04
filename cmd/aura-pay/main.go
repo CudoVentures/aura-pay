@@ -18,10 +18,6 @@ func init() {
 
 func main() {
 	log.Info().Msg("Application started")
-	log.Info().Msg("Application is running ok")
-	log.Info().Msg("Exiting..")
-	os.Exit(0)
-
 	err := worker.Start()
 	if err != nil {
 		log.Error().Msgf("Application has encountered an error! Error: %s", err) // TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
