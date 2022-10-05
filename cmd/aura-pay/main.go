@@ -17,12 +17,21 @@ func init() {
 }
 
 func main() {
-	log.Info().Msg("Application started")
-	err := worker.Start()
-	if err != nil {
-		log.Error().Msgf("Application has encountered an error! Error: %s", err) // TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
-		os.Exit(1)
+	for {
+		log.Info().Msg("Application started")
+		errorCount := 0
+		err := worker.Start()
+		if err != nil {
+			errorCount++
+			log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %s time", err, errorCount) // TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
+		} else {
+			log.Info().Msg("Application successfully completed!")
+		}
+
+		if errorCount >= 10 {
+			log.Error().Msgf("Application has not been able to complete for 10 times in a row..exiting")
+			os.Exit(1)
+		}
 	}
-	log.Info().Msg("Application successfully exited!")
 
 }
