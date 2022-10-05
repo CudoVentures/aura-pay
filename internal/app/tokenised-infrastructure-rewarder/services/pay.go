@@ -93,17 +93,9 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		mintedHashPowerForFarm := s.SumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
 		log.Debug().Msgf("Minted hash for farm %s: %s", farm.SubAccountName, mintedHashPowerForFarm)
 
-		hasHashPowerIncreased, leftoverAmount := s.hasHashPowerIncreased(currentHashPowerForFarm, mintedHashPowerForFarm)
-		log.Debug().Msgf("hasHashPowerIncreased : %s, leftoverAmount: ", hasHashPowerIncreased, leftoverAmount)
-
-		rewardForNftOwners := totalRewardForFarm
-		if hasHashPowerIncreased {
-			rewardForNftOwners = s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
-			if err != nil {
-				return err
-			}
-		}
-		log.Debug().Msgf("Reward for nft owners : %s", rewardForNftOwners)
+		rewardForNftOwners := s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
+		leftoverAmountForFarmOwner := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
+		log.Debug().Msgf("rewardForNftOwners : %s, leftoverAmount: ", rewardForNftOwners, leftoverAmountForFarmOwner)
 
 		for _, collection := range farmCollectionsWithNFTs {
 			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
@@ -156,13 +148,11 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		}
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 
-		if hasHashPowerIncreased {
-			leftoverReward := s.CalculatePercent(currentHashPowerForFarm, leftoverAmount, totalRewardForFarm)
-			if err != nil {
-				return err
-			}
-			s.addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, leftoverReward, farm.DefaultBTCPayoutAddress)
-			log.Debug().Msgf("Leftover reward with for farm with Id {%s} amount {%s} is added for return to the farm admin with address {%s}", farm.SubAccountName, leftoverReward, farm.DefaultBTCPayoutAddress)
+		if leftoverAmountForFarmOwner > 0 {
+			rewardToReturn := s.CalculatePercent(currentHashPowerForFarm, leftoverAmountForFarmOwner, totalRewardForFarm)
+			s.addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.DefaultBTCPayoutAddress)
+			log.Debug().Msgf("Leftover reward with for farm with Id {%s} amount {%s} is added for return to the farm admin with address {%s}", farm.SubAccountName, rewardToReturn, farm.DefaultBTCPayoutAddress)
+
 		}
 
 		if len(destinationAddressesWithAmount) == 0 {
@@ -223,15 +213,6 @@ func (s *services) findCurrentPayoutPeriod(payoutTimes []types.NFTPayoutTime, nf
 
 	return payoutTimes[l-2].PayoutTimeAt, payoutTimes[l-1].PayoutTimeAt, nil
 
-}
-
-func (s *services) hasHashPowerIncreased(currentHashPowerForFarm float64, mintedHashPowerForFarm float64) (bool, float64) {
-	if currentHashPowerForFarm > mintedHashPowerForFarm {
-		leftOverAmount := currentHashPowerForFarm - mintedHashPowerForFarm
-		return true, leftOverAmount
-	}
-
-	return false, -1
 }
 
 func (s *services) addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]btcutil.Amount, leftoverReward btcutil.Amount, farmDefaultPayoutAddress string) {
