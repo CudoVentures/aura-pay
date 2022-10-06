@@ -119,7 +119,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				if err != nil {
 					return err
 				}
-				payoutTimes, err := sql_db.GetPayoutTimesForNFT(db, nft.Id)
+				payoutTimes, err := sql_db.GetPayoutTimesForNFT(db, collection.Denom.Id, nft.Id)
 				if err != nil {
 					return err
 				}
@@ -135,10 +135,6 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 					return err
 				}
 				s.distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNft, destinationAddressesWithAmount, nftStatistics)
-
-				tx := db.MustBegin()
-				sql_db.SetPayoutTimesForNFT(tx, collection.Denom.Id, nft.Id, time.Now().Unix(), rewardForNft.ToBTC())
-				tx.Commit()
 			}
 		}
 
@@ -200,19 +196,12 @@ func (s *services) getNftTransferHistory(collectionDenomId, nftId string) (types
 	return nftTransferHistory, nil
 }
 
-func (s *services) findCurrentPayoutPeriod(payoutTimes []types.NFTPayoutTime, nftTransferHistory types.NftTransferHistory) (int64, int64, error) {
-	if len(payoutTimes) == 0 { // first time payment - start time is time of minting, end time is now
+func (s *services) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, int64, error) {
+	l := len(payoutTimes)
+	if l == 0 { // first time payment - start time is time of minting, end time is now
 		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, time.Now().Unix(), nil
 	}
-
-	if len(payoutTimes) == 1 {
-		return payoutTimes[0].PayoutTimeAt, time.Now().Unix(), nil
-	}
-
-	l := len(payoutTimes)
-
-	return payoutTimes[l-2].PayoutTimeAt, payoutTimes[l-1].PayoutTimeAt, nil
-
+	return payoutTimes[l-1].PayoutPeriodEnd, time.Now().Unix(), nil // last time we paid until now
 }
 
 func (s *services) addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]btcutil.Amount, leftoverReward btcutil.Amount, farmDefaultPayoutAddress string) {
@@ -240,14 +229,6 @@ func (s *services) verifyCollectionIds(collections types.CollectionData) ([]stri
 	}
 
 	return verifiedCollectionIds, nil
-}
-
-func (s *services) sumCollectionHashPower(collectionNFTs []types.NFT) float64 {
-	var collectionHashPower float64
-	for _, nft := range collectionNFTs {
-		collectionHashPower += nft.DataJson.HashRateOwned
-	}
-	return collectionHashPower
 }
 
 func (s *services) distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount, statistics types.NFTStatistics) {

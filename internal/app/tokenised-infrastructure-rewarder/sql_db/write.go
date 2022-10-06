@@ -7,10 +7,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func SetPayoutTimesForNFT(tx *sqlx.Tx, collectionDenomId string, nftId string, payoutTime int64, payoutAmount float64) {
-	tx.MustExec("INSERT INTO nft_payout_times (denom_id, token_id, payout_time_at, amount, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6)", collectionDenomId, nftId, payoutTime, payoutAmount, time.Now().UTC(), time.Now().UTC())
-}
-
 func SaveDestionAddressesWithAmountHistory(tx *sqlx.Tx, address string, amount btcutil.Amount, txHash string, farmId string) {
 	tx.MustExec("INSERT INTO statistics_destination_addresses_with_amount (address, amount, tx_hash, farm_id, payout_time, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6, $7)", address, amount, txHash, farmId, time.Now().Unix(), time.Now().UTC(), time.Now().UTC())
 }

@@ -83,9 +83,9 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 		}
 
 		// add the remainder of transferTime - periodStart to previous owner, but how to find him?
-        // from all the transfers, find the one that is previous to the current ( that is transfers[1stTransferIndex-1])
+		// from all the transfers, find the one that is previous to the current ( that is transfers[1stTransferIndex-1])
 
-		if i == len(transferHistoryForTimePeriod)-1 && len(transferHistoryForTimePeriod) > 1 {
+		if i == len(transferHistoryForTimePeriod)-1 && len(transferHistoryForTimePeriod) > 1 { // add the remaining time to the last owner
 			timeOwned += (periodEnd - transferHistoryForTimePeriod[i].Timestamp)
 		}
 
