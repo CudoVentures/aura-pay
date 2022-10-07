@@ -57,8 +57,11 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 	for i := 0; i < len(transferHistoryForTimePeriod); i++ {
 		var timeOwned int64
 		statisticsAdditionalData := types.NFTOwnerInformation{}
-		if containInitialMintTx {
-			cudosAddress = transferHistoryForTimePeriod[i].To
+		if containInitialMintTx { // handles the case where we have no payout periods and periodStart is equal to transferHistoryForTimePeriod[i].timestamp
+			cudosAddress = transferHistoryForTimePeriod[i].From
+			if transferHistoryForTimePeriod[i].From == "0x0" { // only the first
+				cudosAddress = transferHistoryForTimePeriod[i].To
+			}
 			if len(transferHistoryForTimePeriod) == 1 {
 				timeOwned = periodEnd - transferHistoryForTimePeriod[i].Timestamp
 				statisticsAdditionalData.TimeOwnedFrom = transferHistoryForTimePeriod[i].Timestamp
@@ -85,7 +88,7 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 		// add the remainder of transferTime - periodStart to previous owner, but how to find him?
 		// from all the transfers, find the one that is previous to the current ( that is transfers[1stTransferIndex-1])
 
-		if i == len(transferHistoryForTimePeriod)-1 && len(transferHistoryForTimePeriod) > 1 { // add the remaining time to the last owner
+		if i == len(transferHistoryForTimePeriod)-1 && len(transferHistoryForTimePeriod) > 1 { // add the remaining days to the last owner
 			timeOwned += (periodEnd - transferHistoryForTimePeriod[i].Timestamp)
 		}
 
