@@ -12,9 +12,10 @@ func Start() error {
 	// add new logic for maintenance fee calculation
 	// add logic that handles the start of the month for the reward
 	config := infrastructure.NewConfig()
+	helper := infrastructure.NewHelper(config)
 	provider := infrastructure.NewProvider(config)
 	requestClient := requesters.NewRequester(*config)
-	payService := services.NewServices(requestClient, provider)
+	payService := services.NewServices(requestClient, provider, helper)
 	err := payService.ProcessPayment(config)
 	return err
 }
