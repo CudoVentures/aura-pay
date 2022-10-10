@@ -2,33 +2,23 @@ package types
 
 import "github.com/btcsuite/btcd/btcutil"
 
-type NFTPayoutTime struct {
-	Id           int    `db:"id"`
-	DenomId      string `db:"denom_id"`
-	TokenId      string `db:"token_id"`
-	PayoutTimeAt int64  `db:"payout_time_at"`
-	Amount       string
-	CreatedAt    int64 `db:"createdAt"`
-	UpdatedAt    int64 `db:"updatedAt"`
-}
-
 type NFTStatistics struct {
-	TokenId                  string
-	DenomId                  string
-	PayoutPeriodStart        int64
-	PayoutPeriodEnd          int64
+	TokenId                  string `db:"token_id"`
+	DenomId                  string `db:"denom_id"`
+	PayoutPeriodStart        int64  `db:"payout_period_start"`
+	PayoutPeriodEnd          int64  `db:"payout_period_end"`
 	Reward                   btcutil.Amount
-	MaintenanceFee           btcutil.Amount
-	CUDOPartOfMaintenanceFee btcutil.Amount
+	MaintenanceFee           btcutil.Amount `db:"maintenance_fee"`
+	CUDOPartOfMaintenanceFee btcutil.Amount `db:"cudo_part_of_maintenance_fee"`
 	NFTOwnersForPeriod       []NFTOwnerInformation
 }
 
 type NFTOwnerInformation struct {
-	TimeOwnedFrom      int64
-	TimeOwnedTo        int64
-	TotalTimeOwned     int64
-	PercentOfTimeOwned float64
+	TimeOwnedFrom      int64   `db:"time_owned_from"`
+	TimeOwnedTo        int64   `db:"time_owned_to"`
+	TotalTimeOwned     int64   `db:"total_time_owned"`
+	PercentOfTimeOwned float64 `db:"percent_of_time_owned"`
 	Owner              string
-	PayoutAddress      string
+	PayoutAddress      string `db:"payout_address"`
 	Reward             btcutil.Amount
 }

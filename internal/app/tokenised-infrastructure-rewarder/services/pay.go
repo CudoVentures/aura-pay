@@ -139,8 +139,8 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, maintenanceFee)
 				log.Debug().Msgf("CUDO part (%s) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
 				nftStatistics.Reward = rewardForNftAfterFee
-				nftStatistics.MaintenanceFee = maintenanceFee                     // TODO: Add them in write.go for sql
-				nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee // TODO: Add them in write.go for SQL
+				nftStatistics.MaintenanceFee = maintenanceFee
+				nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
 
 				allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
 					nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, nftStatistics, nft.Owner)
@@ -240,9 +240,13 @@ func (s *services) saveStatistics(txHash *chainhash.Hash, destinationAddressesWi
 	}
 
 	for _, nftStatistic := range statistics {
-		sql_db.SaveNftInformationHistory(sql_tx, nftStatistic.DenomId, nftStatistic.TokenId, nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash.String())
+		sql_db.SaveNftInformationHistory(sql_tx, nftStatistic.DenomId, nftStatistic.TokenId,
+			nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash.String(),
+			nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee)
 		for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
-			sql_db.SaveNFTOwnersForPeriodHistory(sql_tx, nftStatistic.DenomId, nftStatistic.TokenId, ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned, ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward)
+			sql_db.SaveNFTOwnersForPeriodHistory(sql_tx, nftStatistic.DenomId, nftStatistic.TokenId,
+				ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned,
+				ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward)
 		}
 	}
 }
