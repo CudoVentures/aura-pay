@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -34,7 +35,8 @@ func (s *services) CalculatePercent(available float64, actual float64, reward bt
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
-func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory types.NftTransferHistory, collectionDenomId string, nftId string, periodStart int64, periodEnd int64, statistics types.NFTStatistics, currentNftOwner string, network string) (map[string]float64, error) {
+func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory, collectionDenomId, nftId string,
+	periodStart, periodEnd int64, statistics types.NFTStatistics, currentNftOwner, network string) (map[string]float64, error) {
 
 	ownersWithPercentOwnedTime := make(map[string]float64)
 	totalPeriodTimeInSeconds := periodEnd - periodStart
@@ -50,7 +52,7 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 
 	// no transfers for this period, we give the current owner 100%
 	if len(transferHistoryForTimePeriod) == 0 {
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(currentNftOwner, network, nftId, collectionDenomId)
+		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, currentNftOwner, network, nftId, collectionDenomId)
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +101,7 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 		percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
 		statisticsAdditionalData.PercentOfTimeOwned = percentOfTimeOwned
 
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(cudosAddress, network, nftId, collectionDenomId)
+		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, cudosAddress, network, nftId, collectionDenomId)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +110,6 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 
 		if _, ok := ownersWithPercentOwnedTime[nftPayoutAddress]; ok { // if the nft has been bought, sold and bought again by the same owner in the same period - accumulate
 			ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
-
 		} else {
 			ownersWithPercentOwnedTime[nftPayoutAddress] = percentOfTimeOwned
 		}

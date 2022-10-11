@@ -1,39 +1,42 @@
 package main
 
 import (
-	"os"
+	"context"
 
 	worker "github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 )
 
-// init is invoked before main()
-func init() {
-	// loads values from .env into the system
-	if err := godotenv.Load("../../.env"); err != nil {
-		log.Error().Msg("No .env file found")
-	}
+func main() {
+	runService(context.Background())
 }
 
-func main() {
-	for {
-		log.Info().Msg("Application started")
-		errorCount := 0
-		err := worker.Start()
-		if err != nil {
-			//todo: unload wallet that has erroed out
-			errorCount++
-			log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %s time", err, errorCount) // TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
-		} else {
-			log.Info().Msg("Application successfully completed!")
-			os.Exit(0)
-		}
-
-		if errorCount >= 10 {
-			log.Error().Msgf("Application has not been able to complete for 10 times in a row..exiting")
-			os.Exit(1)
-		}
+func runService(ctx context.Context) {
+	if err := godotenv.Load(".env"); err != nil {
+		log.Error().Msgf("No .env file found: %s", err)
 	}
 
+	config := infrastructure.NewConfig()
+	provider := infrastructure.NewProvider(config)
+	requestClient := requesters.NewRequester(config)
+
+	var params *chaincfg.Params
+	var minConfirmation int
+
+	if config.IsTesting {
+		params = &chaincfg.SigNetParams
+		minConfirmation = 1
+	} else {
+		params = &chaincfg.MainNetParams
+		minConfirmation = 6
+	}
+
+	payService := services.NewServices(config, requestClient, infrastructure.NewHelper(config), params, minConfirmation)
+
+	worker.Start(ctx, config, payService, provider)
 }
