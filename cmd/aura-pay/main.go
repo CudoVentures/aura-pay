@@ -11,7 +11,7 @@ import (
 // init is invoked before main()
 func init() {
 	// loads values from .env into the system
-	if err := godotenv.Load("../../../.env"); err != nil {
+	if err := godotenv.Load("../../.env"); err != nil {
 		log.Error().Msg("No .env file found")
 	}
 }
@@ -22,6 +22,7 @@ func main() {
 		errorCount := 0
 		err := worker.Start()
 		if err != nil {
+			//todo: unload wallet that has erroed out
 			errorCount++
 			log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %s time", err, errorCount) // TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
 		} else {

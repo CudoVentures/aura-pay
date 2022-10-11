@@ -1,7 +1,6 @@
 package services
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -79,7 +78,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				return err
 			}
 		}
-		log.Debug().Msgf("Total hash power for farm %s: %s", farm.SubAccountName, currentHashPowerForFarm)
+		log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
 
 		dailyFeeInSatoshis, err := s.CalculateDailyMaintenanceFee(farm, currentHashPowerForFarm)
 		if err != nil {
@@ -96,20 +95,19 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		if err != nil {
 			return err
 		}
+
+		s.filterExpiredNFTs(farmCollectionsWithNFTs)
+
 		mintedHashPowerForFarm := s.SumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
-		log.Debug().Msgf("Minted hash for farm %s: %s", farm.SubAccountName, mintedHashPowerForFarm)
+		log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
 
 		rewardForNftOwners := s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
 		leftoverAmountForFarmOwner := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
-		log.Debug().Msgf("rewardForNftOwners : %s, leftoverAmount: ", rewardForNftOwners, leftoverAmountForFarmOwner)
+		log.Debug().Msgf("rewardForNftOwners : %s, leftoverAmountSatoshis: %.6f", rewardForNftOwners, leftoverAmountForFarmOwner)
 
 		for _, collection := range farmCollectionsWithNFTs {
-			log.Debug().Msgf("Processing collection with denomId %s..", collection.Denom.Id)
+			log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
 			for _, nft := range collection.Nfts {
-				if time.Now().Unix() > nft.DataJson.ExpirationDate {
-					log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%s} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
-					continue
-				}
 				var nftStatistics types.NFTStatistics
 				nftStatistics.TokenId = nft.Id
 				nftStatistics.DenomId = collection.Denom.Id
@@ -151,12 +149,6 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 			}
 		}
 
-		err = rpcClient.UnloadWallet(&farm.SubAccountName)
-		if err != nil {
-			return err
-		}
-		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
-
 		if leftoverAmountForFarmOwner > 0 {
 			rewardToReturn := s.CalculatePercent(currentHashPowerForFarm, leftoverAmountForFarmOwner, totalRewardForFarm)
 			s.addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
@@ -178,10 +170,18 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		}
 
 		log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
-		txHash, err := s.payRewards(farm.AddressForReceivingRewardsFromPool, destinationAddressesWithAmount, rpcClient, totalRewardForFarm, farm.SubAccountName)
+		txHash, err := s.payRewards(farm.AddressForReceivingRewardsFromPool, destinationAddressesWithAmount, rpcClient, totalRewardForFarm, farm.SubAccountName, config)
+		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash.String())
+
 		if err != nil {
 			return err
 		}
+
+		err = rpcClient.UnloadWallet(&farm.SubAccountName)
+		if err != nil {
+			return err
+		}
+		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 
 		sql_tx := db.MustBegin()
 		s.saveStatistics(txHash, destinationAddressesWithAmount, statistics, sql_tx, farm.Id)
@@ -190,6 +190,22 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 	}
 
 	return nil
+}
+
+func (*services) filterExpiredNFTs(farmCollectionsWithNFTs []types.Collection) {
+	for i := 0; i < len(farmCollectionsWithNFTs); i++ {
+		var nonExpiredNFTs []types.NFT
+		for j := 0; j < len(farmCollectionsWithNFTs[i].Nfts); j++ {
+			currentNft := farmCollectionsWithNFTs[i].Nfts[j]
+			if time.Now().Unix() > currentNft.DataJson.ExpirationDate {
+				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", farmCollectionsWithNFTs[i].Denom.Id,
+					currentNft.Id, currentNft.DataJson.ExpirationDate)
+				continue
+			}
+			nonExpiredNFTs = append(nonExpiredNFTs, currentNft)
+		}
+		farmCollectionsWithNFTs[i].Nfts = nonExpiredNFTs
+	}
 }
 
 func (s *services) calculateMaintenanceFeeForNFT(periodStart int64,
@@ -321,18 +337,28 @@ func (s *services) addPaymentAmountToStatistics(amount btcutil.Amount, payoutAdd
 	}
 }
 
-func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesWithAmount map[string]btcutil.Amount, rpcClient *rpcclient.Client, totalRewardForFarm btcutil.Amount, farmName string) (*chainhash.Hash, error) {
+func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesWithAmount map[string]btcutil.Amount, rpcClient *rpcclient.Client, totalRewardForFarm btcutil.Amount, farmName string, config *infrastructure.Config) (*chainhash.Hash, error) {
 	var outputVouts []int
 	for i := 0; i < len(destinationAddressesWithAmount); i++ {
 		outputVouts = append(outputVouts, i)
 	}
 
-	// todo: add if else config for testnet, signet and mainnet
-	addr, err := btcutil.DecodeAddress(miningPoolBTCAddress, &chaincfg.SigNetParams)
+	var params *chaincfg.Params
+	var minConfirmation int
+
+	if config.IsTesting {
+		params = &chaincfg.SigNetParams
+		minConfirmation = 1
+	} else {
+		params = &chaincfg.MainNetParams
+		minConfirmation = 6
+	}
+	address, err := btcutil.DecodeAddress(miningPoolBTCAddress, params)
 	if err != nil {
 		return nil, err
 	}
-	unspentTxsForAddress, err := rpcClient.ListUnspentMinMaxAddresses(6, 99999999, []btcutil.Address{addr})
+
+	unspentTxsForAddress, err := rpcClient.ListUnspentMinMaxAddresses(minConfirmation, 99999999, []btcutil.Address{address})
 	if err != nil {
 		return nil, err
 	}
@@ -346,17 +372,17 @@ func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesW
 	}
 
 	inputTx := unspentTxsForAddress[0]
-	if inputTx.Amount != totalRewardForFarm.ToBTC() {
-		err = fmt.Errorf("input tx with hash {%s} has different amount (%v) then the total reward ({%v}) for farm {%s} ", inputTx.TxID, inputTx.Amount, totalRewardForFarm.ToBTC(), farmName)
-		return nil, err
+	// if inputTx.Amount != totalRewardForFarm.ToBTC() {
+	// 	err = fmt.Errorf("input tx with hash {%s} has different amount (%v) then the total reward ({%v}) for farm {%s} ", inputTx.TxID, inputTx.Amount, totalRewardForFarm.ToBTC(), farmName)
+	// 	return nil, err
 
-	}
+	// }
 
 	txInput := btcjson.TransactionInput{Txid: inputTx.TxID, Vout: inputTx.Vout}
 	inputs := []btcjson.TransactionInput{txInput}
 
 	isWitness := false
-	transformedAddressesWithAmount, err := s.transformAddressesWithAmount(destinationAddressesWithAmount)
+	transformedAddressesWithAmount, err := s.transformAddressesWithAmount(destinationAddressesWithAmount, params)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +398,7 @@ func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesW
 	}
 
 	signedTx, isSigned, err := rpcClient.SignRawTransactionWithWallet(res.Transaction)
-	if err != nil || isSigned == false {
+	if err != nil || !isSigned {
 		return nil, err
 	}
 
@@ -399,12 +425,11 @@ func EnsureTotalRewardIsEqualToAmountBeingSent(destinationAddressesWithAmount ma
 
 }
 
-func (s *services) transformAddressesWithAmount(destinationAddressesWithAmount map[string]btcutil.Amount) (map[btcutil.Address]btcutil.Amount, error) {
+func (s *services) transformAddressesWithAmount(destinationAddressesWithAmount map[string]btcutil.Amount, params *chaincfg.Params) (map[btcutil.Address]btcutil.Amount, error) {
 	result := make(map[btcutil.Address]btcutil.Amount)
 
 	for address, amount := range destinationAddressesWithAmount {
-		// todo: add test param for signet, testnet and mainnet
-		addr, err := btcutil.DecodeAddress(address, &chaincfg.SigNetParams)
+		addr, err := btcutil.DecodeAddress(address, params)
 		if err != nil {
 			return nil, err
 		}
@@ -412,23 +437,6 @@ func (s *services) transformAddressesWithAmount(destinationAddressesWithAmount m
 	}
 
 	return result, nil
-}
-
-func (s *services) findMatchingUTXO(rpcClient *rpcclient.Client, txId string, vout uint32) (btcjson.ListUnspentResult, error) {
-	unspentTxs, err := rpcClient.ListUnspent()
-	if err != nil {
-		return btcjson.ListUnspentResult{}, err
-	}
-	var matchedUTXO btcjson.ListUnspentResult
-	for _, unspentTx := range unspentTxs {
-		if unspentTx.TxID == txId && unspentTx.Vout == vout {
-			matchedUTXO = unspentTx
-		} else {
-			err = errors.New("No matching UTXO found!")
-			return btcjson.ListUnspentResult{}, err
-		}
-	}
-	return matchedUTXO, nil
 }
 
 type ApiRequester interface {

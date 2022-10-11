@@ -184,7 +184,14 @@ func (r *Requester) GetFarms() ([]types.Farm, error) {
 
 	if r.config.IsTesting { //TODO: Remove once backend is up
 		Collection := types.Collection{Denom: types.Denom{Id: "test"}, Nfts: []types.NFT{}}
-		testFarm := types.Farm{Id: "test", SubAccountName: "testwallet2", AddressForReceivingRewardsFromPool: "testwallet2", Collections: []types.Collection{Collection}}
+		testFarm := types.Farm{
+			Id:                                 "1",
+			SubAccountName:                     "testwallet2",
+			AddressForReceivingRewardsFromPool: "tb1qnud3dvyz2a3p3qk0vuk25exkkx9s7r9p4v3ww2",
+			LeftoverRewardPayoutAddress:        "tb1qmktqv4psg7ucw6ct578ev4y9pl9k8m6eh7g0vd",
+			MaintenanceFeePayoutdAddress:       "tb1q4pugpvdwg4kntyghpmt6fxmmpx207hfm8llhld",
+			MonthlyMaintenanceFeeInBTC:         0.001,
+			Collections:                        []types.Collection{Collection}}
 		return []types.Farm{testFarm}, nil
 	}
 

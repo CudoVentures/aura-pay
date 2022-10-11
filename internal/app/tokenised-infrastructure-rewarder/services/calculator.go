@@ -1,8 +1,11 @@
 package services
 
 import (
+	"time"
+
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/rs/zerolog/log"
 )
 
 const NETWORK = "btc"
@@ -12,6 +15,10 @@ func (s *services) SumMintedHashPowerForAllCollections(collections []types.Colle
 
 	for _, collection := range collections {
 		for _, nft := range collection.Nfts {
+			if time.Now().Unix() > nft.DataJson.ExpirationDate {
+				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
+				continue
+			}
 			totalMintedHashPowerForAllCollections += nft.DataJson.HashRateOwned
 		}
 	}
