@@ -27,6 +27,7 @@ func main() {
 			log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %s time", err, errorCount) // TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
 		} else {
 			log.Info().Msg("Application successfully completed!")
+			os.Exit(0)
 		}
 
 		if errorCount >= 10 {

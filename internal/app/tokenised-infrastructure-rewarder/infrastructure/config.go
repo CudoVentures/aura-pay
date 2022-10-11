@@ -27,6 +27,7 @@ type Config struct {
 	Network                         string
 	CUDOMaintenanceFeePercent       float64
 	CUDOMaintenanceFeePayoutAddress string
+	AuraPoolTestFarmWalletPassword  string
 }
 
 // NewConfig New returns a new Config struct
@@ -52,6 +53,7 @@ func NewConfig() *Config {
 		Network:                         getEnv("NETWORK", ""),
 		CUDOMaintenanceFeePercent:       getEnvAsFloat64("CUDO_MAINTENANCE_FEE_PERCENT", 10.0),
 		CUDOMaintenanceFeePayoutAddress: getEnv("CUDO_MAINTENANCE_FEE_PAYOUT_ADDRESS", ""),
+		AuraPoolTestFarmWalletPassword:  getEnv("AURA_POOL_TEST_FARM_WALLET_PASSWORD", ""),
 	}
 }
 

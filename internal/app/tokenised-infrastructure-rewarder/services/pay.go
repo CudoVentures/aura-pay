@@ -399,8 +399,18 @@ func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesW
 		return nil, err
 	}
 
+	err = rpcClient.WalletPassphrase(config.AuraPoolTestFarmWalletPassword, 60)
+	if err != nil {
+		return nil, err
+	}
+
 	signedTx, isSigned, err := rpcClient.SignRawTransactionWithWallet(res.Transaction)
 	if err != nil || !isSigned {
+		return nil, err
+	}
+
+	err = rpcClient.WalletLock()
+	if err != nil {
 		return nil, err
 	}
 
