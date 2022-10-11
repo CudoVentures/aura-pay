@@ -183,9 +183,11 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		}
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 
-		sql_tx := db.MustBegin()
-		s.saveStatistics(txHash, destinationAddressesWithAmount, statistics, sql_tx, farm.Id)
-		sql_tx.Commit()
+		// uncomment once backend is up and running
+		// sql_tx := db.MustBegin()
+		// s.saveStatistics(txHash, destinationAddressesWithAmount, statistics, sql_tx, farm.Id)
+		// sql_tx.Commit()
+		fmt.Print(statistics)
 
 	}
 

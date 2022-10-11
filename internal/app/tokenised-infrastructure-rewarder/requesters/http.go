@@ -61,17 +61,6 @@ func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string
 }
 
 func (r *Requester) GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
-	// jsonData := map[string]string{
-	// 	"query": fmt.Sprintf(`
-	//         {
-	//             denoms_by_data_property(args: {property_name: "farm_id", property_value: "%s"}) {
-	//                 id,
-	//                 data_json
-	//             }
-	//         }
-	//     `, farmId),
-	// }
-
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
 		{
@@ -183,14 +172,17 @@ func (r *Requester) GetFarmCollectionsFromHasura(farmId string) (types.Collectio
 func (r *Requester) GetFarms() ([]types.Farm, error) {
 
 	if r.config.IsTesting { //TODO: Remove once backend is up
-		Collection := types.Collection{Denom: types.Denom{Id: "test"}, Nfts: []types.NFT{}}
+		Collection := types.Collection{
+			Denom: types.Denom{Id: "test"},
+			Nfts:  []types.NFT{},
+		}
 		testFarm := types.Farm{
 			Id:                                 "1",
-			SubAccountName:                     "testwallet2",
-			AddressForReceivingRewardsFromPool: "tb1qnud3dvyz2a3p3qk0vuk25exkkx9s7r9p4v3ww2",
-			LeftoverRewardPayoutAddress:        "tb1qmktqv4psg7ucw6ct578ev4y9pl9k8m6eh7g0vd",
-			MaintenanceFeePayoutdAddress:       "tb1q4pugpvdwg4kntyghpmt6fxmmpx207hfm8llhld",
-			MonthlyMaintenanceFeeInBTC:         0.001,
+			SubAccountName:                     "aura_pool_test_wallet",
+			AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
+			LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
+			MaintenanceFeePayoutdAddress:       "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
+			MonthlyMaintenanceFeeInBTC:         0.0001,
 			Collections:                        []types.Collection{Collection}}
 		return []types.Farm{testFarm}, nil
 	}
