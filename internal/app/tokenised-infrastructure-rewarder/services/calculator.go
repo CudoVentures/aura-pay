@@ -8,8 +8,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const NETWORK = "btc"
-
 func (s *services) SumMintedHashPowerForAllCollections(collections []types.Collection) float64 {
 	var totalMintedHashPowerForAllCollections float64
 
@@ -36,7 +34,7 @@ func (s *services) CalculatePercent(available float64, actual float64, reward bt
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
-func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory types.NftTransferHistory, collectionDenomId string, nftId string, periodStart int64, periodEnd int64, statistics types.NFTStatistics, currentNftOwner string) (map[string]float64, error) {
+func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferHistory types.NftTransferHistory, collectionDenomId string, nftId string, periodStart int64, periodEnd int64, statistics types.NFTStatistics, currentNftOwner string, network string) (map[string]float64, error) {
 
 	ownersWithPercentOwnedTime := make(map[string]float64)
 	totalPeriodTimeInSeconds := periodEnd - periodStart
@@ -52,7 +50,7 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 
 	// no transfers for this period, we give the current owner 100%
 	if len(transferHistoryForTimePeriod) == 0 {
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(currentNftOwner, NETWORK, nftId, collectionDenomId)
+		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(currentNftOwner, network, nftId, collectionDenomId)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +99,7 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(nftTransferH
 		percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
 		statisticsAdditionalData.PercentOfTimeOwned = percentOfTimeOwned
 
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(cudosAddress, NETWORK, nftId, collectionDenomId)
+		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(cudosAddress, network, nftId, collectionDenomId)
 		if err != nil {
 			return nil, err
 		}

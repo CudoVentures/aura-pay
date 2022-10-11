@@ -141,7 +141,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
 
 				allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
-					nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, nftStatistics, nft.Owner)
+					nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, nftStatistics, nft.Owner, config.Network)
 				if err != nil {
 					return err
 				}
