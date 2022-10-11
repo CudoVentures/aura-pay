@@ -372,11 +372,11 @@ func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesW
 	}
 
 	inputTx := unspentTxsForAddress[0]
-	// if inputTx.Amount != totalRewardForFarm.ToBTC() {
-	// 	err = fmt.Errorf("input tx with hash {%s} has different amount (%v) then the total reward ({%v}) for farm {%s} ", inputTx.TxID, inputTx.Amount, totalRewardForFarm.ToBTC(), farmName)
-	// 	return nil, err
+	if inputTx.Amount != totalRewardForFarm.ToBTC() {
+		err = fmt.Errorf("input tx with hash {%s} has different amount (%v) then the total reward ({%v}) for farm {%s} ", inputTx.TxID, inputTx.Amount, totalRewardForFarm.ToBTC(), farmName)
+		return nil, err
 
-	// }
+	}
 
 	txInput := btcjson.TransactionInput{Txid: inputTx.TxID, Vout: inputTx.Vout}
 	inputs := []btcjson.TransactionInput{txInput}
