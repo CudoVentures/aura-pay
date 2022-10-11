@@ -9,7 +9,6 @@ type Farm struct {
 	Collections                        []Collection `json:"collections"`
 	MonthlyMaintenanceFeeInBTC         float64      `json:"maintenance_fee_in_btc"`
 }
-
 type Collection struct {
 	Denom Denom `json:"denom"`
 	Nfts  []NFT `json:"nfts"`
