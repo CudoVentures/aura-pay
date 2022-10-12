@@ -4,6 +4,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -28,6 +29,9 @@ type Config struct {
 	CUDOMaintenanceFeePercent       float64
 	CUDOMaintenanceFeePayoutAddress string
 	AuraPoolTestFarmWalletPassword  string
+	WorkerMaxErrorsCount            int
+	WorkerProcessInterval           time.Duration
+	WorkerFailureRetryDelay         time.Duration
 }
 
 // NewConfig New returns a new Config struct
@@ -54,6 +58,9 @@ func NewConfig() *Config {
 		CUDOMaintenanceFeePercent:       getEnvAsFloat64("CUDO_MAINTENANCE_FEE_PERCENT", 10.0),
 		CUDOMaintenanceFeePayoutAddress: getEnv("CUDO_MAINTENANCE_FEE_PAYOUT_ADDRESS", ""),
 		AuraPoolTestFarmWalletPassword:  getEnv("AURA_POOL_TEST_FARM_WALLET_PASSWORD", ""),
+		WorkerMaxErrorsCount:            getEnvAsInt("WORKER_MAX_ERRORS_COUNT", 10),
+		WorkerProcessInterval:           getEnvAsDuration("WORKER_PROCESS_INTERVAL", time.Second*5),
+		WorkerFailureRetryDelay:         getEnvAsDuration("WORKER_FAILURE_RETRY_DELAY", time.Second*5),
 	}
 }
 
@@ -109,4 +116,15 @@ func getEnvAsSlice(name string, defaultVal []string, sep string) []string {
 	val := strings.Split(valStr, sep)
 
 	return val
+}
+
+func getEnvAsDuration(name string, defaultVal time.Duration) time.Duration {
+	valStr := getEnv(name, "")
+	if valStr == "" {
+		return defaultVal
+	}
+	if duration, err := time.ParseDuration(valStr); err == nil {
+		return duration
+	}
+	return defaultVal
 }

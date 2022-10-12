@@ -5,6 +5,7 @@ import (
 
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
 
@@ -29,11 +30,9 @@ func (p *Provider) InitBtcRpcClient() (*rpcclient.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err != nil {
-		return nil, err
-	}
 
 	log.Debug().Msgf("rpcClient initiated with host: %s", connCfg.Host)
+
 	return client, err
 }
 

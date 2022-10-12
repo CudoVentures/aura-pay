@@ -2,6 +2,7 @@ package requesters
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -14,24 +15,22 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 )
 
-func NewRequester(config infrastructure.Config) *Requester {
+func NewRequester(config *infrastructure.Config) *Requester {
 	return &Requester{config: config}
 }
 
 type Requester struct {
-	config infrastructure.Config
+	config *infrastructure.Config
 }
 
-func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string, tokenId string, denomId string) (string, error) {
+func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
 
 	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
-	// requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
-	//TODO: uncomment above line once testing is done
-	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s", cudosAddress, network, denomId)
-	req, err := http.NewRequest("GET", r.config.NodeRestUrl+requestString, nil)
+	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
+	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return "", err
@@ -43,6 +42,8 @@ func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string
 		log.Error().Msg(err.Error())
 		return "", err
 	}
+	defer res.Body.Close()
+
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return "", err
@@ -50,8 +51,7 @@ func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string
 
 	okStruct := types.MappedAddress{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		log.Error().Msg(err.Error())
 		return "", err
 	}
@@ -60,7 +60,7 @@ func (r *Requester) GetPayoutAddressFromNode(cudosAddress string, network string
 
 }
 
-func (r *Requester) GetNftTransferHistory(collectionDenomId string, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
+func (r *Requester) GetNftTransferHistory(ctx context.Context, collectionDenomId, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
 		{
@@ -72,7 +72,7 @@ func (r *Requester) GetNftTransferHistory(collectionDenomId string, nftId string
 	}
 
 	jsonValue, _ := json.Marshal(jsonData)
-	request, err := http.NewRequest("POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
+	request, err := http.NewRequestWithContext(ctx, "POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
 	if err != nil {
 		return types.NftTransferHistory{}, err
 	}
@@ -86,12 +86,11 @@ func (r *Requester) GetNftTransferHistory(collectionDenomId string, nftId string
 	data, err := ioutil.ReadAll(response.Body)
 
 	if err != nil {
-		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		log.Error().Msgf("Could read data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.NftTransferHistory{}, err
 	}
 	var res types.NftTransferHistory
-	err = json.Unmarshal(data, &res)
-	if err != nil {
+	if err := json.Unmarshal(data, &res); err != nil {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.NftTransferHistory{}, err
 	}
@@ -99,10 +98,10 @@ func (r *Requester) GetNftTransferHistory(collectionDenomId string, nftId string
 	return res, nil
 }
 
-func (r *Requester) GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTimestamp string) (float64, error) {
+func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farmName, sinceTimestamp string) (float64, error) {
 	requestString := fmt.Sprintf("/subaccount_hashrate_day/%s", farmName)
 
-	req, err := http.NewRequest("GET", r.config.FoundryPoolAPIBaseURL+requestString, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", r.config.FoundryPoolAPIBaseURL+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return -1, err
@@ -120,12 +119,17 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTim
 		log.Error().Msg(err.Error())
 		return -1, err
 	}
+	defer res.Body.Close()
+
 	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Error().Msgf("Could read farm (%s) total hash power data from foundry, error is: [%s]", farmName, err)
+		return 0, err
+	}
 
 	okStruct := types.FarmHashRate{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		log.Error().Msg(err.Error())
 		return -1, err
 	}
@@ -133,7 +137,7 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(farmName string, sinceTim
 	return okStruct[0].HashrateAccepted, nil
 }
 
-func (r *Requester) GetFarmCollectionsFromHasura(farmId string) (types.CollectionData, error) {
+func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId string) (types.CollectionData, error) {
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
             {
@@ -145,7 +149,7 @@ func (r *Requester) GetFarmCollectionsFromHasura(farmId string) (types.Collectio
         `, farmId),
 	}
 	jsonValue, _ := json.Marshal(jsonData)
-	request, err := http.NewRequest("POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
+	request, err := http.NewRequestWithContext(ctx, "POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
 	client := &http.Client{Timeout: time.Second * 10}
 	response, err := client.Do(request)
 	if err != nil {
@@ -153,15 +157,15 @@ func (r *Requester) GetFarmCollectionsFromHasura(farmId string) (types.Collectio
 		return types.CollectionData{}, nil
 	}
 	defer response.Body.Close()
-	data, err := ioutil.ReadAll(response.Body)
 
+	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.CollectionData{}, err
 	}
+
 	var res types.CollectionData
-	err = json.Unmarshal(data, &res)
-	if err != nil {
+	if err := json.Unmarshal(data, &res); err != nil {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.CollectionData{}, err
 	}
@@ -169,9 +173,9 @@ func (r *Requester) GetFarmCollectionsFromHasura(farmId string) (types.Collectio
 	return res, nil
 }
 
-func (r *Requester) GetFarms() ([]types.Farm, error) {
+func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 
-	if r.config.IsTesting { //TODO: Remove once backend is up
+	if r.config.IsTesting { // TODO: Remove once backend is up
 		Collection := types.Collection{
 			Denom: types.Denom{Id: "test"},
 			Nfts:  []types.NFT{},
@@ -191,9 +195,9 @@ func (r *Requester) GetFarms() ([]types.Farm, error) {
 		Timeout: 60 * time.Second,
 	}
 
-	requestString := "getController/GetAllFarms" // change once you know what it is
+	requestString := "/farms"
 
-	req, err := http.NewRequest("GET", r.config.AuraPoolBackEndUrl+requestString, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", r.config.AuraPoolBackEndUrl+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return nil, err
@@ -205,6 +209,8 @@ func (r *Requester) GetFarms() ([]types.Farm, error) {
 		log.Error().Msg(err.Error())
 		return nil, err
 	}
+	defer res.Body.Close()
+
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
@@ -212,8 +218,7 @@ func (r *Requester) GetFarms() ([]types.Farm, error) {
 
 	okStruct := []types.Farm{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		log.Error().Msg(err.Error())
 		return nil, err
 	}
@@ -222,14 +227,14 @@ func (r *Requester) GetFarms() ([]types.Farm, error) {
 
 }
 
-func (r *Requester) VerifyCollection(denomId string) (bool, error) {
+func (r *Requester) VerifyCollection(ctx context.Context, denomId string) (bool, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
 
 	requestString := fmt.Sprintf("/CudoVentures/cudos-node/marketplace/collection_by_denom_id/%s", denomId)
 
-	req, err := http.NewRequest("GET", r.config.NodeRestUrl+requestString, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return false, err
@@ -241,6 +246,8 @@ func (r *Requester) VerifyCollection(denomId string) (bool, error) {
 		log.Error().Msg(err.Error())
 		return false, err
 	}
+	defer res.Body.Close()
+
 	bytes, err := ioutil.ReadAll(res.Body) // Generated by https://quicktype.io
 
 	okStruct := struct {
@@ -252,8 +259,7 @@ func (r *Requester) VerifyCollection(denomId string) (bool, error) {
 		} `json:"Collection"`
 	}{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		log.Error().Msg(err.Error())
 		return false, err
 	}
@@ -261,7 +267,7 @@ func (r *Requester) VerifyCollection(denomId string) (bool, error) {
 	return okStruct.Collection.Verified, nil
 }
 
-func (r *Requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collection, error) {
+func (r *Requester) GetFarmCollectionWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
@@ -279,7 +285,7 @@ func (r *Requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collec
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", r.config.NodeRestUrl+"/nft/collectionsByDenomIds", bytes.NewBuffer(reqBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", r.config.NodeRestUrl+"/nft/collectionsByDenomIds", bytes.NewBuffer(reqBytes))
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return nil, err
@@ -290,6 +296,9 @@ func (r *Requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collec
 	if err != nil {
 		return nil, err
 	}
+
+	defer res.Body.Close()
+
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
@@ -297,8 +306,7 @@ func (r *Requester) GetFarmCollectionWithNFTs(denomIds []string) ([]types.Collec
 
 	okStruct := types.CollectionResponse{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		return nil, err
 	}
 

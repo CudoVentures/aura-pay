@@ -1,5 +1,7 @@
 package types
 
+import "github.com/btcsuite/btcd/chaincfg"
+
 type Farm struct {
 	Id                                 string       `json:"id"`
 	SubAccountName                     string       `json:"sub_account_name"`
@@ -38,4 +40,9 @@ type NFT struct {
 type NFTDataJson struct {
 	ExpirationDate int64   `json:"expiration_date"`
 	HashRateOwned  float64 `json:"hash_rate_owned"`
+}
+
+type BtcNetworkParams struct {
+	ChainParams      *chaincfg.Params
+	MinConfirmations int
 }
