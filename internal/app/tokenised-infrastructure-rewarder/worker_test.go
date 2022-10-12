@@ -19,7 +19,7 @@ func TestWorkerShouldReturnIfContextIsCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	Start(ctx, &infrastructure.Config{}, nil, nil, nil)
+	Start(ctx, &infrastructure.Config{}, nil, nil)
 
 	require.Error(t, ctx.Err())
 }
@@ -28,7 +28,7 @@ func TestWorkerShouldReturnIfContextIsCanceledDuringProcessPayment(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	mps := &mockPayService{}
-	mps.On("ProcessPayment", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+	mps.On("ProcessPayment", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		cancel()
 	})
 
@@ -49,8 +49,6 @@ func TestWorkerShouldReturnIfContextIsCanceledDuringProcessPayment(t *testing.T)
 
 	mp.On("InitDBConnection").Return(db, nil)
 
-	mar := &mockAPIRequester{}
-
 	Start(ctx, &infrastructure.Config{
 		WorkerMaxErrorsCount:    10000,
 		WorkerFailureRetryDelay: 1 * time.Second,
@@ -64,8 +62,8 @@ type mockPayService struct {
 	mock.Mock
 }
 
-func (mps *mockPayService) ProcessPayment(ctx context.Context, apiRequester services.ApiRequester, btcClient services.BtcClient, storage services.Storage) error {
-	args := mps.Called(ctx, apiRequester, btcClient, storage)
+func (mps *mockPayService) ProcessPayment(ctx context.Context, btcClient services.BtcClient, storage services.Storage) error {
+	args := mps.Called(ctx, btcClient, storage)
 	return args.Error(0)
 }
 

@@ -129,8 +129,7 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farm
 
 	okStruct := types.FarmHashRate{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		log.Error().Msg(err.Error())
 		return -1, err
 	}
@@ -158,15 +157,15 @@ func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId str
 		return types.CollectionData{}, nil
 	}
 	defer response.Body.Close()
-	data, err := ioutil.ReadAll(response.Body)
 
+	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.CollectionData{}, err
 	}
+
 	var res types.CollectionData
-	err = json.Unmarshal(data, &res)
-	if err != nil {
+	if err := json.Unmarshal(data, &res); err != nil {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.CollectionData{}, err
 	}
@@ -180,7 +179,7 @@ func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 		Timeout: 60 * time.Second,
 	}
 
-	requestString := "getController/GetAllFarms" // change once you know what it is
+	requestString := "/farms"
 
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.AuraPoolBackEndUrl+requestString, nil)
 	if err != nil {
@@ -203,8 +202,7 @@ func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 
 	okStruct := []types.Farm{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		log.Error().Msg(err.Error())
 		return nil, err
 	}
@@ -245,8 +243,7 @@ func (r *Requester) VerifyCollection(ctx context.Context, denomId string) (bool,
 		} `json:"Collection"`
 	}{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		log.Error().Msg(err.Error())
 		return false, err
 	}
@@ -293,8 +290,7 @@ func (r *Requester) GetFarmCollectionWithNFTs(ctx context.Context, denomIds []st
 
 	okStruct := types.CollectionResponse{}
 
-	err = json.Unmarshal(bytes, &okStruct)
-	if err != nil {
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		return nil, err
 	}
 
