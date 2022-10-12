@@ -102,8 +102,14 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 		log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
 
 		rewardForNftOwners := s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
-		leftoverAmountForFarmOwner := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
-		log.Debug().Msgf("rewardForNftOwners : %s, leftoverAmountSatoshis: %.6f", rewardForNftOwners, leftoverAmountForFarmOwner)
+		leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
+		var rewardToReturn btcutil.Amount
+		// return to the farm owner whatever is left
+		if leftoverHashPower > 0 {
+			rewardToReturn := s.CalculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarm)
+			s.addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
+		}
+		log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
 
 		for _, collection := range farmCollectionsWithNFTs {
 			log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
@@ -135,7 +141,7 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				s.payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, config.CUDOMaintenanceFeePayoutAddress)
 				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNftAfterFee)
 				log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, maintenanceFee)
-				log.Debug().Msgf("CUDO part (%s) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
+				log.Debug().Msgf("CUDO part (%.6f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
 				nftStatistics.Reward = rewardForNftAfterFee
 				nftStatistics.MaintenanceFee = maintenanceFee
 				nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
@@ -147,13 +153,6 @@ func (s *services) ProcessPayment(config *infrastructure.Config) error {
 				}
 				s.distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFee, destinationAddressesWithAmount, nftStatistics)
 			}
-		}
-
-		if leftoverAmountForFarmOwner > 0 {
-			rewardToReturn := s.CalculatePercent(currentHashPowerForFarm, leftoverAmountForFarmOwner, totalRewardForFarm)
-			s.addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
-			log.Debug().Msgf("Leftover reward with for farm with Id {%s} amount {%s} is added for return to the farm admin with address {%s}", farm.SubAccountName, rewardToReturn, farm.LeftoverRewardPayoutAddress)
-
 		}
 
 		if len(destinationAddressesWithAmount) == 0 {
@@ -217,6 +216,7 @@ func (s *services) calculateMaintenanceFeeForNFT(periodStart int64,
 	destinationAddressesWithAmount map[string]btcutil.Amount,
 	farm types.Farm) (btcutil.Amount, btcutil.Amount, btcutil.Amount) {
 
+	//TODO: What happens if the payout comes in less then 24h? Probably it is better to calculate it hourly?
 	totalPayoutDays := (periodStart - periodEnd) / 3600 / 24                                        // period for which we are paying the MT fee
 	nftMaintenanceFeeForPayoutPeriod := btcutil.Amount(totalPayoutDays * int64(dailyFeeInSatoshis)) // the fee for the period
 	if nftMaintenanceFeeForPayoutPeriod > rewardForNft {                                            // if the fee is greater - it has higher priority then the users reward
@@ -368,10 +368,10 @@ func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesW
 		return nil, fmt.Errorf("farm {%s} has more then one unspent transaction", farmName)
 	}
 
-	err = EnsureTotalRewardIsEqualToAmountBeingSent(destinationAddressesWithAmount, totalRewardForFarm, farmName)
-	if err != nil {
-		return nil, err
-	}
+	// err = EnsureTotalRewardIsEqualToAmountBeingSent(destinationAddressesWithAmount, totalRewardForFarm, farmName)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	inputTx := unspentTxsForAddress[0]
 	if inputTx.Amount != totalRewardForFarm.ToBTC() {

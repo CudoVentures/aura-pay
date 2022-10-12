@@ -3,6 +3,7 @@ package types
 import "github.com/btcsuite/btcd/btcutil"
 
 type NFTStatistics struct {
+	Id                       string `db:"id"`
 	TokenId                  string `db:"token_id"`
 	DenomId                  string `db:"denom_id"`
 	PayoutPeriodStart        int64  `db:"payout_period_start"`
@@ -11,6 +12,9 @@ type NFTStatistics struct {
 	MaintenanceFee           btcutil.Amount `db:"maintenance_fee"`
 	CUDOPartOfMaintenanceFee btcutil.Amount `db:"cudo_part_of_maintenance_fee"`
 	NFTOwnersForPeriod       []NFTOwnerInformation
+	TxHash                   string `db:"tx_hash"`
+	CreatedAt                int64  `db:"createdAt"`
+	UpdatedAt                int64  `db:"updatedAt"`
 }
 
 type NFTOwnerInformation struct {
@@ -21,4 +25,6 @@ type NFTOwnerInformation struct {
 	Owner              string
 	PayoutAddress      string `db:"payout_address"`
 	Reward             btcutil.Amount
+	CreatedAt          int64 `db:"createdAt"`
+	UpdatedAt          int64 `db:"updatedAt"`
 }
