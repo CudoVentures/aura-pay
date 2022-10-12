@@ -175,6 +175,22 @@ func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId str
 
 func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 
+	if r.config.IsTesting { // TODO: Remove once backend is up
+		Collection := types.Collection{
+			Denom: types.Denom{Id: "test"},
+			Nfts:  []types.NFT{},
+		}
+		testFarm := types.Farm{
+			Id:                                 "1",
+			SubAccountName:                     "aura_pool_test_wallet",
+			AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
+			LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
+			MaintenanceFeePayoutdAddress:       "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
+			MonthlyMaintenanceFeeInBTC:         0.0001,
+			Collections:                        []types.Collection{Collection}}
+		return []types.Farm{testFarm}, nil
+	}
+
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}

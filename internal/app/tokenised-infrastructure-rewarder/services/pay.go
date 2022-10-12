@@ -18,22 +18,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func NewServices(config *infrastructure.Config, apiRequester ApiRequester, helper Helper, params *chaincfg.Params, minConfirmation int) *services {
+func NewServices(config *infrastructure.Config, apiRequester ApiRequester, helper Helper, btcNetworkParams *types.BtcNetworkParams) *services {
 	return &services{
-		config:          config,
-		helper:          helper,
-		params:          params,
-		minConfirmation: minConfirmation,
-		apiRequester:    apiRequester,
+		config:           config,
+		helper:           helper,
+		btcNetworkParams: btcNetworkParams,
+		apiRequester:     apiRequester,
 	}
 }
 
 type services struct {
-	config          *infrastructure.Config
-	helper          Helper
-	params          *chaincfg.Params
-	minConfirmation int
-	apiRequester    ApiRequester
+	config           *infrastructure.Config
+	helper           Helper
+	btcNetworkParams *types.BtcNetworkParams
+	apiRequester     ApiRequester
 }
 
 // missing:
@@ -65,9 +63,14 @@ func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, stor
 			return err
 		}
 
-		currentHashPowerForFarm, err := s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
-		if err != nil {
-			return err
+		var currentHashPowerForFarm float64
+		if s.config.IsTesting {
+			currentHashPowerForFarm = 1200 // hardcoded for testing & QA
+		} else {
+			currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+			if err != nil {
+				return err
+			}
 		}
 		log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
 
@@ -316,11 +319,11 @@ func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesW
 		outputVouts = append(outputVouts, i)
 	}
 
-	address, err := btcutil.DecodeAddress(miningPoolBTCAddress, s.params)
+	address, err := btcutil.DecodeAddress(miningPoolBTCAddress, s.btcNetworkParams.ChainParams)
 	if err != nil {
 		return nil, err
 	}
-	unspentTxsForAddress, err := btcClient.ListUnspentMinMaxAddresses(s.minConfirmation, 99999999, []btcutil.Address{address})
+	unspentTxsForAddress, err := btcClient.ListUnspentMinMaxAddresses(s.btcNetworkParams.MinConfirmations, 99999999, []btcutil.Address{address})
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +345,7 @@ func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesW
 	inputs := []btcjson.TransactionInput{txInput}
 
 	isWitness := false
-	transformedAddressesWithAmount, err := transformAddressesWithAmount(destinationAddressesWithAmount, s.params)
+	transformedAddressesWithAmount, err := transformAddressesWithAmount(destinationAddressesWithAmount, s.btcNetworkParams.ChainParams)
 	if err != nil {
 		return nil, err
 	}

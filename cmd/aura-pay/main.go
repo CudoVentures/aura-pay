@@ -7,6 +7,7 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
@@ -25,18 +26,17 @@ func runService(ctx context.Context) {
 	provider := infrastructure.NewProvider(config)
 	requestClient := requesters.NewRequester(config)
 
-	var params *chaincfg.Params
-	var minConfirmation int
+	var btcNetworkParams types.BtcNetworkParams
 
 	if config.IsTesting {
-		params = &chaincfg.SigNetParams
-		minConfirmation = 1
+		btcNetworkParams.ChainParams = &chaincfg.SigNetParams
+		btcNetworkParams.MinConfirmations = 1
 	} else {
-		params = &chaincfg.MainNetParams
-		minConfirmation = 6
+		btcNetworkParams.ChainParams = &chaincfg.MainNetParams
+		btcNetworkParams.MinConfirmations = 6
 	}
 
-	payService := services.NewServices(config, requestClient, infrastructure.NewHelper(config), params, minConfirmation)
+	payService := services.NewServices(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
 	worker.Start(ctx, config, payService, provider)
 }
