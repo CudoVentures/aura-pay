@@ -55,7 +55,8 @@ func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, stor
 			return err
 		}
 		if totalRewardForFarm == 0 {
-			return fmt.Errorf("reward for farm %s is 0....skipping this farm", farm.SubAccountName)
+			log.Info().Msgf("reward for farm %s is 0....skipping this farm", farm.SubAccountName)
+			continue
 		}
 		log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
 		collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.SubAccountName)
