@@ -42,144 +42,161 @@ func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, stor
 	}
 
 	for _, farm := range farms {
-		log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
-		destinationAddressesWithAmount := make(map[string]btcutil.Amount)
-		var statistics []types.NFTStatistics
-		if _, err := btcClient.LoadWallet(farm.SubAccountName); err != nil {
+		if err := s.processFarm(ctx, btcClient, storage, farm); err != nil {
 			return err
 		}
-		log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.SubAccountName)
+	}
 
-		totalRewardForFarm, err := btcClient.GetBalance("*") // returns the total balance in satoshis
-		if err != nil {
-			return err
-		}
-		if totalRewardForFarm == 0 {
-			log.Info().Msgf("reward for farm %s is 0....skipping this farm", farm.SubAccountName)
-			continue
-		}
-		log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
-		collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.SubAccountName)
-		if err != nil {
-			return err
-		}
+	return nil
+}
 
-		var currentHashPowerForFarm float64
-		if s.config.IsTesting {
-			currentHashPowerForFarm = 1200 // hardcoded for testing & QA
-		} else {
-			currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
-			if err != nil {
-				return err
-			}
-		}
-		log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
+func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage Storage, farm types.Farm) error {
+	log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
+	destinationAddressesWithAmount := make(map[string]btcutil.Amount)
+	var statistics []types.NFTStatistics
+	if _, err := btcClient.LoadWallet(farm.SubAccountName); err != nil {
+		return err
+	}
+	log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.SubAccountName)
 
-		dailyFeeInSatoshis, err := s.calculateDailyMaintenanceFee(farm, currentHashPowerForFarm)
-		if err != nil {
-			return err
-		}
-
-		verifiedDenomIds, err := s.verifyCollectionIds(ctx, collections)
-		if err != nil {
-			return err
-		}
-		log.Debug().Msgf("Verified collections for farm %s: %s", farm.SubAccountName, fmt.Sprintf("%v", verifiedDenomIds))
-
-		farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionWithNFTs(ctx, verifiedDenomIds)
-		if err != nil {
-			return err
-		}
-
-		filterExpiredNFTs(farmCollectionsWithNFTs)
-
-		mintedHashPowerForFarm := s.SumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
-		log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
-
-		rewardForNftOwners := s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
-		leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
-		var rewardToReturn btcutil.Amount
-		// return to the farm owner whatever is left
-		if leftoverHashPower > 0 {
-			rewardToReturn := s.CalculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarm)
-			addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
-		}
-		log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
-
-		for _, collection := range farmCollectionsWithNFTs {
-			log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
-			for _, nft := range collection.Nfts {
-				var nftStatistics types.NFTStatistics
-				nftStatistics.TokenId = nft.Id
-				nftStatistics.DenomId = collection.Denom.Id
-
-				nftTransferHistory, err := s.getNftTransferHistory(ctx, collection.Denom.Id, nft.Id)
-				if err != nil {
-					return err
-				}
-				payoutTimes, err := storage.GetPayoutTimesForNFT(ctx, collection.Denom.Id, nft.Id)
-				if err != nil {
-					return err
-				}
-				periodStart, periodEnd, err := findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
-				if err != nil {
-					return err
-				}
-
-				nftStatistics.PayoutPeriodStart = periodStart
-				nftStatistics.PayoutPeriodEnd = periodEnd
-
-				rewardForNft := s.CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
-
-				maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := calculateMaintenanceFeeForNFT(periodStart, periodEnd, dailyFeeInSatoshis, rewardForNft, destinationAddressesWithAmount, farm)
-				payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutdAddress)
-				payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOMaintenanceFeePayoutAddress)
-				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNftAfterFee)
-				log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, maintenanceFee)
-				log.Debug().Msgf("CUDO part (%.6f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
-				nftStatistics.Reward = rewardForNftAfterFee
-				nftStatistics.MaintenanceFee = maintenanceFee
-				nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
-
-				allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
-					ctx, nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, nftStatistics, nft.Owner, s.config.Network)
-				if err != nil {
-					return err
-				}
-
-				distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFee, destinationAddressesWithAmount, nftStatistics)
-			}
-		}
-
-		if len(destinationAddressesWithAmount) == 0 {
-			return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
-		}
-
-		// utilised in case we had a maintenance fee greater then the nft reward.
-		// keys with 0 value were added in order to have statistics even for 0 reward
-		// and in order to avoid sending them as 0 - just remove them but still keep statistic
-		for key := range destinationAddressesWithAmount {
-			if destinationAddressesWithAmount[key] == 0 {
-				delete(destinationAddressesWithAmount, key)
-			}
-		}
-
-		log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
-		txHash, err := s.payRewards(farm.AddressForReceivingRewardsFromPool, destinationAddressesWithAmount, totalRewardForFarm, farm.SubAccountName, btcClient)
-		if err != nil {
-			return err
-		}
-		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash.String())
-
+	defer func() {
 		if err := btcClient.UnloadWallet(&farm.SubAccountName); err != nil {
-			return err
+			log.Error().Msgf("Failed to unload wallet %s: %s", farm.SubAccountName, err)
+			return
 		}
 
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
+	}()
 
-		if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash.String(), farm.Id); err != nil {
-			log.Error().Msgf("Failed to save statistics: %s", txHash.String(), err)
+	totalRewardForFarm, err := btcClient.GetBalance("*") // returns the total balance in satoshis
+	if err != nil {
+		return err
+	}
+	if totalRewardForFarm == 0 {
+		log.Info().Msgf("reward for farm %s is 0....skipping this farm", farm.SubAccountName)
+		return nil
+	}
+
+	log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
+	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.SubAccountName)
+	if err != nil {
+		return err
+	}
+
+	var currentHashPowerForFarm float64
+	if s.config.IsTesting {
+		currentHashPowerForFarm = 1200 // hardcoded for testing & QA
+	} else {
+		currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+		if err != nil {
+			return err
 		}
+
+		if currentHashPowerForFarm <= 0 {
+			return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
+		}
+	}
+
+	log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
+
+	dailyFeeInSatoshis, err := s.calculateDailyMaintenanceFee(farm, currentHashPowerForFarm)
+	if err != nil {
+		return err
+	}
+
+	verifiedDenomIds, err := s.verifyCollectionIds(ctx, collections)
+	if err != nil {
+		return err
+	}
+	log.Debug().Msgf("Verified collections for farm %s: %s", farm.SubAccountName, fmt.Sprintf("%v", verifiedDenomIds))
+
+	farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionWithNFTs(ctx, verifiedDenomIds)
+	if err != nil {
+		return err
+	}
+
+	filterExpiredNFTs(farmCollectionsWithNFTs)
+
+	mintedHashPowerForFarm := s.SumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
+	log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
+
+	rewardForNftOwners := s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
+	leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
+	var rewardToReturn btcutil.Amount
+	// return to the farm owner whatever is left
+	if leftoverHashPower > 0 {
+		rewardToReturn := s.CalculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarm)
+		addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
+	}
+	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
+
+	for _, collection := range farmCollectionsWithNFTs {
+		log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
+		for _, nft := range collection.Nfts {
+			var nftStatistics types.NFTStatistics
+			nftStatistics.TokenId = nft.Id
+			nftStatistics.DenomId = collection.Denom.Id
+
+			nftTransferHistory, err := s.getNftTransferHistory(ctx, collection.Denom.Id, nft.Id)
+			if err != nil {
+				return err
+			}
+			payoutTimes, err := storage.GetPayoutTimesForNFT(ctx, collection.Denom.Id, nft.Id)
+			if err != nil {
+				return err
+			}
+			periodStart, periodEnd, err := findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+			if err != nil {
+				return err
+			}
+
+			nftStatistics.PayoutPeriodStart = periodStart
+			nftStatistics.PayoutPeriodEnd = periodEnd
+
+			rewardForNft := s.CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
+
+			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := calculateMaintenanceFeeForNFT(periodStart, periodEnd, dailyFeeInSatoshis, rewardForNft, destinationAddressesWithAmount, farm)
+			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutdAddress)
+			payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOMaintenanceFeePayoutAddress)
+			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNftAfterFee)
+			log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, maintenanceFee)
+			log.Debug().Msgf("CUDO part (%.6f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
+			nftStatistics.Reward = rewardForNftAfterFee
+			nftStatistics.MaintenanceFee = maintenanceFee
+			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
+
+			allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
+				ctx, nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, nftStatistics, nft.Owner, s.config.Network)
+			if err != nil {
+				return err
+			}
+
+			distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFee, destinationAddressesWithAmount, nftStatistics)
+		}
+	}
+
+	if len(destinationAddressesWithAmount) == 0 {
+		return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
+	}
+
+	// utilised in case we had a maintenance fee greater then the nft reward.
+	// keys with 0 value were added in order to have statistics even for 0 reward
+	// and in order to avoid sending them as 0 - just remove them but still keep statistic
+	for key := range destinationAddressesWithAmount {
+		if destinationAddressesWithAmount[key] == 0 {
+			delete(destinationAddressesWithAmount, key)
+		}
+	}
+
+	log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
+	txHash, err := s.payRewards(farm.AddressForReceivingRewardsFromPool, destinationAddressesWithAmount, totalRewardForFarm, farm.SubAccountName, btcClient)
+	if err != nil {
+		return err
+	}
+	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash.String())
+
+	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash.String(), farm.Id); err != nil {
+		log.Error().Msgf("Failed to save statistics: %s", txHash.String(), err)
 	}
 
 	return nil
