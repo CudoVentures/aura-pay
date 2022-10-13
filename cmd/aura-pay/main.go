@@ -18,7 +18,7 @@ func main() {
 }
 
 func runService(ctx context.Context) {
-	if err := godotenv.Load(".env"); err != nil {
+	if err := godotenv.Load("../../.env"); err != nil {
 		log.Error().Msgf("No .env file found: %s", err)
 	}
 
