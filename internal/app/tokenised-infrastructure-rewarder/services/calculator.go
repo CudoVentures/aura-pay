@@ -26,6 +26,10 @@ func (s *services) SumMintedHashPowerForAllCollections(collections []types.Colle
 }
 
 func (s *services) CalculatePercent(available float64, actual float64, reward btcutil.Amount) btcutil.Amount {
+	if actual == 0 {
+		return btcutil.Amount(0)
+	}
+
 	payoutRewardPercent := float64(actual) / float64(available) * 100 // ex 100 from 1000 = 10%
 	calculatedReward := float64(reward) * payoutRewardPercent / 100   // ex 10% from 1000 = 100
 	rewardInSatoshis := btcutil.Amount(calculatedReward)              // btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
