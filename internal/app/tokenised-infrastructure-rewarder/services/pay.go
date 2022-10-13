@@ -50,6 +50,15 @@ func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, stor
 		}
 		log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.SubAccountName)
 
+		defer func() {
+			if err := btcClient.UnloadWallet(&farm.SubAccountName); err != nil {
+				log.Error().Msgf("Failed to unload wallet %s: %s", farm.SubAccountName, err)
+				return
+			}
+
+			log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
+		}()
+
 		totalRewardForFarm, err := btcClient.GetBalance("*") // returns the total balance in satoshis
 		if err != nil {
 			return err
@@ -72,7 +81,12 @@ func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, stor
 			if err != nil {
 				return err
 			}
+
+			if currentHashPowerForFarm <= 0 {
+				return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
+			}
 		}
+
 		log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
 
 		dailyFeeInSatoshis, err := s.calculateDailyMaintenanceFee(farm, currentHashPowerForFarm)
@@ -170,12 +184,6 @@ func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, stor
 			return err
 		}
 		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash.String())
-
-		if err := btcClient.UnloadWallet(&farm.SubAccountName); err != nil {
-			return err
-		}
-
-		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 
 		if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash.String(), farm.Id); err != nil {
 			log.Error().Msgf("Failed to save statistics: %s", txHash.String(), err)
