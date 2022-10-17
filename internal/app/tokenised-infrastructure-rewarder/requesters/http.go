@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/btcsuite/btcd/btcutil"
 
 	"github.com/rs/zerolog/log"
 
@@ -23,6 +26,10 @@ type Requester struct {
 	config *infrastructure.Config
 }
 
+const (
+	StatusCodeOK = 200
+)
+
 func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
@@ -30,29 +37,31 @@ func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, 
 
 	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
 	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
+	// requestStringDebug := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s", cudosAddress, network, denomId)
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return "", err
 	}
+
 	defer res.Body.Close()
 
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}
+	if res.StatusCode != StatusCodeOK {
+		return "", fmt.Errorf("error! Request Failed: %s with StatusCode: %d, Error: %s", res.Status, res.StatusCode, string(bytes))
+	}
 
 	okStruct := types.MappedAddress{}
 
 	if err := json.Unmarshal(bytes, &okStruct); err != nil {
-		log.Error().Msg(err.Error())
 		return "", err
 	}
 
@@ -82,8 +91,14 @@ func (r *Requester) GetNftTransferHistory(ctx context.Context, collectionDenomId
 		log.Error().Msgf("The HTTP request failed with error %s\n", err)
 		return types.NftTransferHistory{}, nil
 	}
+	if response.StatusCode != StatusCodeOK {
+		return types.NftTransferHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d", response.Status, response.StatusCode)
+	}
 	defer response.Body.Close()
 	data, err := ioutil.ReadAll(response.Body)
+	if response.StatusCode != StatusCodeOK {
+		return types.NftTransferHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
+	}
 
 	if err != nil {
 		log.Error().Msgf("Could read data [%s] from hasura to the specific type, error is: [%s]", data, err)
@@ -103,7 +118,6 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farm
 
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.FoundryPoolAPIBaseURL+requestString, nil)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return -1, err
 	}
 
@@ -116,9 +130,9 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farm
 	client := &http.Client{Timeout: time.Second * 10}
 	res, err := client.Do(req)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return -1, err
 	}
+
 	defer res.Body.Close()
 
 	bytes, err := ioutil.ReadAll(res.Body)
@@ -127,10 +141,13 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farm
 		return 0, err
 	}
 
+	if res.StatusCode != StatusCodeOK {
+		return -1, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", res.Status, res.StatusCode, string(bytes))
+	}
+
 	okStruct := types.FarmHashRate{}
 
 	if err := json.Unmarshal(bytes, &okStruct); err != nil {
-		log.Error().Msg(err.Error())
 		return -1, err
 	}
 
@@ -150,6 +167,9 @@ func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId str
 	}
 	jsonValue, _ := json.Marshal(jsonData)
 	request, err := http.NewRequestWithContext(ctx, "POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
+	if err != nil {
+		return types.CollectionData{}, err
+	}
 	client := &http.Client{Timeout: time.Second * 10}
 	response, err := client.Do(request)
 	if err != nil {
@@ -162,6 +182,9 @@ func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId str
 	if err != nil {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return types.CollectionData{}, err
+	}
+	if response.StatusCode != StatusCodeOK {
+		return types.CollectionData{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
 	}
 
 	var res types.CollectionData
@@ -182,10 +205,10 @@ func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 		}
 		testFarm := types.Farm{
 			Id:                                 "1",
-			SubAccountName:                     "aura_pool_test_wallet",
-			AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
-			LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
-			MaintenanceFeePayoutdAddress:       "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
+			SubAccountName:                     "testwallet2",
+			AddressForReceivingRewardsFromPool: "tb1qeymwaxsx73edkrqyg436khmcwlavw8zjc57wnw",
+			LeftoverRewardPayoutAddress:        "tb1qmktqv4psg7ucw6ct578ev4y9pl9k8m6eh7g0vd",
+			MaintenanceFeePayoutdAddress:       "tb1quljswl4xgmmqrmuyvqqxzg77zyd7z8na54ps7a",
 			MonthlyMaintenanceFeeInBTC:         0.0001,
 			Collections:                        []types.Collection{Collection}}
 		return []types.Farm{testFarm}, nil
@@ -199,16 +222,15 @@ func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.AuraPoolBackEndUrl+requestString, nil)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return nil, err
 	}
+
 	defer res.Body.Close()
 
 	bytes, err := ioutil.ReadAll(res.Body)
@@ -216,10 +238,13 @@ func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 		return nil, err
 	}
 
+	if res.StatusCode != StatusCodeOK {
+		return nil, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", res.Status, res.StatusCode, string(bytes))
+	}
+
 	okStruct := []types.Farm{}
 
 	if err := json.Unmarshal(bytes, &okStruct); err != nil {
-		log.Error().Msg(err.Error())
 		return nil, err
 	}
 
@@ -236,19 +261,24 @@ func (r *Requester) VerifyCollection(ctx context.Context, denomId string) (bool,
 
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return false, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return false, err
 	}
 	defer res.Body.Close()
 
-	bytes, err := ioutil.ReadAll(res.Body) // Generated by https://quicktype.io
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return false, err
+	}
+
+	if res.StatusCode != StatusCodeOK {
+		return false, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", res.Status, res.StatusCode, string(bytes))
+	}
 
 	okStruct := struct {
 		Collection struct {
@@ -260,7 +290,6 @@ func (r *Requester) VerifyCollection(ctx context.Context, denomId string) (bool,
 	}{}
 
 	if err := json.Unmarshal(bytes, &okStruct); err != nil {
-		log.Error().Msg(err.Error())
 		return false, err
 	}
 
@@ -281,13 +310,11 @@ func (r *Requester) GetFarmCollectionWithNFTs(ctx context.Context, denomIds []st
 
 	reqBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return nil, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", r.config.NodeRestUrl+"/nft/collectionsByDenomIds", bytes.NewBuffer(reqBytes))
 	if err != nil {
-		log.Error().Msg(err.Error())
 		return nil, err
 	}
 
@@ -302,6 +329,10 @@ func (r *Requester) GetFarmCollectionWithNFTs(ctx context.Context, denomIds []st
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	if res.StatusCode != StatusCodeOK {
+		return nil, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", res.Status, res.StatusCode, string(bytes))
 	}
 
 	okStruct := types.CollectionResponse{}
@@ -321,4 +352,75 @@ func (r *Requester) GetFarmCollectionWithNFTs(ctx context.Context, denomIds []st
 	}
 
 	return okStruct.Result.Collections, nil
+}
+
+// Issues a curl request to the btc node to send funds to many addresses:
+// curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "sendmany", "params": ["", {"bc1q09vm5lfy0j5reeulh4x5752q25uqqvz34hufdl":0.01,"bc1q02ad21edsxd23d32dfgqqsz4vv4nmtfzuklhy3":0.02}, 6, "testing"]}' -H 'content-type: text/plain;' http://127.0.0.1:8332/
+func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error) {
+
+	destinationAddressesWithAmount = make(map[string]float64)
+	destinationAddressesWithAmount["tb1q350dpgdppy6t4rdy6uwlva84nmd3wxz75crlmz"] = 0.00015671
+	destinationAddressesWithAmount["tb1qsf77kqqhqnnmyssqe324zwttmveyeg6h0lrsl5"] = 0.00015671
+
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	bytes, err := json.Marshal(destinationAddressesWithAmount)
+	if err != nil {
+		return "", err
+	}
+	escapedDestinationAddresses := string(bytes)
+
+	subractFeeFromAddresses := []string{}
+	for k := range destinationAddressesWithAmount {
+		subractFeeFromAddresses = append(subractFeeFromAddresses, k)
+	}
+
+	bytes, err = json.Marshal(subractFeeFromAddresses)
+	if err != nil {
+		return "", err
+	}
+	escapedSubractFeeFromAddressesString := string(bytes)
+
+	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"sendmany\", \"params\": [\"\", %s, 6, \"\", %s, true]}", escapedDestinationAddresses, escapedSubractFeeFromAddressesString)
+
+	body := strings.NewReader(formatedString)
+	endPointToCall := fmt.Sprintf("http://%s:%s", r.config.BitcoinNodeUrl, r.config.BitcoinNodePort)
+	req, err := http.NewRequestWithContext(ctx, "POST", endPointToCall, body)
+	if err != nil {
+		return "", err
+	}
+	req.SetBasicAuth(r.config.BitcoinNodeUserName, r.config.BitcoinNodePassword)
+	req.Header.Set("Content-Type", "text/plain;")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	defer resp.Body.Close()
+
+	bytes, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != StatusCodeOK {
+		return "", fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", resp.Status, resp.StatusCode, string(bytes))
+	}
+
+	okStruct := struct {
+		TxHash string `json:"result"`
+		Err    string `json:"error"`
+	}{}
+
+	if err := json.Unmarshal(bytes, &okStruct); err != nil {
+		return "", err
+	}
+
+	if okStruct.Err != "" {
+		return "", fmt.Errorf(okStruct.Err)
+	}
+
+	return okStruct.TxHash, nil
 }

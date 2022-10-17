@@ -40,12 +40,13 @@ func (s *services) CalculatePercent(available float64, actual float64, reward bt
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
 func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory, collectionDenomId, nftId string,
-	periodStart, periodEnd int64, statistics types.NFTStatistics, currentNftOwner, network string) (map[string]float64, error) {
+	periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, network string) (map[string]float64, error) {
 
 	ownersWithPercentOwnedTime := make(map[string]float64)
 	totalPeriodTimeInSeconds := periodEnd - periodStart
 	var transferHistoryForTimePeriod []types.NftTransferEvent
 	var cudosAddress string
+	statisticsAdditionalData := types.NFTOwnerInformation{}
 
 	// get only those transfer events in the current time period
 	for _, transferHistoryElement := range nftTransferHistory.Data.NestedData.Events {
@@ -61,13 +62,19 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.
 			return nil, err
 		}
 		ownersWithPercentOwnedTime[nftPayoutAddress] = 100
+
+		statisticsAdditionalData.TimeOwnedFrom = periodStart
+		statisticsAdditionalData.TimeOwnedTo = periodEnd
+		statisticsAdditionalData.TotalTimeOwned = periodEnd - periodStart
+		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
+		statisticsAdditionalData.PercentOfTimeOwned = 100
+
 		return ownersWithPercentOwnedTime, nil
 	}
 
 	containInitialMintTx := transferHistoryForTimePeriod[0].From == "0x0" // "0x0" means no transfers and thus the from address is empty; only the to address is populated with the receiver addr
 	for i := 0; i < len(transferHistoryForTimePeriod); i++ {
 		var timeOwned int64
-		statisticsAdditionalData := types.NFTOwnerInformation{}
 		if containInitialMintTx { // handles the case where we have no payout periods and periodStart is equal to transferHistoryForTimePeriod[i].timestamp
 			cudosAddress = transferHistoryForTimePeriod[i].From
 			if transferHistoryForTimePeriod[i].From == "0x0" { // only the first

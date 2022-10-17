@@ -22,8 +22,8 @@ type NFTOwnerInformation struct {
 	TimeOwnedTo        int64   `db:"time_owned_to"`
 	TotalTimeOwned     int64   `db:"total_time_owned"`
 	PercentOfTimeOwned float64 `db:"percent_of_time_owned"`
-	Owner              string
-	PayoutAddress      string `db:"payout_address"`
+	Owner              string  // not used anywhere?
+	PayoutAddress      string  `db:"payout_address"`
 	Reward             btcutil.Amount
 	CreatedAt          int64 `db:"createdAt"`
 	UpdatedAt          int64 `db:"updatedAt"`

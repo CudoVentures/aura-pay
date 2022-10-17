@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	_ "github.com/lib/pq"
+
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
@@ -12,9 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// TODO: add new logic for maintenance fee calculation
-// TODO: add logic that handles the start of the month for the reward
-
 func Start(ctx context.Context, config *infrastructure.Config, payService payService, provider provider) {
 	log.Info().Msg("Application started")
 
@@ -22,6 +21,7 @@ func Start(ctx context.Context, config *infrastructure.Config, payService paySer
 		log.Error().Msgf("retry error: %s", err)
 
 		ticker := time.NewTicker(config.WorkerFailureRetryDelay)
+		defer ticker.Stop()
 
 		select {
 		case <-ticker.C:
@@ -61,9 +61,11 @@ func Start(ctx context.Context, config *infrastructure.Config, payService paySer
 			}
 		}
 
+		// TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
+
 		if processingError != nil {
 			errorCount++
-			log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount) // TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
+			log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
 		}
 	}
 
