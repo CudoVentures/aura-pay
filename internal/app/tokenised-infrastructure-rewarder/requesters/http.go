@@ -198,27 +198,27 @@ func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId str
 
 func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 
-	if r.config.IsTesting { // TODO: Remove once backend is up
-		Collection := types.Collection{
-			Denom: types.Denom{Id: "test"},
-			Nfts:  []types.NFT{},
-		}
-		testFarm := types.Farm{
-			Id:                                 "1",
-			SubAccountName:                     "testwallet2",
-			AddressForReceivingRewardsFromPool: "tb1qeymwaxsx73edkrqyg436khmcwlavw8zjc57wnw",
-			LeftoverRewardPayoutAddress:        "tb1qmktqv4psg7ucw6ct578ev4y9pl9k8m6eh7g0vd",
-			MaintenanceFeePayoutdAddress:       "tb1quljswl4xgmmqrmuyvqqxzg77zyd7z8na54ps7a",
-			MonthlyMaintenanceFeeInBTC:         0.0001,
-			Collections:                        []types.Collection{Collection}}
-		return []types.Farm{testFarm}, nil
-	}
+	// if r.config.IsTesting { // TODO: Remove once backend is up
+	// 	Collection := types.Collection{
+	// 		Denom: types.Denom{Id: "test"},
+	// 		Nfts:  []types.NFT{},
+	// 	}
+	// 	testFarm := types.Farm{
+	// 		Id:                                 "1",
+	// 		SubAccountName:                     "testwallet2",
+	// 		AddressForReceivingRewardsFromPool: "tb1qeymwaxsx73edkrqyg436khmcwlavw8zjc57wnw",
+	// 		LeftoverRewardPayoutAddress:        "tb1qmktqv4psg7ucw6ct578ev4y9pl9k8m6eh7g0vd",
+	// 		MaintenanceFeePayoutdAddress:       "tb1quljswl4xgmmqrmuyvqqxzg77zyd7z8na54ps7a",
+	// 		MonthlyMaintenanceFeeInBTC:         0.0001,
+	// 		Collections:                        []types.Collection{Collection}}
+	// 	return []types.Farm{testFarm}, nil
+	// }
 
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
 
-	requestString := "/farms"
+	requestString := "/farm"
 
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.AuraPoolBackEndUrl+requestString, nil)
 	if err != nil {

@@ -3,13 +3,13 @@ package types
 import "github.com/btcsuite/btcd/chaincfg"
 
 type Farm struct {
-	Id                                 string       `json:"id"`
+	Id                                 int          `json:"id"`
 	SubAccountName                     string       `json:"sub_account_name"`
 	AddressForReceivingRewardsFromPool string       `json:"address_for_receiving_rewards_from_pool"` // Address set in the mining pool that receives the farm rewards
 	LeftoverRewardPayoutAddress        string       `json:"leftover_reward_payout_address"`
 	MaintenanceFeePayoutdAddress       string       `json:"maintenance_fee_payout_address"`
 	Collections                        []Collection `json:"collections"`
-	MonthlyMaintenanceFeeInBTC         float64      `json:"maintenance_fee_in_btc"`
+	MonthlyMaintenanceFeeInBTC         string       `json:"maintenance_fee_in_btc"`
 }
 type Collection struct {
 	Denom Denom `json:"denom"`
