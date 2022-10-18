@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
@@ -34,7 +35,6 @@ type services struct {
 	apiRequester     ApiRequester
 }
 
-// missing:
 func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, storage Storage) error {
 	farms, err := s.apiRequester.GetFarms(ctx)
 	if err != nil {
@@ -208,7 +208,7 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 		return err
 	}
 
-	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, farm.Id); err != nil {
+	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id)); err != nil {
 		log.Error().Msgf("Failed to save statistics: %s", txHash, err)
 	}
 
@@ -274,7 +274,11 @@ func payMaintenanceFeeForNFT(destinationAddressesWithAmount map[string]btcutil.A
 func (s *services) calculateDailyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) (btcutil.Amount, error) {
 	currentYear, currentMonth, _ := time.Now().Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
-	totalFeeBTC := farm.MonthlyMaintenanceFeeInBTC / currentHashPowerForFarm
+	mtFee, err := strconv.ParseFloat(farm.MaintenanceFeePayoutdAddress, 64)
+	if err != nil {
+		return -1, err
+	}
+	totalFeeBTC := mtFee / currentHashPowerForFarm
 	dailyFeeBTC := totalFeeBTC / float64(periodLength)
 	dailyFeeInSatoshis, err := btcutil.NewAmount(dailyFeeBTC)
 	if err != nil {
