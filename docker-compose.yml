@@ -27,6 +27,11 @@ services:
       CUDO_MAINTENANCE_FEE_PERCENT: ${CUDO_MAINTENANCE_FEE_PERCENT}
       CUDO_MAINTENANCE_FEE_PAYOUT_ADDRESS: ${CUDO_MAINTENANCE_FEE_PAYOUT_ADDRESS}
       AURA_POOL_TEST_FARM_WALLET_PASSWORD: ${AURA_POOL_TEST_FARM_WALLET_PASSWORD}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "128m"
+        max-file: "1"
 
 
 
