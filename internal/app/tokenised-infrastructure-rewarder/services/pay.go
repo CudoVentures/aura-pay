@@ -118,15 +118,15 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 
 	filterExpiredNFTs(farmCollectionsWithNFTs)
 
-	mintedHashPowerForFarm := s.SumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
+	mintedHashPowerForFarm := sumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
 	log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
 
-	rewardForNftOwners := s.CalculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
+	rewardForNftOwners := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
 	leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
 	var rewardToReturn btcutil.Amount
 	// return to the farm owner whatever is left
 	if leftoverHashPower > 0 {
-		rewardToReturn = s.CalculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarm)
+		rewardToReturn = calculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarm)
 		addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
 	}
 	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
@@ -154,7 +154,7 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 			nftStatistics.PayoutPeriodStart = periodStart
 			nftStatistics.PayoutPeriodEnd = periodEnd
 
-			rewardForNft := s.CalculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
+			rewardForNft := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
 
 			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := calculateMaintenanceFeeForNFT(periodStart, periodEnd, dailyFeeInSatoshis, rewardForNft, destinationAddressesWithAmount, farm)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutdAddress)
@@ -209,7 +209,7 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 	}
 
 	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id)); err != nil {
-		log.Error().Msgf("Failed to save statistics: %s", txHash, err)
+		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
 	}
 
 	return nil
