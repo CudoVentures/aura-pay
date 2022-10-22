@@ -11,7 +11,6 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/wire"
@@ -74,7 +73,7 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 		return err
 	}
 	if totalRewardForFarm == 0 {
-		log.Info().Msgf("reward for farm %s is 0....skipping this farm", farm.SubAccountName)
+		log.Info().Msgf("reward for farm {{%s}} is 0....skipping this farm", farm.SubAccountName)
 		return nil
 	}
 
@@ -274,7 +273,7 @@ func payMaintenanceFeeForNFT(destinationAddressesWithAmount map[string]btcutil.A
 func (s *services) calculateDailyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) (btcutil.Amount, error) {
 	currentYear, currentMonth, _ := time.Now().Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
-	mtFee, err := strconv.ParseFloat(farm.MaintenanceFeePayoutdAddress, 64)
+	mtFee, err := strconv.ParseFloat(farm.MonthlyMaintenanceFeeInBTC, 64)
 	if err != nil {
 		return -1, err
 	}
@@ -356,106 +355,6 @@ func addPaymentAmountToStatistics(amount btcutil.Amount, payoutAddress string, n
 			additionalData.Reward = amount
 		}
 	}
-}
-
-// func (s *services) payRewards(miningPoolBTCAddress string, destinationAddressesWithAmount map[string]btcutil.Amount, totalRewardForFarm btcutil.Amount, farmName string, btcClient BtcClient) (*chainhash.Hash, error) {
-// 	var outputVouts []int
-// 	for i := 0; i < len(destinationAddressesWithAmount); i++ {
-// 		outputVouts = append(outputVouts, i)
-// 	}
-
-// 	address, err := btcutil.DecodeAddress(miningPoolBTCAddress, s.btcNetworkParams.ChainParams)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	unspentTxsForAddress, err := btcClient.ListUnspentMinMaxAddresses(s.btcNetworkParams.MinConfirmations, 99999999, []btcutil.Address{address})
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if len(unspentTxsForAddress) > 1 {
-// 		return nil, fmt.Errorf("farm {%s} has more then one unspent transaction", farmName)
-// 	}
-
-// 	// err = EnsureTotalRewardIsEqualToAmountBeingSent(destinationAddressesWithAmount, totalRewardForFarm, farmName)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
-
-// 	inputTx := unspentTxsForAddress[0]
-// 	if inputTx.Amount != totalRewardForFarm.ToBTC() {
-// 		return nil, fmt.Errorf("input tx with hash {%s} has different amount (%v) then the total reward ({%v}) for farm {%s} ", inputTx.TxID, inputTx.Amount, totalRewardForFarm.ToBTC(), farmName)
-// 	}
-
-// 	txInput := btcjson.TransactionInput{Txid: inputTx.TxID, Vout: inputTx.Vout}
-// 	inputs := []btcjson.TransactionInput{txInput}
-
-// 	isWitness := false
-// 	transformedAddressesWithAmount, err := transformAddressesWithAmount(destinationAddressesWithAmount, s.btcNetworkParams.ChainParams)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	rawTx, err := btcClient.CreateRawTransaction(inputs, transformedAddressesWithAmount, nil)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	res, err := btcClient.FundRawTransaction(rawTx, btcjson.FundRawTransactionOpts{SubtractFeeFromOutputs: outputVouts}, &isWitness)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	signedTx, isSigned, err := btcClient.SignRawTransactionWithWallet(res.Transaction)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	if !isSigned {
-// 		return nil, fmt.Errorf("failed to sign transaction: %+v", res.Transaction)
-// 	}
-// 	err = btcClient.WalletLock()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	txHash, err := btcClient.SendRawTransaction(signedTx, false)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return txHash, nil
-// }
-
-func EnsureTotalRewardIsEqualToAmountBeingSent(destinationAddressesWithAmount map[string]btcutil.Amount, totalRewardForFarm btcutil.Amount, farmName string) error {
-	var totalRewardToSend btcutil.Amount
-
-	for _, v := range destinationAddressesWithAmount {
-		totalRewardToSend += v
-	}
-	if totalRewardToSend != totalRewardForFarm {
-		return fmt.Errorf("mismatch between totalRewardAForFarm {%s} and totalRewardToSend {%s}. Farm name {%s}", totalRewardForFarm, totalRewardToSend, farmName)
-	}
-
-	return nil
-}
-
-func transformAddressesWithAmount(destinationAddressesWithAmount map[string]btcutil.Amount, params *chaincfg.Params) (map[btcutil.Address]btcutil.Amount, error) {
-	result := make(map[btcutil.Address]btcutil.Amount)
-
-	for address, amount := range destinationAddressesWithAmount {
-		addr, err := btcutil.DecodeAddress(address, params)
-		if err != nil {
-			return nil, err
-		}
-		result[addr] = amount
-	}
-
-	return result, nil
 }
 
 type ApiRequester interface {
