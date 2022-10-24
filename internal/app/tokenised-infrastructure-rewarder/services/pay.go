@@ -99,7 +99,7 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 
 	log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
 
-	dailyFeeInSatoshis, err := s.calculateDailyMaintenanceFee(farm, currentHashPowerForFarm)
+	hourlyMaintenanceFeeInSatoshis, err := s.calculateHourlyMaintenanceFee(farm, currentHashPowerForFarm)
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 
 			rewardForNft := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
 
-			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := calculateMaintenanceFeeForNFT(periodStart, periodEnd, dailyFeeInSatoshis, rewardForNft, destinationAddressesWithAmount, farm)
+			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := calculateMaintenanceFeeForNFT(periodStart, periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft, destinationAddressesWithAmount, farm)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutdAddress)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOMaintenanceFeePayoutAddress)
 			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNftAfterFee)
@@ -241,15 +241,14 @@ func filterExpiredNFTs(farmCollectionsWithNFTs []types.Collection) {
 
 func calculateMaintenanceFeeForNFT(periodStart int64,
 	periodEnd int64,
-	dailyFeeInSatoshis btcutil.Amount,
+	hourlyFeeInSatoshis btcutil.Amount,
 	rewardForNft btcutil.Amount,
 	destinationAddressesWithAmount map[string]btcutil.Amount,
 	farm types.Farm) (btcutil.Amount, btcutil.Amount, btcutil.Amount) {
 
-	//TODO: What happens if the payout comes in less then 24h? Probably it is better to calculate it hourly?
-	totalPayoutDays := (periodStart - periodEnd) / 3600 / 24                                        // period for which we are paying the MT fee
-	nftMaintenanceFeeForPayoutPeriod := btcutil.Amount(totalPayoutDays * int64(dailyFeeInSatoshis)) // the fee for the period
-	if nftMaintenanceFeeForPayoutPeriod > rewardForNft {                                            // if the fee is greater - it has higher priority then the users reward
+	totalPayoutHours := (periodEnd - periodStart) / 3600                                              // period for which we are paying the MT fee
+	nftMaintenanceFeeForPayoutPeriod := btcutil.Amount(totalPayoutHours * int64(hourlyFeeInSatoshis)) // the fee for the period
+	if nftMaintenanceFeeForPayoutPeriod > rewardForNft {                                              // if the fee is greater - it has higher priority then the users reward
 		nftMaintenanceFeeForPayoutPeriod = rewardForNft
 		rewardForNft = 0
 	} else {
@@ -270,20 +269,21 @@ func payMaintenanceFeeForNFT(destinationAddressesWithAmount map[string]btcutil.A
 	}
 }
 
-func (s *services) calculateDailyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) (btcutil.Amount, error) {
+func (s *services) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) (btcutil.Amount, error) {
 	currentYear, currentMonth, _ := time.Now().Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
-	mtFee, err := strconv.ParseFloat(farm.MonthlyMaintenanceFeeInBTC, 64)
+	mtFeeInBTC, err := strconv.ParseFloat(farm.MonthlyMaintenanceFeeInBTC, 64)
 	if err != nil {
 		return -1, err
 	}
-	totalFeeBTC := mtFee / currentHashPowerForFarm
-	dailyFeeBTC := totalFeeBTC / float64(periodLength)
-	dailyFeeInSatoshis, err := btcutil.NewAmount(dailyFeeBTC)
+	mtFeeInSatoshis, err := btcutil.NewAmount(mtFeeInBTC)
 	if err != nil {
 		return -1, err
 	}
-	return dailyFeeInSatoshis, nil
+	feePerOneHashPower := btcutil.Amount(float64(mtFeeInSatoshis) / currentHashPowerForFarm)
+	dailyFeeInSatoshis := int(feePerOneHashPower) / periodLength
+	hourlyFeeInSatoshis := dailyFeeInSatoshis / 24
+	return btcutil.Amount(hourlyFeeInSatoshis), nil
 }
 
 func (s *services) getNftTransferHistory(ctx context.Context, collectionDenomId, nftId string) (types.NftTransferHistory, error) {
