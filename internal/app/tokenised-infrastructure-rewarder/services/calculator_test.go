@@ -471,7 +471,7 @@ func (mar *mockAPIRequester) VerifyCollection(ctx context.Context, denomId strin
 	return args.Bool(0), args.Error(1)
 }
 
-func (mar *mockAPIRequester) GetFarmCollectionWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error) {
+func (mar *mockAPIRequester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error) {
 	args := mar.Called(ctx, denomIds)
 	return args.Get(0).([]types.Collection), args.Error(1)
 }

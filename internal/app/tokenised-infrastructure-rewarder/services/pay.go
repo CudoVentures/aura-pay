@@ -11,9 +11,7 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
@@ -25,13 +23,6 @@ func NewServices(config *infrastructure.Config, apiRequester ApiRequester, helpe
 		btcNetworkParams: btcNetworkParams,
 		apiRequester:     apiRequester,
 	}
-}
-
-type services struct {
-	config           *infrastructure.Config
-	helper           Helper
-	btcNetworkParams *types.BtcNetworkParams
-	apiRequester     ApiRequester
 }
 
 func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, storage Storage) error {
@@ -52,8 +43,7 @@ func (s *services) ProcessPayment(ctx context.Context, btcClient BtcClient, stor
 
 func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage Storage, farm types.Farm) error {
 	log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
-	destinationAddressesWithAmount := make(map[string]btcutil.Amount)
-	var statistics []types.NFTStatistics
+
 	if _, err := btcClient.LoadWallet(farm.SubAccountName); err != nil {
 		return err
 	}
@@ -108,14 +98,28 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 	if err != nil {
 		return err
 	}
+
+	if len(verifiedDenomIds) == 0 {
+		log.Error().Msgf("no verified colletions for farm {%s}", farm.SubAccountName)
+		return nil
+	}
+
 	log.Debug().Msgf("Verified collections for farm %s: %s", farm.SubAccountName, fmt.Sprintf("%v", verifiedDenomIds))
 
-	farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionWithNFTs(ctx, verifiedDenomIds)
+	farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionsWithNFTs(ctx, verifiedDenomIds)
 	if err != nil {
 		return err
 	}
 
-	filterExpiredNFTs(farmCollectionsWithNFTs)
+	nonExpiredNFTsCount := s.filterExpiredNFTs(farmCollectionsWithNFTs)
+
+	fmt.Printf("nonExpiredNFTsCount: %d", nonExpiredNFTsCount)
+	if nonExpiredNFTsCount == 0 {
+		log.Error().Msgf("all nfts for farm {%s} are expired", farm.SubAccountName)
+		return nil
+	}
+
+	fmt.Printf("farmCollectionsWithNFTs: %+v", farmCollectionsWithNFTs)
 
 	mintedHashPowerForFarm := sumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
 	log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
@@ -123,12 +127,17 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 	rewardForNftOwners := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
 	leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
 	var rewardToReturn btcutil.Amount
+
+	destinationAddressesWithAmount := make(map[string]btcutil.Amount)
+
 	// return to the farm owner whatever is left
 	if leftoverHashPower > 0 {
 		rewardToReturn = calculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarm)
 		addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
 	}
 	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
+
+	statistics := []types.NFTStatistics{}
 
 	for _, collection := range farmCollectionsWithNFTs {
 		log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
@@ -145,7 +154,7 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 			if err != nil {
 				return err
 			}
-			periodStart, periodEnd, err := findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+			periodStart, periodEnd, err := s.findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
 			if err != nil {
 				return err
 			}
@@ -155,7 +164,7 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 
 			rewardForNft := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
 
-			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := calculateMaintenanceFeeForNFT(periodStart, periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft, destinationAddressesWithAmount, farm)
+			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart, periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft, destinationAddressesWithAmount, farm)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutdAddress)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOMaintenanceFeePayoutAddress)
 			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNftAfterFee)
@@ -170,6 +179,8 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 			if err != nil {
 				return err
 			}
+
+			statistics = append(statistics, nftStatistics)
 
 			distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFee, destinationAddressesWithAmount, &nftStatistics)
 		}
@@ -196,16 +207,20 @@ func (s *services) processFarm(ctx context.Context, btcClient BtcClient, storage
 		return err
 	}
 
+	defer func() {
+		if err := btcClient.WalletLock(); err != nil {
+			log.Error().Msgf("Failed to lock wallet %s: %s", farm.SubAccountName, err)
+			return
+		}
+
+		log.Debug().Msgf("Farm Wallet: {%s} locked", farm.SubAccountName)
+	}()
+
 	txHash, err := s.apiRequester.SendMany(ctx, convertedDestinationAddressesWithAmount, farm.SubAccountName, totalRewardForFarm)
 	if err != nil {
 		return err
 	}
 	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
-
-	err = btcClient.WalletLock() //todo: add defer
-	if err != nil {
-		return err
-	}
 
 	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id)); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
@@ -223,12 +238,14 @@ func convertAmountToBTC(destinationAddressesWithAmount map[string]btcutil.Amount
 	return result
 }
 
-func filterExpiredNFTs(farmCollectionsWithNFTs []types.Collection) {
+func (s *services) filterExpiredNFTs(farmCollectionsWithNFTs []types.Collection) int {
+	nonExpiredNFTsCount := 0
+	now := s.helper.Unix()
 	for i := 0; i < len(farmCollectionsWithNFTs); i++ {
 		var nonExpiredNFTs []types.NFT
 		for j := 0; j < len(farmCollectionsWithNFTs[i].Nfts); j++ {
 			currentNft := farmCollectionsWithNFTs[i].Nfts[j]
-			if time.Now().Unix() > currentNft.DataJson.ExpirationDate {
+			if now > currentNft.DataJson.ExpirationDate {
 				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", farmCollectionsWithNFTs[i].Denom.Id,
 					currentNft.Id, currentNft.DataJson.ExpirationDate)
 				continue
@@ -236,10 +253,13 @@ func filterExpiredNFTs(farmCollectionsWithNFTs []types.Collection) {
 			nonExpiredNFTs = append(nonExpiredNFTs, currentNft)
 		}
 		farmCollectionsWithNFTs[i].Nfts = nonExpiredNFTs
+		nonExpiredNFTsCount += len(nonExpiredNFTs)
 	}
+
+	return nonExpiredNFTsCount
 }
 
-func calculateMaintenanceFeeForNFT(periodStart int64,
+func (s *services) calculateMaintenanceFeeForNFT(periodStart int64,
 	periodEnd int64,
 	hourlyFeeInSatoshis btcutil.Amount,
 	rewardForNft btcutil.Amount,
@@ -255,22 +275,18 @@ func calculateMaintenanceFeeForNFT(periodStart int64,
 		rewardForNft -= nftMaintenanceFeeForPayoutPeriod
 	}
 
-	partOfMaintenanceFeeForCudo := btcutil.Amount(float64(nftMaintenanceFeeForPayoutPeriod) * 10 / 100) // ex 10% from 1000 = 100
+	partOfMaintenanceFeeForCudo := btcutil.Amount(float64(nftMaintenanceFeeForPayoutPeriod) * s.config.CUDOMaintenanceFeePercent / 100) // ex 10% from 1000 = 100
 	nftMaintenanceFeeForPayoutPeriod -= partOfMaintenanceFeeForCudo
 
 	return nftMaintenanceFeeForPayoutPeriod, partOfMaintenanceFeeForCudo, rewardForNft
 }
 
 func payMaintenanceFeeForNFT(destinationAddressesWithAmount map[string]btcutil.Amount, maintenanceFeeAmount btcutil.Amount, farmMaintenanceFeePayoutAddress string) {
-	if _, ok := destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress]; ok {
-		destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress] += maintenanceFeeAmount
-	} else {
-		destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress] = maintenanceFeeAmount
-	}
+	destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress] += maintenanceFeeAmount
 }
 
 func (s *services) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) (btcutil.Amount, error) {
-	currentYear, currentMonth, _ := time.Now().Date()
+	currentYear, currentMonth, _ := s.helper.Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
 	mtFeeInBTC, err := strconv.ParseFloat(farm.MonthlyMaintenanceFeeInBTC, 64)
 	if err != nil {
@@ -287,6 +303,7 @@ func (s *services) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPow
 }
 
 func (s *services) getNftTransferHistory(ctx context.Context, collectionDenomId, nftId string) (types.NftTransferHistory, error) {
+	// TODO: This oculd be optimized, why fetching all events everytime
 	nftTransferHistory, err := s.apiRequester.GetNftTransferHistory(ctx, collectionDenomId, nftId, 1) // all transfer events
 	if err != nil {
 		return types.NftTransferHistory{}, err
@@ -300,12 +317,12 @@ func (s *services) getNftTransferHistory(ctx context.Context, collectionDenomId,
 	return nftTransferHistory, nil
 }
 
-func findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, int64, error) {
+func (s *services) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, int64, error) {
 	l := len(payoutTimes)
 	if l == 0 { // first time payment - start time is time of minting, end time is now
-		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, time.Now().Unix(), nil
+		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, s.helper.Unix(), nil
 	}
-	return payoutTimes[l-1].PayoutPeriodEnd, time.Now().Unix(), nil // last time we paid until now
+	return payoutTimes[l-1].PayoutPeriodEnd, s.helper.Unix(), nil // last time we paid until now
 }
 
 func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]btcutil.Amount, leftoverReward btcutil.Amount, farmDefaultPayoutAddress string) {
@@ -337,12 +354,8 @@ func (s *services) verifyCollectionIds(ctx context.Context, collections types.Co
 
 func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount, statistics *types.NFTStatistics) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
-		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)    // TODO: Change this to normal float64 percent as MULF64 is rounding
-		if _, ok := destinationAddressesWithAmount[nftPayoutAddress]; ok { // if the address is already there then increment the amount it will receive for its next nft
-			destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
-		} else {
-			destinationAddressesWithAmount[nftPayoutAddress] = payoutAmount
-		}
+		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100) // TODO: Change this to normal float64 percent as MULF64 is rounding
+		destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
 		addPaymentAmountToStatistics(payoutAmount, nftPayoutAddress, statistics)
 	}
 }
@@ -355,6 +368,13 @@ func addPaymentAmountToStatistics(amount btcutil.Amount, payoutAddress string, n
 			additionalData.Reward = amount
 		}
 	}
+}
+
+type services struct {
+	config           *infrastructure.Config
+	helper           Helper
+	btcNetworkParams *types.BtcNetworkParams
+	apiRequester     ApiRequester
 }
 
 type ApiRequester interface {
@@ -370,7 +390,7 @@ type ApiRequester interface {
 
 	VerifyCollection(ctx context.Context, denomId string) (bool, error)
 
-	GetFarmCollectionWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error)
+	GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error)
 
 	SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error)
 }
@@ -387,18 +407,6 @@ type BtcClient interface {
 
 	UnloadWallet(walletName *string) error
 
-	ListUnspentMinMaxAddresses(minConf, maxConf int, addrs []btcutil.Address) ([]btcjson.ListUnspentResult, error)
-
-	CreateRawTransaction(inputs []btcjson.TransactionInput, amounts map[btcutil.Address]btcutil.Amount, lockTime *int64) (*wire.MsgTx, error)
-
-	FundRawTransaction(tx *wire.MsgTx, opts btcjson.FundRawTransactionOpts, isWitness *bool) (*btcjson.FundRawTransactionResult, error)
-
-	SignRawTransactionWithWallet(tx *wire.MsgTx) (*wire.MsgTx, bool, error)
-
-	SendRawTransaction(tx *wire.MsgTx, allowHighFees bool) (*chainhash.Hash, error)
-
-	ListUnspent() ([]btcjson.ListUnspentResult, error)
-
 	WalletPassphrase(passphrase string, timeoutSecs int64) error
 
 	WalletLock() error
@@ -412,4 +420,6 @@ type Storage interface {
 
 type Helper interface {
 	DaysIn(m time.Month, year int) int
+	Unix() int64
+	Date() (year int, month time.Month, day int)
 }

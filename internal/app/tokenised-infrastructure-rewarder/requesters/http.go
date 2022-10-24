@@ -296,7 +296,7 @@ func (r *Requester) VerifyCollection(ctx context.Context, denomId string) (bool,
 	return okStruct.Collection.Verified, nil
 }
 
-func (r *Requester) GetFarmCollectionWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error) {
+func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}

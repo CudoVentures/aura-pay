@@ -2,6 +2,7 @@ package tokenised_infrastructure_rewarder
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -58,6 +59,95 @@ func TestWorkerShouldReturnIfContextIsCanceledDuringProcessPayment(t *testing.T)
 	require.Error(t, ctx.Err())
 }
 
+func TestWorkerShouldRetryIfRpcConnectionFails(t *testing.T) {
+	mp := &mockProvider{}
+
+	connCfg := &rpcclient.ConnConfig{
+		HTTPPostMode: true, // Bitcoin core only supports HTTP POST mode
+		DisableTLS:   true, // Bitcoin core does not provide TLS by default,
+	}
+
+	client, err := rpcclient.New(connCfg, nil)
+	require.NoError(t, err)
+
+	mp.On("InitBtcRpcClient").Return(client, errors.New("should fail"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go Start(ctx, &infrastructure.Config{
+		WorkerMaxErrorsCount:    10000,
+		WorkerFailureRetryDelay: 200 * time.Millisecond,
+		WorkerProcessInterval:   200 * time.Millisecond,
+	}, nil, mp)
+
+	time.Sleep(1 * time.Second)
+
+	cancel()
+
+	require.Greater(t, mp.initBtcRpcClientCallsCount, 1)
+}
+
+func TestWorkerShouldRetryIfDbConnectionFails(t *testing.T) {
+	mp := &mockProvider{}
+
+	connCfg := &rpcclient.ConnConfig{
+		HTTPPostMode: true, // Bitcoin core only supports HTTP POST mode
+		DisableTLS:   true, // Bitcoin core does not provide TLS by default,
+	}
+
+	client, err := rpcclient.New(connCfg, nil)
+	require.NoError(t, err)
+
+	mp.On("InitBtcRpcClient").Return(client, nil)
+
+	db, err := sqlx.Connect("sqlite3", ":memory:")
+	require.NoError(t, err)
+
+	mp.On("InitDBConnection").Return(db, errors.New("should fail"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go Start(ctx, &infrastructure.Config{
+		WorkerMaxErrorsCount:    10000,
+		WorkerFailureRetryDelay: 200 * time.Millisecond,
+		WorkerProcessInterval:   200 * time.Millisecond,
+	}, nil, mp)
+
+	time.Sleep(1 * time.Second)
+
+	cancel()
+
+	require.Greater(t, mp.initDbConnectionCallsCount, 1)
+}
+
+func TestWorkerShouldExitIfErrorsExceedMaxErrorsCount(t *testing.T) {
+	mp := &mockProvider{}
+
+	connCfg := &rpcclient.ConnConfig{
+		HTTPPostMode: true, // Bitcoin core only supports HTTP POST mode
+		DisableTLS:   true, // Bitcoin core does not provide TLS by default,
+	}
+
+	client, err := rpcclient.New(connCfg, nil)
+	require.NoError(t, err)
+
+	mp.On("InitBtcRpcClient").Return(client, nil)
+
+	db, err := sqlx.Connect("sqlite3", ":memory:")
+	require.NoError(t, err)
+
+	mp.On("InitDBConnection").Return(db, nil)
+
+	mps := &mockPayService{}
+	mps.On("ProcessPayment", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("fail error"))
+
+	Start(context.Background(), &infrastructure.Config{
+		WorkerMaxErrorsCount:    1,
+		WorkerFailureRetryDelay: 200 * time.Millisecond,
+		WorkerProcessInterval:   200 * time.Millisecond,
+	}, mps, mp)
+}
+
 type mockPayService struct {
 	mock.Mock
 }
@@ -69,14 +159,18 @@ func (mps *mockPayService) ProcessPayment(ctx context.Context, btcClient service
 
 type mockProvider struct {
 	mock.Mock
+	initBtcRpcClientCallsCount int
+	initDbConnectionCallsCount int
 }
 
 func (mp *mockProvider) InitBtcRpcClient() (*rpcclient.Client, error) {
+	mp.initBtcRpcClientCallsCount += 1
 	args := mp.Called()
 	return args.Get(0).(*rpcclient.Client), args.Error(1)
 }
 
 func (mp *mockProvider) InitDBConnection() (*sqlx.DB, error) {
+	mp.initDbConnectionCallsCount += 1
 	args := mp.Called()
 	return args.Get(0).(*sqlx.DB), args.Error(1)
 }
@@ -110,7 +204,7 @@ func (mar *mockAPIRequester) VerifyCollection(ctx context.Context, denomId strin
 	return args.Bool(0), args.Error(1)
 }
 
-func (mar *mockAPIRequester) GetFarmCollectionWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error) {
+func (mar *mockAPIRequester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error) {
 	args := mar.Called(ctx, denomIds)
 	return args.Get(0).([]types.Collection), args.Error(1)
 }
