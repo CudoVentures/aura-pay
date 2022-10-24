@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -9,7 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (s *services) SumMintedHashPowerForAllCollections(collections []types.Collection) float64 {
+func sumMintedHashPowerForAllCollections(collections []types.Collection) float64 {
 	var totalMintedHashPowerForAllCollections float64
 
 	for _, collection := range collections {
@@ -25,28 +27,30 @@ func (s *services) SumMintedHashPowerForAllCollections(collections []types.Colle
 	return totalMintedHashPowerForAllCollections
 }
 
-func (s *services) CalculatePercent(available float64, actual float64, reward btcutil.Amount) btcutil.Amount {
-	if actual == 0 {
+func calculatePercent(available float64, actual float64, reward btcutil.Amount) btcutil.Amount {
+	if available <= 0 || actual <= 0 || reward.ToBTC() <= 0 {
 		return btcutil.Amount(0)
 	}
 
 	payoutRewardPercent := float64(actual) / float64(available) * 100 // ex 100 from 1000 = 10%
 	calculatedReward := float64(reward) * payoutRewardPercent / 100   // ex 10% from 1000 = 100
-	rewardInSatoshis := btcutil.Amount(calculatedReward)              // btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
-	return rewardInSatoshis
+
+	// btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
+	return btcutil.Amount(calculatedReward)
 }
 
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
 func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory, collectionDenomId, nftId string,
-	periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, network string) (map[string]float64, error) {
+	periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, payoutAddrNetwork string) (map[string]float64, error) {
 
-	ownersWithPercentOwnedTime := make(map[string]float64)
 	totalPeriodTimeInSeconds := periodEnd - periodStart
+	if totalPeriodTimeInSeconds <= 0 {
+		return nil, fmt.Errorf("invalid period, start (%d) end (%d)", periodStart, periodEnd)
+	}
+
 	var transferHistoryForTimePeriod []types.NftTransferEvent
-	var cudosAddress string
-	statisticsAdditionalData := types.NFTOwnerInformation{}
 
 	// get only those transfer events in the current time period
 	for _, transferHistoryElement := range nftTransferHistory.Data.NestedData.Events {
@@ -55,9 +59,12 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.
 		}
 	}
 
+	ownersWithPercentOwnedTime := make(map[string]float64)
+	statisticsAdditionalData := types.NFTOwnerInformation{}
+
 	// no transfers for this period, we give the current owner 100%
 	if len(transferHistoryForTimePeriod) == 0 {
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, currentNftOwner, network, nftId, collectionDenomId)
+		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, currentNftOwner, payoutAddrNetwork, nftId, collectionDenomId)
 		if err != nil {
 			return nil, err
 		}
@@ -69,63 +76,56 @@ func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.
 		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
 		statisticsAdditionalData.PercentOfTimeOwned = 100
 
+		statistics.NFTOwnersForPeriod = []types.NFTOwnerInformation{statisticsAdditionalData}
+
 		return ownersWithPercentOwnedTime, nil
 	}
 
-	containInitialMintTx := transferHistoryForTimePeriod[0].From == "0x0" // "0x0" means no transfers and thus the from address is empty; only the to address is populated with the receiver addr
-	for i := 0; i < len(transferHistoryForTimePeriod); i++ {
-		var timeOwned int64
-		if containInitialMintTx { // handles the case where we have no payout periods and periodStart is equal to transferHistoryForTimePeriod[i].timestamp
-			cudosAddress = transferHistoryForTimePeriod[i].From
-			if transferHistoryForTimePeriod[i].From == "0x0" { // only the first
-				cudosAddress = transferHistoryForTimePeriod[i].To
-			}
-			if len(transferHistoryForTimePeriod) == 1 {
-				timeOwned = periodEnd - transferHistoryForTimePeriod[i].Timestamp
-				statisticsAdditionalData.TimeOwnedFrom = transferHistoryForTimePeriod[i].Timestamp
-				statisticsAdditionalData.TimeOwnedTo = periodEnd
-			} else {
-				timeOwned = transferHistoryForTimePeriod[i+1].Timestamp - transferHistoryForTimePeriod[i].Timestamp
-				statisticsAdditionalData.TimeOwnedFrom = transferHistoryForTimePeriod[i].Timestamp
-				statisticsAdditionalData.TimeOwnedTo = transferHistoryForTimePeriod[i+1].Timestamp
-			}
-		} else {
-			cudosAddress = transferHistoryForTimePeriod[i].From
-			if i == 0 {
-				timeOwned = transferHistoryForTimePeriod[i].Timestamp - periodStart
-				statisticsAdditionalData.TimeOwnedFrom = transferHistoryForTimePeriod[i].Timestamp
-				statisticsAdditionalData.TimeOwnedTo = periodStart
-			} else {
-				timeOwned = transferHistoryForTimePeriod[i].Timestamp - transferHistoryForTimePeriod[i-1].Timestamp
-				statisticsAdditionalData.TimeOwnedFrom = transferHistoryForTimePeriod[i].Timestamp
-				statisticsAdditionalData.TimeOwnedTo = transferHistoryForTimePeriod[i-1].Timestamp
-			}
+	if periodStart < transferHistoryForTimePeriod[0].Timestamp {
+		transferHistoryForTimePeriod = append([]types.NftTransferEvent{
+			{
+				To:        transferHistoryForTimePeriod[0].From,
+				From:      transferHistoryForTimePeriod[0].From,
+				Timestamp: periodStart,
+			},
+		}, transferHistoryForTimePeriod...)
+	}
 
-		}
+	transferHistoryLen := len(transferHistoryForTimePeriod)
 
-		if i == len(transferHistoryForTimePeriod)-1 && len(transferHistoryForTimePeriod) > 1 { // add the remaining days to the last owner
-			timeOwned += (periodEnd - transferHistoryForTimePeriod[i].Timestamp)
-		}
+	transferHistoryForTimePeriod = append(transferHistoryForTimePeriod, types.NftTransferEvent{
+		To:        transferHistoryForTimePeriod[transferHistoryLen-1].To,
+		From:      transferHistoryForTimePeriod[transferHistoryLen-1].To,
+		Timestamp: periodEnd,
+	})
+
+	for i := 0; i < len(transferHistoryForTimePeriod)-1; i++ {
+
+		timeOwned := transferHistoryForTimePeriod[i+1].Timestamp - transferHistoryForTimePeriod[i].Timestamp
+		statisticsAdditionalData.TimeOwnedFrom = transferHistoryForTimePeriod[i].Timestamp
+		statisticsAdditionalData.TimeOwnedTo = transferHistoryForTimePeriod[i+1].Timestamp
 
 		statisticsAdditionalData.TotalTimeOwned = timeOwned
 
-		percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
+		percentOfTimeOwned := roundToPrecision(float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100)
 		statisticsAdditionalData.PercentOfTimeOwned = percentOfTimeOwned
 
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, cudosAddress, network, nftId, collectionDenomId)
+		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, transferHistoryForTimePeriod[i].To, payoutAddrNetwork, nftId, collectionDenomId)
 		if err != nil {
 			return nil, err
 		}
 
 		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
 
-		if _, ok := ownersWithPercentOwnedTime[nftPayoutAddress]; ok { // if the nft has been bought, sold and bought again by the same owner in the same period - accumulate
-			ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
-		} else {
-			ownersWithPercentOwnedTime[nftPayoutAddress] = percentOfTimeOwned
-		}
+		ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
+
 		statistics.NFTOwnersForPeriod = append(statistics.NFTOwnersForPeriod, statisticsAdditionalData)
 	}
 
 	return ownersWithPercentOwnedTime, nil
+}
+
+func roundToPrecision(value float64) (result float64) {
+	result, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", value), 64)
+	return
 }
