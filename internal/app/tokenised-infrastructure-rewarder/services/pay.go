@@ -246,9 +246,9 @@ func calculateMaintenanceFeeForNFT(periodStart int64,
 	destinationAddressesWithAmount map[string]btcutil.Amount,
 	farm types.Farm) (btcutil.Amount, btcutil.Amount, btcutil.Amount) {
 
-	totalPayoutHours := (periodEnd - periodStart) / 3600                                              // period for which we are paying the MT fee
-	nftMaintenanceFeeForPayoutPeriod := btcutil.Amount(totalPayoutHours * int64(hourlyFeeInSatoshis)) // the fee for the period
-	if nftMaintenanceFeeForPayoutPeriod > rewardForNft {                                              // if the fee is greater - it has higher priority then the users reward
+	periodInHoursToPayFor := (periodEnd - periodStart) / 3600                                              // period for which we are paying the MT fee
+	nftMaintenanceFeeForPayoutPeriod := btcutil.Amount(periodInHoursToPayFor * int64(hourlyFeeInSatoshis)) // the fee for the period
+	if nftMaintenanceFeeForPayoutPeriod > rewardForNft {                                                   // if the fee is greater - it has higher priority then the users reward
 		nftMaintenanceFeeForPayoutPeriod = rewardForNft
 		rewardForNft = 0
 	} else {
