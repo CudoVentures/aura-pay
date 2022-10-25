@@ -29,12 +29,12 @@ type Denom struct {
 }
 
 type NFT struct {
-	Id       string `json:"id"`
-	Name     string `json:"name"`
-	Uri      string `json:"uri"`
-	Data     string `json:"data"`
-	DataJson NFTDataJson
-	Owner    string `json:"owner"`
+	Id       string      `json:"id"`
+	Name     string      `json:"name"`
+	Uri      string      `json:"uri"`
+	Data     string      `json:"data"`
+	DataJson NFTDataJson `json:"data_json"`
+	Owner    string      `json:"owner"`
 }
 
 type NFTDataJson struct {

@@ -17,3 +17,11 @@ type Helper struct {
 func (h *Helper) DaysIn(m time.Month, year int) int {
 	return time.Date(year, m+1, 0, 0, 0, 0, 0, time.UTC).Day()
 }
+
+func (h *Helper) Unix() int64 {
+	return time.Now().Unix()
+}
+
+func (h *Helper) Date() (year int, month time.Month, day int) {
+	return time.Now().Date()
+}
