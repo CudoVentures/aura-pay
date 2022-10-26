@@ -358,10 +358,6 @@ func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []s
 // curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "sendmany", "params": ["", {"bc1q09vm5lfy0j5reeulh4x5752q25uqqvz34hufdl":0.01,"bc1q02ad21edsxd23d32dfgqqsz4vv4nmtfzuklhy3":0.02}, 6, "testing"]}' -H 'content-type: text/plain;' http://127.0.0.1:8332/
 func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error) {
 
-	destinationAddressesWithAmount = make(map[string]float64)
-	destinationAddressesWithAmount["tb1q350dpgdppy6t4rdy6uwlva84nmd3wxz75crlmz"] = 0.00015671
-	destinationAddressesWithAmount["tb1qsf77kqqhqnnmyssqe324zwttmveyeg6h0lrsl5"] = 0.00015671
-
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
