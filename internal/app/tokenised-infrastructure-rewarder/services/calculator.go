@@ -42,7 +42,7 @@ func calculatePercent(available float64, actual float64, reward btcutil.Amount) 
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
-func (s *services) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory, collectionDenomId, nftId string,
+func (s *payService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory, collectionDenomId, nftId string,
 	periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, payoutAddrNetwork string) (map[string]float64, error) {
 
 	totalPeriodTimeInSeconds := periodEnd - periodStart

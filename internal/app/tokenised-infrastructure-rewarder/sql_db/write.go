@@ -4,9 +4,28 @@ import (
 	"context"
 	"time"
 
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/jmoiron/sqlx"
 )
+
+func saveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string) error {
+	now := time.Now()
+	_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), now.UTC(), now.UTC())
+	return err
+}
+
+func updateTxHasheshWithStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
+	qry, args, err := sqlx.In(updateTxHashesWithStatusQuery, types.TransactionCompleted, txHashes)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, qry, args...); err != nil {
+		return err
+	}
+	return nil
+}
 
 func saveDestionAddressesWithAmountHistory(ctx context.Context, tx *sqlx.Tx, address string, amount btcutil.Amount, txHash string, farmId string) error {
 	now := time.Now()
@@ -32,6 +51,11 @@ func saveNFTOwnersForPeriodHistory(ctx context.Context, tx *sqlx.Tx, collectionD
 }
 
 const (
+	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status 
+	(tx_hash, status, time_sent, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
+
+	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
+
 	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount 
 		(address, amount, tx_hash, farm_id, payout_time, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 

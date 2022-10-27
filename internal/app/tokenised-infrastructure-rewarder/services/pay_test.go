@@ -28,8 +28,8 @@ func TestProcessPayment(t *testing.T) {
 		MinConfirmations: 6,
 	}
 
-	s := NewServices(config, setupMockApiRequester(t), &mockHelper{}, btcNetworkParams)
-	require.NoError(t, s.ProcessPayment(context.Background(), setupMockBtcClient(), setupMockStorage()))
+	s := NewPayService(config, setupMockApiRequester(t), &mockHelper{}, btcNetworkParams)
+	require.NoError(t, s.Execute(context.Background(), setupMockBtcClient(), setupMockStorage()))
 }
 
 func setupMockApiRequester(t *testing.T) *mockAPIRequester {

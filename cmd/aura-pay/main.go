@@ -36,7 +36,11 @@ func runService(ctx context.Context) {
 		btcNetworkParams.MinConfirmations = 6
 	}
 
-	payService := services.NewServices(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
+	retryService := services.NewRetryService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
+
+	go worker.Start(ctx, config, retryService, provider)
+
+	payService := services.NewPayService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
 	worker.Start(ctx, config, payService, provider)
 }

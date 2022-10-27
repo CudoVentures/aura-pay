@@ -28,3 +28,17 @@ type NFTOwnerInformation struct {
 	CreatedAt          int64 `db:"createdAt"`
 	UpdatedAt          int64 `db:"updatedAt"`
 }
+
+type TransactionHashWithStatus struct {
+	TxHash    string `db:"tx_hash"`
+	Status    string `db:"status"`
+	TimeSent  int64  `db:"time_sent"`
+	CreatedAt int64  `db:"createdAt"`
+	UpdatedAt int64  `db:"updatedAt"`
+}
+
+const (
+	TransactionPending   = "Pending"
+	TransactionCompleted = "Completed"
+	TransactionFailed    = "Failed"
+)

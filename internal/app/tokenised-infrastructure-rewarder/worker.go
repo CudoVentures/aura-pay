@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func Start(ctx context.Context, config *infrastructure.Config, payService payService, provider provider) {
+func Start(ctx context.Context, config *infrastructure.Config, s service, provider provider) {
 	log.Info().Msg("Application started")
 
 	retry := func(err error) {
@@ -31,7 +31,7 @@ func Start(ctx context.Context, config *infrastructure.Config, payService paySer
 
 	errorCount := 0
 
-	for ctx.Err() == nil && errorCount < config.WorkerMaxErrorsCount {
+	for ctx.Err() == nil {
 
 		var processingError error
 
@@ -55,7 +55,7 @@ func Start(ctx context.Context, config *infrastructure.Config, payService paySer
 
 			select {
 			case <-ticker.C:
-				processingError = payService.ProcessPayment(ctx, rpcClient, sql_db.NewSqlDB(db))
+				processingError = s.Execute(ctx, rpcClient, sql_db.NewSqlDB(db))
 			case <-ctx.Done():
 				return
 			}
@@ -64,12 +64,11 @@ func Start(ctx context.Context, config *infrastructure.Config, payService paySer
 		// TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
 
 		if processingError != nil {
+			//TODO: add grafana if errorCount >= val
 			errorCount++
 			log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
 		}
 	}
-
-	log.Error().Msgf("Application has not been able to complete for %d times in a row..exiting", errorCount)
 }
 
 type provider interface {
@@ -77,6 +76,6 @@ type provider interface {
 	InitDBConnection() (*sqlx.DB, error)
 }
 
-type payService interface {
-	ProcessPayment(ctx context.Context, btcClient services.BtcClient, storage services.Storage) error
+type service interface {
+	Execute(ctx context.Context, btcClient services.BtcClient, storage services.Storage) error
 }

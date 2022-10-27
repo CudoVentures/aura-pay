@@ -49,9 +49,30 @@ func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		}
 	}
 
+	if retErr = saveTxHashWithStatus(ctx, sql_tx, txHash, types.TransactionPending); retErr != nil {
+		return
+	}
+
 	if retErr = sql_tx.Commit(); retErr != nil {
 		retErr = fmt.Errorf("failed to commit transaction: %s", retErr)
 		return
+	}
+
+	return nil
+}
+
+func (sdb *sqlDB) UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error {
+	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %s", err)
+	}
+
+	if retErr := updateTxHasheshWithStatus(ctx, sql_tx, txHashesToMarkCompleted, status); retErr != nil {
+		return fmt.Errorf("failed to commit transaction: %s", retErr)
+	}
+
+	if retErr := sql_tx.Commit(); retErr != nil {
+		return fmt.Errorf("failed to commit transaction: %s", retErr)
 	}
 
 	return nil
