@@ -420,3 +420,7 @@ func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount
 
 	return okStruct.TxHash, nil
 }
+
+func (r *Requester) BumpFee(ctx context.Context, walletName string, txId string) (string, error) {
+	return "", nil
+}

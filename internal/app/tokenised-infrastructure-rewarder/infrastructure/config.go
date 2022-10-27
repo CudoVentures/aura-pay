@@ -8,59 +8,61 @@ import (
 )
 
 type Config struct {
-	HasuraURL                       string
-	NodeRestUrl                     string
-	BitcoinNodeUrl                  string
-	BitcoinNodePort                 string
-	BitcoinNodeUserName             string
-	BitcoinNodePassword             string
-	FoundryPoolAPIBaseURL           string
-	FoundryPoolAPIKey               string
-	DbDriverName                    string
-	DbHost                          string
-	DbPort                          string
-	DbUser                          string
-	DbPassword                      string
-	DbName                          string
-	HasuraActionsURL                string
-	IsTesting                       bool
-	AuraPoolBackEndUrl              string
-	Network                         string
-	CUDOMaintenanceFeePercent       float64
-	CUDOMaintenanceFeePayoutAddress string
-	AuraPoolTestFarmWalletPassword  string
-	WorkerMaxErrorsCount            int
-	WorkerProcessInterval           time.Duration
-	WorkerFailureRetryDelay         time.Duration
+	HasuraURL                         string
+	NodeRestUrl                       string
+	BitcoinNodeUrl                    string
+	BitcoinNodePort                   string
+	BitcoinNodeUserName               string
+	BitcoinNodePassword               string
+	FoundryPoolAPIBaseURL             string
+	FoundryPoolAPIKey                 string
+	DbDriverName                      string
+	DbHost                            string
+	DbPort                            string
+	DbUser                            string
+	DbPassword                        string
+	DbName                            string
+	HasuraActionsURL                  string
+	IsTesting                         bool
+	AuraPoolBackEndUrl                string
+	Network                           string
+	CUDOMaintenanceFeePercent         float64
+	CUDOMaintenanceFeePayoutAddress   string
+	AuraPoolTestFarmWalletPassword    string
+	WorkerProcessInterval             time.Duration
+	WorkerFailureRetryDelay           time.Duration
+	RBFTransactionRetryDelayInSeconds int
+	RBFTransactionRetryMaxCount       int
 }
 
 // NewConfig New returns a new Config struct
 func NewConfig() *Config {
 	return &Config{
-		HasuraURL:                       getEnv("HASURA_URL", ""),
-		NodeRestUrl:                     getEnv("NODE_REST_URL", ""),
-		BitcoinNodeUrl:                  getEnv("BITCOIN_NODE_URL", ""),
-		BitcoinNodePort:                 getEnv("BITCOIN_NODE_PORT", ""),
-		BitcoinNodeUserName:             getEnv("BITCOIN_NODE_USER_NAME", ""),
-		BitcoinNodePassword:             getEnv("BITCOIN_NODE_PASSWORD", ""),
-		FoundryPoolAPIBaseURL:           getEnv("FOUNDRY_POOL_API_BASE_URL", ""),
-		FoundryPoolAPIKey:               getEnv("FOUNDRY_POOL_API_KEY", ""),
-		DbDriverName:                    getEnv("DB_DRIVER_NAME", ""),
-		DbHost:                          getEnv("DB_HOST", ""),
-		DbPort:                          getEnv("DB_PORT", ""),
-		DbUser:                          getEnv("DB_USER", ""),
-		DbPassword:                      getEnv("DB_PASSWORD", ""),
-		DbName:                          getEnv("DB_NAME", ""),
-		HasuraActionsURL:                getEnv("HASURA_ACTIONS_URL", ""),
-		IsTesting:                       getEnvAsBool("IS_TESTING", true),
-		AuraPoolBackEndUrl:              getEnv("AURA_POOL_BACKEND_URL", ""),
-		Network:                         getEnv("NETWORK", ""),
-		CUDOMaintenanceFeePercent:       getEnvAsFloat64("CUDO_MAINTENANCE_FEE_PERCENT", 10.0),
-		CUDOMaintenanceFeePayoutAddress: getEnv("CUDO_MAINTENANCE_FEE_PAYOUT_ADDRESS", ""),
-		AuraPoolTestFarmWalletPassword:  getEnv("AURA_POOL_TEST_FARM_WALLET_PASSWORD", ""),
-		WorkerMaxErrorsCount:            getEnvAsInt("WORKER_MAX_ERRORS_COUNT", 10),
-		WorkerProcessInterval:           getEnvAsDuration("WORKER_PROCESS_INTERVAL", time.Second*5),
-		WorkerFailureRetryDelay:         getEnvAsDuration("WORKER_FAILURE_RETRY_DELAY", time.Second*5),
+		HasuraURL:                         getEnv("HASURA_URL", ""),
+		NodeRestUrl:                       getEnv("NODE_REST_URL", ""),
+		BitcoinNodeUrl:                    getEnv("BITCOIN_NODE_URL", ""),
+		BitcoinNodePort:                   getEnv("BITCOIN_NODE_PORT", ""),
+		BitcoinNodeUserName:               getEnv("BITCOIN_NODE_USER_NAME", ""),
+		BitcoinNodePassword:               getEnv("BITCOIN_NODE_PASSWORD", ""),
+		FoundryPoolAPIBaseURL:             getEnv("FOUNDRY_POOL_API_BASE_URL", ""),
+		FoundryPoolAPIKey:                 getEnv("FOUNDRY_POOL_API_KEY", ""),
+		DbDriverName:                      getEnv("DB_DRIVER_NAME", ""),
+		DbHost:                            getEnv("DB_HOST", ""),
+		DbPort:                            getEnv("DB_PORT", ""),
+		DbUser:                            getEnv("DB_USER", ""),
+		DbPassword:                        getEnv("DB_PASSWORD", ""),
+		DbName:                            getEnv("DB_NAME", ""),
+		HasuraActionsURL:                  getEnv("HASURA_ACTIONS_URL", ""),
+		IsTesting:                         getEnvAsBool("IS_TESTING", true),
+		AuraPoolBackEndUrl:                getEnv("AURA_POOL_BACKEND_URL", ""),
+		Network:                           getEnv("NETWORK", ""),
+		CUDOMaintenanceFeePercent:         getEnvAsFloat64("CUDO_MAINTENANCE_FEE_PERCENT", 10.0),
+		CUDOMaintenanceFeePayoutAddress:   getEnv("CUDO_MAINTENANCE_FEE_PAYOUT_ADDRESS", ""),
+		AuraPoolTestFarmWalletPassword:    getEnv("AURA_POOL_TEST_FARM_WALLET_PASSWORD", ""),
+		WorkerProcessInterval:             getEnvAsDuration("WORKER_PROCESS_INTERVAL", time.Second*5),
+		WorkerFailureRetryDelay:           getEnvAsDuration("WORKER_FAILURE_RETRY_DELAY", time.Second*5),
+		RBFTransactionRetryDelayInSeconds: getEnvAsInt("RBF_TRANSACTION_RETRY_DELAY_IN_SECONDS", 18000),
+		RBFTransactionRetryMaxCount:       getEnvAsInt("RBF_TRANSACTION_RETRY_MAX_COUNT", 2),
 	}
 }
 

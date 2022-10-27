@@ -394,6 +394,8 @@ type ApiRequester interface {
 	GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error)
 
 	SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error)
+
+	BumpFee(ctx context.Context, walletName string, txId string) (string, error)
 }
 
 type Provider interface {
@@ -423,6 +425,10 @@ type Storage interface {
 	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string) error
 
 	UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error
+
+	SaveTxHashWithStatus(ctx context.Context, txHash string, status string, farmId string, retryCount int) error
+
+	SaveRBFTransactionHistory(ctx context.Context, old_tx_hash string, new_tx_hash string, farmId string) error
 }
 
 type Helper interface {

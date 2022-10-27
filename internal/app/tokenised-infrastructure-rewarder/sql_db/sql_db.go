@@ -49,7 +49,7 @@ func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		}
 	}
 
-	if retErr = saveTxHashWithStatus(ctx, sql_tx, txHash, types.TransactionPending); retErr != nil {
+	if retErr = saveTxHashWithStatus(ctx, sql_tx, txHash, types.TransactionPending, farmId, 0); retErr != nil {
 		return
 	}
 
@@ -61,13 +61,48 @@ func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 	return nil
 }
 
+func (sdb *sqlDB) SaveTxHashWithStatus(ctx context.Context, txHash string, status string, farmId string, retryCount int) error {
+	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %s", err)
+	}
+
+	if retErr := saveTxHashWithStatus(ctx, sql_tx, txHash, status, farmId, retryCount); retErr != nil {
+		return retErr
+	}
+
+	if retErr := sql_tx.Commit(); retErr != nil {
+		return fmt.Errorf("failed to commit transaction: %s", retErr)
+	}
+
+	return nil
+
+}
+
 func (sdb *sqlDB) UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error {
 	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %s", err)
 	}
 
-	if retErr := updateTxHasheshWithStatus(ctx, sql_tx, txHashesToMarkCompleted, status); retErr != nil {
+	if retErr := updateTxHashesWithStatus(ctx, sql_tx, txHashesToMarkCompleted, status); retErr != nil {
+		return fmt.Errorf("failed to commit transaction: %s", retErr)
+	}
+
+	if retErr := sql_tx.Commit(); retErr != nil {
+		return fmt.Errorf("failed to commit transaction: %s", retErr)
+	}
+
+	return nil
+}
+
+func (sdb *sqlDB) SaveRBFTransactionHistory(ctx context.Context, old_tx_hash string, new_tx_hash string, farmId string) error {
+	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %s", err)
+	}
+
+	if retErr := saveRBFTransactionHistory(ctx, sql_tx, old_tx_hash, new_tx_hash, farmId); retErr != nil {
 		return fmt.Errorf("failed to commit transaction: %s", retErr)
 	}
 

@@ -9,13 +9,13 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func saveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string) error {
+func saveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmId string, retryCount int) error {
 	now := time.Now()
-	_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), now.UTC(), now.UTC())
+	_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmId, retryCount, now.Unix(), now.UTC(), now.UTC())
 	return err
 }
 
-func updateTxHasheshWithStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
+func updateTxHashesWithStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
 	qry, args, err := sqlx.In(updateTxHashesWithStatusQuery, types.TransactionCompleted, txHashes)
 	if err != nil {
 		return err
@@ -50,11 +50,19 @@ func saveNFTOwnersForPeriodHistory(ctx context.Context, tx *sqlx.Tx, collectionD
 	return err
 }
 
+func saveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, old_tx_hash string, new_tx_hash string, farm_id string) error {
+	now := time.Now()
+	_, err := tx.ExecContext(ctx, insertRBFTransactionHistory, old_tx_hash, new_tx_hash,
+		farm_id, now.UTC(), now.UTC())
+	return err
+}
+
 const (
 	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status 
-	(tx_hash, status, time_sent, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
+	(tx_hash, status, time_sent, farm_id, retry_count, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
-	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
+	insertRBFTransactionHistory = `INSERT INTO rbf_transaction_history 
+	(old_tx_hash, new_tx_hash, farm_id, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
 
 	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount 
 		(address, amount, tx_hash, farm_id, payout_time, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
@@ -66,4 +74,6 @@ const (
 	insertNFTOnwersForPeriodHistory = `INSERT INTO statistics_nft_owners_payout_history (denom_id, token_id, time_owned_from, time_owned_to, 
 		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, createdAt, updatedAt) 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+
+	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
 )
