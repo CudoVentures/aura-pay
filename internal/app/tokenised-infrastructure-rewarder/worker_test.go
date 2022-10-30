@@ -29,7 +29,7 @@ func TestWorkerShouldReturnIfContextIsCanceledDuringProcessPayment(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	mps := &mockPayService{}
-	mps.On("ProcessPayment", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+	mps.On("Execute", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		cancel()
 	})
 
@@ -51,7 +51,6 @@ func TestWorkerShouldReturnIfContextIsCanceledDuringProcessPayment(t *testing.T)
 	mp.On("InitDBConnection").Return(db, nil)
 
 	Start(ctx, &infrastructure.Config{
-		WorkerMaxErrorsCount:    10000,
 		WorkerFailureRetryDelay: 1 * time.Second,
 		WorkerProcessInterval:   1 * time.Second,
 	}, mps, mp)
@@ -75,7 +74,6 @@ func TestWorkerShouldRetryIfRpcConnectionFails(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go Start(ctx, &infrastructure.Config{
-		WorkerMaxErrorsCount:    10000,
 		WorkerFailureRetryDelay: 200 * time.Millisecond,
 		WorkerProcessInterval:   200 * time.Millisecond,
 	}, nil, mp)
@@ -108,7 +106,6 @@ func TestWorkerShouldRetryIfDbConnectionFails(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go Start(ctx, &infrastructure.Config{
-		WorkerMaxErrorsCount:    10000,
 		WorkerFailureRetryDelay: 200 * time.Millisecond,
 		WorkerProcessInterval:   200 * time.Millisecond,
 	}, nil, mp)
@@ -120,39 +117,11 @@ func TestWorkerShouldRetryIfDbConnectionFails(t *testing.T) {
 	require.Greater(t, mp.initDbConnectionCallsCount, 1)
 }
 
-func TestWorkerShouldExitIfErrorsExceedMaxErrorsCount(t *testing.T) {
-	mp := &mockProvider{}
-
-	connCfg := &rpcclient.ConnConfig{
-		HTTPPostMode: true, // Bitcoin core only supports HTTP POST mode
-		DisableTLS:   true, // Bitcoin core does not provide TLS by default,
-	}
-
-	client, err := rpcclient.New(connCfg, nil)
-	require.NoError(t, err)
-
-	mp.On("InitBtcRpcClient").Return(client, nil)
-
-	db, err := sqlx.Connect("sqlite3", ":memory:")
-	require.NoError(t, err)
-
-	mp.On("InitDBConnection").Return(db, nil)
-
-	mps := &mockPayService{}
-	mps.On("ProcessPayment", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("fail error"))
-
-	Start(context.Background(), &infrastructure.Config{
-		WorkerMaxErrorsCount:    1,
-		WorkerFailureRetryDelay: 200 * time.Millisecond,
-		WorkerProcessInterval:   200 * time.Millisecond,
-	}, mps, mp)
-}
-
 type mockPayService struct {
 	mock.Mock
 }
 
-func (mps *mockPayService) ProcessPayment(ctx context.Context, btcClient services.BtcClient, storage services.Storage) error {
+func (mps *mockPayService) Execute(ctx context.Context, btcClient services.BtcClient, storage services.Storage) error {
 	args := mps.Called(ctx, btcClient, storage)
 	return args.Error(0)
 }

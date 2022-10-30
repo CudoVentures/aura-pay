@@ -30,13 +30,13 @@ type NFTOwnerInformation struct {
 }
 
 type TransactionHashWithStatus struct {
-	TxHash     string `db:"tx_hash"`
-	Status     string `db:"status"`
-	TimeSent   int64  `db:"time_sent"`
-	FarmId     string `db:"farm_id"`
-	RetryCount int    `db:"retry_count"`
-	CreatedAt  int64  `db:"createdAt"`
-	UpdatedAt  int64  `db:"updatedAt"`
+	TxHash             string `db:"tx_hash"`
+	Status             string `db:"status"`
+	TimeSent           int64  `db:"time_sent"`
+	FarmSubAccountName string `db:"farm_sub_account_name"`
+	RetryCount         int    `db:"retry_count"`
+	CreatedAt          int64  `db:"createdAt"`
+	UpdatedAt          int64  `db:"updatedAt"`
 }
 
 type RBFTransactionHistory struct {

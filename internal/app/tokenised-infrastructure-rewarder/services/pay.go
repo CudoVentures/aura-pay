@@ -223,7 +223,7 @@ func (s *payService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 
-	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id)); err != nil {
+	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
 	}
 
@@ -420,9 +420,9 @@ type BtcClient interface {
 type Storage interface {
 	GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error)
 
-	GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error)
+	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) error
 
-	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string) error
+	GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error)
 
 	UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error
 

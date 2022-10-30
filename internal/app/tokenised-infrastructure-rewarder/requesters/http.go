@@ -379,7 +379,10 @@ func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount
 	}
 	escapedSubractFeeFromAddressesString := string(bytes)
 
-	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"sendmany\", \"params\": [\"\", %s, 6, \"\", %s, true]}", escapedDestinationAddresses, escapedSubractFeeFromAddressesString)
+	// formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"sendmany\", \"params\": [\"\", %s, 6, \"\", %s, true]}", escapedDestinationAddresses, escapedSubractFeeFromAddressesString)
+
+	// debug
+	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"sendmany\", \"params\": [\"\", %s, 6, \"\", %s, true, \"\", \"\", 1]}", escapedDestinationAddresses, escapedSubractFeeFromAddressesString)
 
 	body := strings.NewReader(formatedString)
 	endPointToCall := fmt.Sprintf("http://%s:%s", r.config.BitcoinNodeUrl, r.config.BitcoinNodePort)

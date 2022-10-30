@@ -14,7 +14,7 @@ func NewSqlDB(db *sqlx.DB) *sqlDB {
 	return &sqlDB{db: db}
 }
 
-func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string) (retErr error) {
+func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) (retErr error) {
 	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %s", err)
@@ -49,7 +49,7 @@ func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		}
 	}
 
-	if retErr = saveTxHashWithStatus(ctx, sql_tx, txHash, types.TransactionPending, farmId, 0); retErr != nil {
+	if retErr = saveTxHashWithStatus(ctx, sql_tx, txHash, types.TransactionPending, farmSubAccountName, 0); retErr != nil {
 		return
 	}
 
@@ -96,13 +96,13 @@ func (sdb *sqlDB) UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCo
 	return nil
 }
 
-func (sdb *sqlDB) SaveRBFTransactionHistory(ctx context.Context, old_tx_hash string, new_tx_hash string, farmId string) error {
+func (sdb *sqlDB) SaveRBFTransactionHistory(ctx context.Context, old_tx_hash string, new_tx_hash string, farmSubAccountName string) error {
 	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %s", err)
 	}
 
-	if retErr := saveRBFTransactionHistory(ctx, sql_tx, old_tx_hash, new_tx_hash, farmId); retErr != nil {
+	if retErr := saveRBFTransactionHistory(ctx, sql_tx, old_tx_hash, new_tx_hash, farmSubAccountName); retErr != nil {
 		return fmt.Errorf("failed to commit transaction: %s", retErr)
 	}
 

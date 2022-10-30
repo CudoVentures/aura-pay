@@ -53,7 +53,7 @@ func (s *retryService) Execute(ctx context.Context, btcClient BtcClient, storage
 		return err
 	}
 
-	// for all others - check if enough time has passed
+	// for all others - check if enough time has passed; if so - send bump fee tx
 	for _, tx := range txToRetry {
 		if time.Now().Unix() >= tx.TimeSent+int64(s.config.RBFTransactionRetryDelayInSeconds) {
 			err := s.retryTransaction(tx, storage, ctx, btcClient)
@@ -74,9 +74,9 @@ func (s *retryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 	}
 	if retryCountExceeded {
 		//TODO: Alert via grafana/prometheus to someone that can manually handle the problem
-		return fmt.Errorf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; FarmId: {%s}", tx.TxHash, tx.FarmId)
+		return fmt.Errorf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; FarmId: {%s}", tx.TxHash, tx.FarmSubAccountName)
 	}
-	_, err = btcClient.LoadWallet(tx.FarmId)
+	_, err = btcClient.LoadWallet(tx.FarmSubAccountName)
 	if err != nil {
 		return err
 	}
@@ -85,22 +85,22 @@ func (s *retryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return err
 	}
 
-	RBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.FarmId, tx.TxHash)
+	RBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.FarmSubAccountName, tx.TxHash)
 	if err != nil {
 		return err
 	}
 
 	defer func() {
 		if err := btcClient.WalletLock(); err != nil {
-			log.Error().Msgf("Failed to lock wallet %s: %s", tx.FarmId, err)
+			log.Error().Msgf("Failed to lock wallet %s: %s", tx.FarmSubAccountName, err)
 		}
-		log.Debug().Msgf("Farm Wallet: {%s} locked", tx.FarmId)
+		log.Debug().Msgf("Farm Wallet: {%s} locked", tx.FarmSubAccountName)
 
-		err = btcClient.UnloadWallet(&tx.FarmId)
+		err = btcClient.UnloadWallet(&tx.FarmSubAccountName)
 		if err != nil {
-			log.Error().Msgf("Failed to unload wallet %s: %s", tx.FarmId, err)
+			log.Error().Msgf("Failed to unload wallet %s: %s", tx.FarmSubAccountName, err)
 		}
-		log.Debug().Msgf("Farm Wallet: {%s} unloaded", tx.FarmId)
+		log.Debug().Msgf("Farm Wallet: {%s} unloaded", tx.FarmSubAccountName)
 	}()
 
 	// update old tx status to replaced
@@ -110,13 +110,13 @@ func (s *retryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 	}
 
 	// link replaced transaction with the tx that replaced it
-	err = storage.SaveRBFTransactionHistory(ctx, tx.TxHash, RBFtxHash, tx.FarmId)
+	err = storage.SaveRBFTransactionHistory(ctx, tx.TxHash, RBFtxHash, tx.FarmSubAccountName)
 	if err != nil {
 		return err
 	}
 
 	// save the new tx with status pending, new timestamp, and retryCount of old one + 1
-	err = storage.SaveTxHashWithStatus(ctx, RBFtxHash, types.TransactionPending, tx.FarmId, tx.RetryCount+1)
+	err = storage.SaveTxHashWithStatus(ctx, RBFtxHash, types.TransactionPending, tx.FarmSubAccountName, tx.RetryCount+1)
 	if err != nil {
 		return err
 	}

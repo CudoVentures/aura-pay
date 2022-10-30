@@ -9,9 +9,9 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func saveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmId string, retryCount int) error {
+func saveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmSubAccountName string, retryCount int) error {
 	now := time.Now()
-	_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmId, retryCount, now.Unix(), now.UTC(), now.UTC())
+	_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
 	return err
 }
 
@@ -59,10 +59,10 @@ func saveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, old_tx_hash str
 
 const (
 	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status 
-	(tx_hash, status, time_sent, farm_id, retry_count, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 	insertRBFTransactionHistory = `INSERT INTO rbf_transaction_history 
-	(old_tx_hash, new_tx_hash, farm_id, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
+	(old_tx_hash, new_tx_hash, farm_sub_account_name, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
 
 	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount 
 		(address, amount, tx_hash, farm_id, payout_time, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
