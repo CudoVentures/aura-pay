@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
@@ -52,49 +53,73 @@ func (s *retryService) Execute(ctx context.Context, btcClient BtcClient, storage
 		return err
 	}
 
-	// for all others - check if there their time of sending + config.RetryTime is <= time.Now().Unix()
+	// for all others - check if enough time has passed
 	for _, tx := range txToRetry {
 		if time.Now().Unix() >= tx.TimeSent+int64(s.config.RBFTransactionRetryDelayInSeconds) {
-			retryCountExceeded, err := s.retryCountExceeded(tx, storage, ctx)
+			err := s.retryTransaction(tx, storage, ctx, btcClient)
 			if err != nil {
-				return err
-			}
-			if retryCountExceeded {
-				log.Error().Msgf("Transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; FarmId: {%s}", tx.TxHash, tx.FarmId)
-				continue
-				//TODO: Alert via grafana/prometheus to someone that can manually handle the problem
-			}
-			// try to bump the fee
-			RBFtxHash, err := s.apiRequester.BumpFee(ctx, "todo", tx.TxHash)
-			if err != nil {
-				return err
-			}
-			// mark old tx as replaced
-			err = storage.UpdateTransactionsStatus(ctx, []string{tx.TxHash}, types.TransactionReplaced)
-			if err != nil {
-				return err
-			}
-			// connect old tx hash with the new tx hash that replaced it
-			err = storage.SaveRBFTransactionHistory(ctx, tx.TxHash, RBFtxHash, tx.FarmId)
-			if err != nil {
-				return err
-			}
-			// save the new tx hash as a new pending transaction and increment the retries
-			err = storage.SaveTxHashWithStatus(ctx, RBFtxHash, types.TransactionPending, tx.FarmId, tx.RetryCount+1)
-			if err != nil {
+
 				return err
 			}
 		}
 		continue
 	}
+	return nil
+}
 
-	// if it is not ignore them and continue
-	// else send an rbf transaction ( or bumpfee ) to try and push them faster
-	// mark that you have tried to send 1 time
-	// connect the old tx with the newly one..think about what happens with the old so you wont go into a loop
-	// if you try 3 times and nothing happens - raise alert and ask for manual intervention
-	// repeat again everything
+func (s *retryService) retryTransaction(tx types.TransactionHashWithStatus, storage Storage, ctx context.Context, btcClient BtcClient) error {
+	retryCountExceeded, err := s.retryCountExceeded(tx, storage, ctx)
+	if err != nil {
+		return err
+	}
+	if retryCountExceeded {
+		//TODO: Alert via grafana/prometheus to someone that can manually handle the problem
+		return fmt.Errorf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; FarmId: {%s}", tx.TxHash, tx.FarmId)
+	}
+	_, err = btcClient.LoadWallet(tx.FarmId)
+	if err != nil {
+		return err
+	}
+	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
+	if err != nil {
+		return err
+	}
 
+	RBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.FarmId, tx.TxHash)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := btcClient.WalletLock(); err != nil {
+			log.Error().Msgf("Failed to lock wallet %s: %s", tx.FarmId, err)
+		}
+		log.Debug().Msgf("Farm Wallet: {%s} locked", tx.FarmId)
+
+		err = btcClient.UnloadWallet(&tx.FarmId)
+		if err != nil {
+			log.Error().Msgf("Failed to unload wallet %s: %s", tx.FarmId, err)
+		}
+		log.Debug().Msgf("Farm Wallet: {%s} unloaded", tx.FarmId)
+	}()
+
+	// update old tx status to replaced
+	err = storage.UpdateTransactionsStatus(ctx, []string{tx.TxHash}, types.TransactionReplaced)
+	if err != nil {
+		return err
+	}
+
+	// link replaced transaction with the tx that replaced it
+	err = storage.SaveRBFTransactionHistory(ctx, tx.TxHash, RBFtxHash, tx.FarmId)
+	if err != nil {
+		return err
+	}
+
+	// save the new tx with status pending, new timestamp, and retryCount of old one + 1
+	err = storage.SaveTxHashWithStatus(ctx, RBFtxHash, types.TransactionPending, tx.FarmId, tx.RetryCount+1)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
