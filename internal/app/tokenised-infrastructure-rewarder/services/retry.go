@@ -96,7 +96,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return err
 	}
 
-	RBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.FarmSubAccountName, tx.TxHash)
+	RBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.TxHash)
 	if err != nil {
 		return err
 	}

@@ -393,7 +393,7 @@ type ApiRequester interface {
 
 	SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error)
 
-	BumpFee(ctx context.Context, walletName string, txId string) (string, error)
+	BumpFee(ctx context.Context, txId string) (string, error)
 }
 
 type Provider interface {
