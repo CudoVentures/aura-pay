@@ -59,7 +59,7 @@ func setupMockApiRequesterRetryService() *mockAPIRequester {
 		"testWallet", "test_tx_1_id").Return("new_test_tx_1_id", nil).Once()
 
 	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
-	apiRequester.On("BumpFee", mock.Anything, "farm_sub_account_name_1", "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884").Return("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885", nil)
+	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884").Return("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885", nil)
 
 	return apiRequester
 }

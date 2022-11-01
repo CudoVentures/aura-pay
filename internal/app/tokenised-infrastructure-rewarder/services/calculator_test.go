@@ -486,7 +486,7 @@ func (mar *mockAPIRequester) SendMany(ctx context.Context, destinationAddressesW
 	return args.String(0), args.Error(1)
 }
 
-func (mar *mockAPIRequester) BumpFee(ctx context.Context, walletName string, txId string) (string, error) {
-	args := mar.Called(ctx, walletName, txId)
+func (mar *mockAPIRequester) BumpFee(ctx context.Context, txId string) (string, error) {
+	args := mar.Called(ctx, txId)
 	return args.String(0), args.Error(1)
 }
