@@ -37,7 +37,7 @@ func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, 
 
 	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
 	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
-	// requestStringDebug := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s", cudosAddress, network, denomId)
+
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
 		return "", err
@@ -198,21 +198,21 @@ func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId str
 
 func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 
-	// if r.config.IsTesting { // TODO: Remove once backend is up
-	// 	Collection := types.Collection{
-	// 		Denom: types.Denom{Id: "test"},
-	// 		Nfts:  []types.NFT{},
-	// 	}
-	// 	testFarm := types.Farm{
-	// 		Id:                                 "1",
-	// 		SubAccountName:                     "testwallet2",
-	// 		AddressForReceivingRewardsFromPool: "tb1qeymwaxsx73edkrqyg436khmcwlavw8zjc57wnw",
-	// 		LeftoverRewardPayoutAddress:        "tb1qmktqv4psg7ucw6ct578ev4y9pl9k8m6eh7g0vd",
-	// 		MaintenanceFeePayoutdAddress:       "tb1quljswl4xgmmqrmuyvqqxzg77zyd7z8na54ps7a",
-	// 		MonthlyMaintenanceFeeInBTC:         0.0001,
-	// 		Collections:                        []types.Collection{Collection}}
-	// 	return []types.Farm{testFarm}, nil
-	// }
+	//if r.config.IsTesting { // TODO: Remove once backend is up
+	//	Collection := types.Collection{
+	//		Denom: types.Denom{Id: "test"},
+	//		Nfts:  []types.NFT{},
+	//	}
+	//	testFarm := types.Farm{
+	//		Id:                                 1,
+	//		SubAccountName:                     "testwallet2",
+	//		AddressForReceivingRewardsFromPool: "tb1qeymwaxsx73edkrqyg436khmcwlavw8zjc57wnw",
+	//		LeftoverRewardPayoutAddress:        "tb1qmktqv4psg7ucw6ct578ev4y9pl9k8m6eh7g0vd",
+	//		MaintenanceFeePayoutdAddress:       "tb1quljswl4xgmmqrmuyvqqxzg77zyd7z8na54ps7a",
+	//		MonthlyMaintenanceFeeInBTC:         "0.0001",
+	//		Collections:                        []types.Collection{Collection}}
+	//	return []types.Farm{testFarm}, nil
+	//}
 
 	client := &http.Client{
 		Timeout: 60 * time.Second,
@@ -379,10 +379,7 @@ func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount
 	}
 	escapedSubractFeeFromAddressesString := string(bytes)
 
-	// formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"sendmany\", \"params\": [\"\", %s, 6, \"\", %s, true]}", escapedDestinationAddresses, escapedSubractFeeFromAddressesString)
-
-	// debug
-	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"sendmany\", \"params\": [\"\", %s, 6, \"\", %s, true, \"\", \"\", 1]}", escapedDestinationAddresses, escapedSubractFeeFromAddressesString)
+	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"sendmany\", \"params\": [\"\", %s, 6, \"\", %s, true]}", escapedDestinationAddresses, escapedSubractFeeFromAddressesString)
 
 	body := strings.NewReader(formatedString)
 	endPointToCall := fmt.Sprintf("http://%s:%s", r.config.BitcoinNodeUrl, r.config.BitcoinNodePort)
@@ -424,6 +421,53 @@ func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount
 	return okStruct.TxHash, nil
 }
 
-func (r *Requester) BumpFee(ctx context.Context, walletName string, txId string) (string, error) {
-	return "", nil
+func (r *Requester) BumpFee(ctx context.Context, txId string) (string, error) {
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	optionals := "{\"replaceable\": true}" // marks the tx as BIP-125 once again
+	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"bumpfee\", \"params\": [%s, %s]}", txId, optionals)
+
+	body := strings.NewReader(formatedString)
+	endPointToCall := fmt.Sprintf("http://%s:%s", r.config.BitcoinNodeUrl, r.config.BitcoinNodePort)
+	req, err := http.NewRequestWithContext(ctx, "POST", endPointToCall, body)
+	if err != nil {
+		return "", err
+	}
+	req.SetBasicAuth(r.config.BitcoinNodeUserName, r.config.BitcoinNodePassword)
+	req.Header.Set("Content-Type", "text/plain;")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	defer resp.Body.Close()
+
+	bts, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != StatusCodeOK {
+		return "", fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", resp.Status, resp.StatusCode, string(bts))
+	}
+
+	okStruct := struct {
+		TxHash      string   `json:"txid"`
+		Errors      []string `json:"errors"`
+		OriginalFee string   `json:"origfee"`
+		NewFee      string   `json:"fee"`
+	}{}
+
+	if err := json.Unmarshal(bts, &okStruct); err != nil {
+		return "", err
+	}
+
+	if len(okStruct.Errors) != 0 {
+		errs := strings.Join(okStruct.Errors[:], ",")
+		return "", fmt.Errorf(errs)
+	}
+
+	return okStruct.TxHash, nil
 }

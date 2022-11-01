@@ -158,7 +158,7 @@ func setupMockBtcClient() *mockBtcClient {
 	btcClient.On("GetBalance", mock.Anything).Return(btcutil.Amount(500000000), nil).Once()
 
 	btcClient.On("LoadWallet", "farm_1").Return(&btcjson.LoadWalletResult{}, nil).Once()
-	btcClient.On("LoadWallet", "farm_2").Return(&btcjson.LoadWalletResult{}, errors.New("faield to load wallet")).Once()
+	btcClient.On("LoadWallet", "farm_2").Return(&btcjson.LoadWalletResult{}, errors.New("failed to load wallet")).Once()
 	btcClient.On("UnloadWallet", mock.Anything).Return(nil)
 	btcClient.On("WalletPassphrase", mock.Anything, mock.Anything).Return(nil)
 	btcClient.On("WalletLock").Return(nil)

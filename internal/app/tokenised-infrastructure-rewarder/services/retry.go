@@ -3,16 +3,14 @@ package services
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/rs/zerolog/log"
 )
 
-func NewRetryService(config *infrastructure.Config, apiRequester ApiRequester, helper Helper, btcNetworkParams *types.BtcNetworkParams) *retryService {
-	return &retryService{
+func NewRetryService(config *infrastructure.Config, apiRequester ApiRequester, helper Helper, btcNetworkParams *types.BtcNetworkParams) *RetryService {
+	return &RetryService{
 		config:           config,
 		helper:           helper,
 		btcNetworkParams: btcNetworkParams,
@@ -20,14 +18,14 @@ func NewRetryService(config *infrastructure.Config, apiRequester ApiRequester, h
 	}
 }
 
-func (s *retryService) Execute(ctx context.Context, btcClient BtcClient, storage Storage) error {
+func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage Storage) error {
 	unconfirmedTransactionHashes, err := storage.GetTxHashesByStatus(ctx, types.TransactionPending)
 	if err != nil {
 		return err
 	}
 
-	txToConfirm := []string{}
-	txToRetry := []types.TransactionHashWithStatus{}
+	var txToConfirm []string
+	var txToRetry []types.TransactionHashWithStatus
 
 	for _, tx := range unconfirmedTransactionHashes {
 		txHash, err := chainhash.NewHashFromStr(tx.TxHash)
@@ -47,7 +45,7 @@ func (s *retryService) Execute(ctx context.Context, btcClient BtcClient, storage
 		}
 	}
 
-	// all the ones that were included in atleast 1 block - mark them as completed
+	// all the ones that were included in at least 1 block - mark them as completed
 	err = storage.UpdateTransactionsStatus(ctx, txToConfirm, types.TransactionCompleted)
 	if err != nil {
 		return err
@@ -55,10 +53,9 @@ func (s *retryService) Execute(ctx context.Context, btcClient BtcClient, storage
 
 	// for all others - check if enough time has passed; if so - send bump fee tx
 	for _, tx := range txToRetry {
-		if time.Now().Unix() >= tx.TimeSent+int64(s.config.RBFTransactionRetryDelayInSeconds) {
+		if s.helper.Unix() >= tx.TimeSent+int64(s.config.RBFTransactionRetryDelayInSeconds) {
 			err := s.retryTransaction(tx, storage, ctx, btcClient)
 			if err != nil {
-
 				return err
 			}
 		}
@@ -67,7 +64,7 @@ func (s *retryService) Execute(ctx context.Context, btcClient BtcClient, storage
 	return nil
 }
 
-func (s *retryService) retryTransaction(tx types.TransactionHashWithStatus, storage Storage, ctx context.Context, btcClient BtcClient) error {
+func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, storage Storage, ctx context.Context, btcClient BtcClient) error {
 	retryCountExceeded, err := s.retryCountExceeded(tx, storage, ctx)
 	if err != nil {
 		return err
@@ -77,15 +74,6 @@ func (s *retryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return fmt.Errorf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; FarmId: {%s}", tx.TxHash, tx.FarmSubAccountName)
 	}
 	_, err = btcClient.LoadWallet(tx.FarmSubAccountName)
-	if err != nil {
-		return err
-	}
-	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
-	if err != nil {
-		return err
-	}
-
-	RBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.FarmSubAccountName, tx.TxHash)
 	if err != nil {
 		return err
 	}
@@ -102,6 +90,16 @@ func (s *retryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		}
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", tx.FarmSubAccountName)
 	}()
+
+	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
+	if err != nil {
+		return err
+	}
+
+	RBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.FarmSubAccountName, tx.TxHash)
+	if err != nil {
+		return err
+	}
 
 	// update old tx status to replaced
 	err = storage.UpdateTransactionsStatus(ctx, []string{tx.TxHash}, types.TransactionReplaced)
@@ -123,8 +121,8 @@ func (s *retryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 	return nil
 }
 
-func (s *retryService) retryCountExceeded(tx types.TransactionHashWithStatus, storage Storage, ctx context.Context) (bool, error) {
-	if tx.RetryCount >= s.config.RBFTransactionRetryDelayInSeconds {
+func (s *RetryService) retryCountExceeded(tx types.TransactionHashWithStatus, storage Storage, ctx context.Context) (bool, error) {
+	if tx.RetryCount >= s.config.RBFTransactionRetryMaxCount {
 		err := storage.UpdateTransactionsStatus(ctx, []string{tx.TxHash}, types.TransactionFailed)
 		if err != nil {
 			return true, err
@@ -134,7 +132,7 @@ func (s *retryService) retryCountExceeded(tx types.TransactionHashWithStatus, st
 	return false, nil
 }
 
-type retryService struct {
+type RetryService struct {
 	config           *infrastructure.Config
 	helper           Helper
 	btcNetworkParams *types.BtcNetworkParams
