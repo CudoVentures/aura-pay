@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/jmoiron/sqlx"
 	"testing"
 	"time"
 
@@ -254,24 +255,35 @@ func (ms *mockStorage) SaveStatistics(ctx context.Context, destinationAddressesW
 	return args.Error(0)
 }
 
-func (ms *mockStorage) UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error {
-	args := ms.Called(ctx, txHashesToMarkCompleted, status)
+func (ms *mockStorage) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashesToMarkCompleted []string, status string) error {
+	args := ms.Called(ctx, tx, txHashesToMarkCompleted, status)
 	return args.Error(0)
 }
 
-func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, txHash string, status string, farmSubAccountName string, retryCount int) error {
-	args := ms.Called(ctx, txHash, status, farmSubAccountName, retryCount)
+func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, status string, farmSubAccountName string, retryCount int) error {
+	args := ms.Called(ctx, tx, txHash, status, farmSubAccountName, retryCount)
 	return args.Error(0)
 }
 
-func (ms *mockStorage) SaveRBFTransactionHistory(ctx context.Context, old_tx_hash string, new_tx_hash string, farmSubAccountName string) error {
-	args := ms.Called(ctx, old_tx_hash, new_tx_hash, farmSubAccountName)
+func (ms *mockStorage) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farmSubAccountName string) error {
+	args := ms.Called(ctx, tx, oldTxHash, newTxHash, farmSubAccountName)
 	return args.Error(0)
 }
 
 func (ms *mockStorage) GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error) {
 	args := ms.Called(ctx, status)
 	return args.Get(0).([]types.TransactionHashWithStatus), args.Error(1)
+}
+
+func (ms *mockStorage) SaveRBFTransactionInformation(ctx context.Context,
+	oldTxHash string,
+	oldTxStatus string,
+	newRBFTxHash string,
+	newRBFTXStatus string,
+	farmSubAccountName string,
+	retryCount int) error {
+	args := ms.Called(ctx, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount)
+	return args.Error(0)
 }
 
 type mockStorage struct {

@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -46,7 +45,7 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 	}
 
 	// all the ones that were included in at least 1 block - mark them as completed
-	err = storage.UpdateTransactionsStatus(ctx, txToConfirm, types.TransactionCompleted)
+	err = storage.UpdateTransactionsStatus(ctx, nil, txToConfirm, types.TransactionCompleted)
 	if err != nil {
 		return err
 	}
@@ -59,7 +58,6 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 				return err
 			}
 		}
-		continue
 	}
 	return nil
 }
@@ -71,7 +69,8 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 	}
 	if retryCountExceeded {
 		//TODO: Alert via grafana/prometheus to someone that can manually handle the problem
-		return fmt.Errorf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; FarmId: {%s}", tx.TxHash, tx.FarmSubAccountName)
+		log.Error().Msgf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; FarmId: {%s}", tx.TxHash, tx.FarmSubAccountName)
+		return nil
 	}
 	_, err = btcClient.LoadWallet(tx.FarmSubAccountName)
 	if err != nil {
@@ -96,34 +95,19 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return err
 	}
 
-	RBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.TxHash)
+	newRBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.TxHash)
 	if err != nil {
 		return err
 	}
 
-	// update old tx status to replaced
-	err = storage.UpdateTransactionsStatus(ctx, []string{tx.TxHash}, types.TransactionReplaced)
-	if err != nil {
-		return err
-	}
+	err = storage.SaveRBFTransactionInformation(ctx, tx.TxHash, types.TransactionReplaced, newRBFtxHash, types.TransactionPending, tx.FarmSubAccountName, tx.RetryCount+1)
 
-	// link replaced transaction with the tx that replaced it
-	err = storage.SaveRBFTransactionHistory(ctx, tx.TxHash, RBFtxHash, tx.FarmSubAccountName)
-	if err != nil {
-		return err
-	}
-
-	// save the new tx with status pending, new timestamp, and retryCount of old one + 1
-	err = storage.SaveTxHashWithStatus(ctx, RBFtxHash, types.TransactionPending, tx.FarmSubAccountName, tx.RetryCount+1)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
 func (s *RetryService) retryCountExceeded(tx types.TransactionHashWithStatus, storage Storage, ctx context.Context) (bool, error) {
 	if tx.RetryCount >= s.config.RBFTransactionRetryMaxCount {
-		err := storage.UpdateTransactionsStatus(ctx, []string{tx.TxHash}, types.TransactionFailed)
+		err := storage.UpdateTransactionsStatus(ctx, nil, []string{tx.TxHash}, types.TransactionFailed)
 		if err != nil {
 			return true, err
 		}

@@ -6,7 +6,7 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 )
 
-func (sdb *sqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error) {
+func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error) {
 	payoutTimes := []types.NFTStatistics{}
 	if err := sdb.db.SelectContext(ctx, &payoutTimes, selectNFTPayoutHistory, collectionDenomId, nftId); err != nil {
 		return nil, err
@@ -14,7 +14,7 @@ func (sdb *sqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId st
 	return payoutTimes, nil
 }
 
-func (sdb *sqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error) {
+func (sdb *SqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error) {
 	txHashesWithStatus := []types.TransactionHashWithStatus{}
 	if err := sdb.db.SelectContext(ctx, &txHashesWithStatus, selectTxHashStatus, status); err != nil {
 		return nil, err

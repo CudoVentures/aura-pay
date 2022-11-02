@@ -10,38 +10,38 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func NewSqlDB(db *sqlx.DB) *sqlDB {
-	return &sqlDB{db: db}
+func NewSqlDB(db *sqlx.DB) *SqlDB {
+	return &SqlDB{db: db}
 }
 
-func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) (retErr error) {
-	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
+func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) (retErr error) {
+	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %s", err)
 	}
 
 	defer func() {
 		if retErr != nil {
-			if err := sql_tx.Rollback(); err != nil {
+			if err := sqlTx.Rollback(); err != nil {
 				log.Error().Msgf("failed to rollback: %s, during: %s", err, retErr)
 			}
 		}
 	}()
 
 	for address, amount := range destinationAddressesWithAmount {
-		if retErr = saveDestionAddressesWithAmountHistory(ctx, sql_tx, address, amount, txHash, farmId); retErr != nil {
+		if retErr = saveDestinationAddressesWithAmountHistory(ctx, sqlTx, address, amount, txHash, farmId); retErr != nil {
 			return
 		}
 	}
 
 	for _, nftStatistic := range statistics {
-		if retErr = saveNFTInformationHistory(ctx, sql_tx, nftStatistic.DenomId, nftStatistic.TokenId,
+		if retErr = saveNFTInformationHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
 			nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash,
 			nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee); retErr != nil {
 			return
 		}
 		for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
-			if retErr = saveNFTOwnersForPeriodHistory(ctx, sql_tx, nftStatistic.DenomId, nftStatistic.TokenId,
+			if retErr = saveNFTOwnersForPeriodHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
 				ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned,
 				ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward); retErr != nil {
 				return
@@ -49,11 +49,11 @@ func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		}
 	}
 
-	if retErr = saveTxHashWithStatus(ctx, sql_tx, txHash, types.TransactionPending, farmSubAccountName, 0); retErr != nil {
+	if retErr = sdb.saveTxHashWithStatus(ctx, sqlTx, txHash, types.TransactionPending, farmSubAccountName, 0); retErr != nil {
 		return
 	}
 
-	if retErr = sql_tx.Commit(); retErr != nil {
+	if retErr = sqlTx.Commit(); retErr != nil {
 		retErr = fmt.Errorf("failed to commit transaction: %s", retErr)
 		return
 	}
@@ -61,58 +61,65 @@ func (sdb *sqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 	return nil
 }
 
-func (sdb *sqlDB) SaveTxHashWithStatus(ctx context.Context, txHash string, status string, farmId string, retryCount int) error {
-	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
+func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context,
+	oldTxHash string,
+	oldTxStatus string,
+	newRBFTxHash string,
+	newRBFTXStatus string,
+	farmSubAccountName string,
+	retryCount int) error {
+
+	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %s", err)
 	}
 
-	if retErr := saveTxHashWithStatus(ctx, sql_tx, txHash, status, farmId, retryCount); retErr != nil {
+	defer func() {
+		if err := sqlTx.Rollback(); err != nil {
+			log.Error().Msgf("failed to rollback: %s, during: %s", err, err)
+		}
+	}()
+
+	// update old tx status
+	if retErr := sdb.updateTxHashesWithStatus(ctx, sqlTx, []string{oldTxHash}, oldTxStatus); retErr != nil {
+		return fmt.Errorf("failed to updateTxHashesWithStatus: %s", retErr)
+	}
+
+	// link replaced transaction with the tx that replaced it
+	if retErr := sdb.saveRBFTransactionHistory(ctx, sqlTx, oldTxHash, newRBFTxHash, farmSubAccountName); retErr != nil {
+		return fmt.Errorf("failed to saveRBFTransactionHistory: %s", retErr)
+	}
+
+	// save the new tx with status, new timestamp, and retryCount of old one + 1
+	if retErr := sdb.saveTxHashWithStatus(ctx, sqlTx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount); retErr != nil {
+		return fmt.Errorf("failed to saveTxHashWithStatus: %s", retErr)
+	}
+
+	return nil
+
+}
+func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, status string, farmSubAccountName string, retryCount int) error {
+	if retErr := sdb.saveTxHashWithStatus(ctx, tx, txHash, status, farmSubAccountName, retryCount); retErr != nil {
 		return retErr
 	}
-
-	if retErr := sql_tx.Commit(); retErr != nil {
-		return fmt.Errorf("failed to commit transaction: %s", retErr)
-	}
-
 	return nil
-
 }
 
-func (sdb *sqlDB) UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error {
-	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %s", err)
-	}
-
-	if retErr := updateTxHashesWithStatus(ctx, sql_tx, txHashesToMarkCompleted, status); retErr != nil {
-		return fmt.Errorf("failed to commit transaction: %s", retErr)
-	}
-
-	if retErr := sql_tx.Commit(); retErr != nil {
+func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashesToUpdate []string, status string) error {
+	if retErr := sdb.updateTxHashesWithStatus(ctx, tx, txHashesToUpdate, status); retErr != nil {
 		return fmt.Errorf("failed to commit transaction: %s", retErr)
 	}
 
 	return nil
 }
 
-func (sdb *sqlDB) SaveRBFTransactionHistory(ctx context.Context, old_tx_hash string, new_tx_hash string, farmSubAccountName string) error {
-	sql_tx, err := sdb.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %s", err)
-	}
-
-	if retErr := saveRBFTransactionHistory(ctx, sql_tx, old_tx_hash, new_tx_hash, farmSubAccountName); retErr != nil {
+func (sdb *SqlDB) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farmSubAccountName string) error {
+	if retErr := sdb.saveRBFTransactionHistory(ctx, tx, oldTxHash, newTxHash, farmSubAccountName); retErr != nil {
 		return fmt.Errorf("failed to commit transaction: %s", retErr)
 	}
-
-	if retErr := sql_tx.Commit(); retErr != nil {
-		return fmt.Errorf("failed to commit transaction: %s", retErr)
-	}
-
 	return nil
 }
 
-type sqlDB struct {
+type SqlDB struct {
 	db *sqlx.DB
 }

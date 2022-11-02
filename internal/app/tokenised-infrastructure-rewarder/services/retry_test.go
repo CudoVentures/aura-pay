@@ -7,12 +7,13 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-func TestRetryService_ExecuteHappyPath(t *testing.T) {
+func TestRetryService_Execute(t *testing.T) {
 	config := &infrastructure.Config{
 		Network:                           "BTC",
 		CUDOMaintenanceFeePercent:         50,
@@ -27,44 +28,45 @@ func TestRetryService_ExecuteHappyPath(t *testing.T) {
 	}
 
 	s := NewRetryService(config, setupMockApiRequesterRetryService(), &mockHelper{}, btcNetworkParams)
-	mockStorageService := setupMockStorageRetryService(false)
-	require.NoError(t, s.Execute(context.Background(), setupMockBtcClientRetryService(false), mockStorageService))
-	mockStorageService.AssertNumberOfCalls(t, "UpdateTransactionsStatus", 2)
-}
+	mockStorageService := setupMockStorageRetryService()
+	require.NoError(t, s.Execute(context.Background(), setupMockBtcClientRetryService(), mockStorageService))
 
-func TestRetryServiceExecuteShouldErrorOutWhenTxRetryCountIsGreaterThenOrEqualThenPredefined(t *testing.T) {
-	config := &infrastructure.Config{
-		Network:                           "BTC",
-		CUDOMaintenanceFeePercent:         50,
-		CUDOMaintenanceFeePayoutAddress:   "cudo_maintenance_fee_payout_addr",
-		RBFTransactionRetryDelayInSeconds: 10,
-		RBFTransactionRetryMaxCount:       2,
+	completedTransactions := 0
+	expectedCompletedTransactions := 1
+	repalcedTransactions := 0
+	expectedReplacedTransactions := 2
+	failedTransactions := 0
+	expectedFailedTransactions := 1
+	for _, elem := range mockStorageService.Calls {
+		if elem.Method == "UpdateTransactionsStatus" && elem.Arguments[3].(string) == "Completed" {
+			completedTransactions++
+		}
+		if elem.Method == "UpdateTransactionsStatus" && elem.Arguments[3].(string) == "Failed" {
+			failedTransactions++
+		}
+		if elem.Method == "SaveRBFTransactionInformation" && elem.Arguments[2].(string) == "Replaced" {
+			repalcedTransactions++
+		}
+
 	}
 
-	btcNetworkParams := &types.BtcNetworkParams{
-		ChainParams:      &chaincfg.MainNetParams,
-		MinConfirmations: 6,
-	}
+	assert.Equal(t, expectedCompletedTransactions, completedTransactions)
+	assert.Equal(t, expectedReplacedTransactions, repalcedTransactions)
+	assert.Equal(t, expectedFailedTransactions, failedTransactions)
 
-	s := NewRetryService(config, setupMockApiRequesterRetryService(), &mockHelper{}, btcNetworkParams)
-	mockStorageService := setupMockStorageRetryService(true)
-	require.Error(t, s.Execute(context.Background(), setupMockBtcClientRetryService(true), mockStorageService))
-	mockStorageService.AssertNumberOfCalls(t, "UpdateTransactionsStatus", 3)
 }
 
 func setupMockApiRequesterRetryService() *mockAPIRequester {
 	apiRequester := &mockAPIRequester{}
 
-	apiRequester.On("BumpFee", mock.Anything,
-		"testWallet", "test_tx_1_id").Return("new_test_tx_1_id", nil).Once()
-
 	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
 	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884").Return("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885", nil)
+	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887").Return("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f888", nil)
 
 	return apiRequester
 }
 
-func setupMockBtcClientRetryService(failedTx bool) *mockBtcClient {
+func setupMockBtcClientRetryService() *mockBtcClient {
 	btcClient := &mockBtcClient{}
 
 	confirmedTxHash1 := &btcjson.TxRawResult{Confirmations: 5}
@@ -83,13 +85,15 @@ func setupMockBtcClientRetryService(failedTx bool) *mockBtcClient {
 	arg4, _ := chainhash.NewHashFromStr("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884")
 	btcClient.On("GetRawTransactionVerbose", arg4).Return(unconfirmedTxHash2, nil)
 
-	if failedTx {
-		failedTransactionHash := &btcjson.TxRawResult{Confirmations: 0}
-		arg5, _ := chainhash.NewHashFromStr("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885")
-		btcClient.On("GetRawTransactionVerbose", arg5).Return(failedTransactionHash, nil)
-	}
+	failedTransactionHash := &btcjson.TxRawResult{Confirmations: 0}
+	arg5, _ := chainhash.NewHashFromStr("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886")
+	btcClient.On("GetRawTransactionVerbose", arg5).Return(failedTransactionHash, nil)
 
-	btcClient.On("LoadWallet", "farm_sub_account_name_1").Return(&btcjson.LoadWalletResult{}, nil).Once()
+	unconfirmedTxHash3 := &btcjson.TxRawResult{Confirmations: 0}
+	arg6, _ := chainhash.NewHashFromStr("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887")
+	btcClient.On("GetRawTransactionVerbose", arg6).Return(unconfirmedTxHash3, nil)
+
+	btcClient.On("LoadWallet", "farm_sub_account_name_1").Return(&btcjson.LoadWalletResult{}, nil)
 
 	btcClient.On("UnloadWallet", mock.Anything).Return(nil)
 
@@ -101,7 +105,7 @@ func setupMockBtcClientRetryService(failedTx bool) *mockBtcClient {
 
 }
 
-func setupMockStorageRetryService(failedTx bool) *mockStorage {
+func setupMockStorageRetryService() *mockStorage {
 	storage := &mockStorage{}
 
 	var uncomfirmedTransactions = []types.TransactionHashWithStatus{
@@ -130,19 +134,26 @@ func setupMockStorageRetryService(failedTx bool) *mockStorage {
 			RetryCount:         0,
 		},
 	}
-	if failedTx {
-		uncomfirmedTransactions = append(uncomfirmedTransactions, types.TransactionHashWithStatus{
-			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885",
-			TimeSent:           10,
-			FarmSubAccountName: "farm_sub_account_name_1",
-			RetryCount:         2,
-		})
-	}
+
+	uncomfirmedTransactions = append(uncomfirmedTransactions, types.TransactionHashWithStatus{
+		TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886",
+		TimeSent:           10,
+		FarmSubAccountName: "farm_sub_account_name_1",
+		RetryCount:         2,
+	})
+
+	uncomfirmedTransactions = append(uncomfirmedTransactions, types.TransactionHashWithStatus{
+		TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887",
+		TimeSent:           10,
+		FarmSubAccountName: "farm_sub_account_name_1",
+		RetryCount:         0,
+	})
 
 	storage.On("GetTxHashesByStatus", mock.Anything, types.TransactionPending).Return(uncomfirmedTransactions, nil)
-	storage.On("UpdateTransactionsStatus", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	storage.On("SaveRBFTransactionHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	storage.On("SaveTxHashWithStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("UpdateTransactionsStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("SaveRBFTransactionHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("SaveTxHashWithStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("SaveRBFTransactionInformation", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	return storage
 }
