@@ -8,7 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func saveDestionAddressesWithAmountHistory(ctx context.Context, tx *sqlx.Tx, address string, amount btcutil.Amount, txHash string, farmId string) error {
+func saveDestinationAddressesWithAmountHistory(ctx context.Context, tx *sqlx.Tx, address string, amount btcutil.Amount, txHash string, farmId string) error {
 	now := time.Now()
 	_, err := tx.ExecContext(ctx, insertDestinationAddressesWithAmountHistory, address, amount, txHash, farmId, now.Unix(), now.UTC(), now.UTC())
 	return err
@@ -31,15 +31,65 @@ func saveNFTOwnersForPeriodHistory(ctx context.Context, tx *sqlx.Tx, collectionD
 	return err
 }
 
+func (sdb *SqlDB) saveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farm_id string) error {
+	now := time.Now()
+	var err error
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash,
+			farm_id, now.UTC(), now.UTC())
+	} else {
+		_, err = sdb.db.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash,
+			farm_id, now.UTC(), now.UTC())
+	}
+
+	return err
+}
+
+func (sdb *SqlDB) saveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmSubAccountName string, retryCount int) error {
+	now := time.Now()
+	var err error
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
+	} else {
+		_, err = sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
+	}
+	return err
+}
+
+func (sdb *SqlDB) updateTxHashesWithStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
+	qry, args, err := sqlx.In(updateTxHashesWithStatusQuery, txStatus, txHashes)
+	if err != nil {
+		return err
+	}
+
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, qry, args...)
+	} else {
+		_, err = sdb.db.ExecContext(ctx, qry, args...)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 const (
-	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount 
+	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status
+	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+
+	insertRBFTransactionHistory = `INSERT INTO rbf_transaction_history
+	(old_tx_hash, new_tx_hash, farm_sub_account_name, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
+
+	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount
 		(address, amount, tx_hash, farm_id, payout_time, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
-	insertNFTInformationHistory = `INSERT INTO statistics_nft_payout_history (denom_id, token_id, payout_period_start, 
-		payout_period_end, reward, tx_hash, maintenance_fee, cudo_part_of_maintenance_fee, createdAt, updatedAt) 
+	insertNFTInformationHistory = `INSERT INTO statistics_nft_payout_history (denom_id, token_id, payout_period_start,
+		payout_period_end, reward, tx_hash, maintenance_fee, cudo_part_of_maintenance_fee, createdAt, updatedAt)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
-	insertNFTOnwersForPeriodHistory = `INSERT INTO statistics_nft_owners_payout_history (denom_id, token_id, time_owned_from, time_owned_to, 
-		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, createdAt, updatedAt) 
+	insertNFTOnwersForPeriodHistory = `INSERT INTO statistics_nft_owners_payout_history (denom_id, token_id, time_owned_from, time_owned_to,
+		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, createdAt, updatedAt)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+
+	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
 )

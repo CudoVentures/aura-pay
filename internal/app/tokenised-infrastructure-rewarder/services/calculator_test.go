@@ -79,7 +79,7 @@ func TestCalculatePercent(t *testing.T) {
 }
 
 func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnErrorIfInvalidPeriod(t *testing.T) {
-	s := NewServices(nil, nil, nil, nil)
+	s := NewPayService(nil, nil, nil, nil)
 	_, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "", "", 1000, 100, nil, "", "")
 	require.Equal(t, errors.New("invalid period, start (1000) end (100)"), err)
 }
@@ -93,7 +93,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnHundredPerc
 	currentNftOwner := "addr1"
 	periodStart := int64(1)
 	periodEnd := int64(100)
-	s := NewServices(nil, apiRequester, nil, nil)
+	s := NewPayService(nil, apiRequester, nil, nil)
 	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC")
 	require.NoError(t, err)
 	require.Equal(t, map[string]float64{payoutAddr: float64(100)}, percents)
@@ -140,7 +140,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 	currentNftOwner := "addr1"
 	periodStart := int64(1)
 	periodEnd := int64(100)
-	s := NewServices(nil, apiRequester, nil, nil)
+	s := NewPayService(nil, apiRequester, nil, nil)
 	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC")
 	require.NoError(t, err)
 
@@ -228,7 +228,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 	currentNftOwner := "addr1"
 	periodStart := int64(1)
 	periodEnd := int64(100)
-	s := NewServices(nil, apiRequester, nil, nil)
+	s := NewPayService(nil, apiRequester, nil, nil)
 	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC")
 	require.NoError(t, err)
 
@@ -343,7 +343,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 	currentNftOwner := "addr1"
 	periodStart := int64(1)
 	periodEnd := int64(100)
-	s := NewServices(nil, apiRequester, nil, nil)
+	s := NewPayService(nil, apiRequester, nil, nil)
 	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC")
 	require.NoError(t, err)
 
@@ -415,7 +415,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldFailIfGetPayoutAd
 	currentNftOwner := "addr1"
 	periodStart := int64(1)
 	periodEnd := int64(100)
-	s := NewServices(nil, apiRequester, nil, nil)
+	s := NewPayService(nil, apiRequester, nil, nil)
 	_, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC")
 	require.Equal(t, failErr, err)
 
@@ -483,5 +483,10 @@ func (mar *mockAPIRequester) GetPayoutAddressFromNode(ctx context.Context, cudos
 
 func (mar *mockAPIRequester) SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error) {
 	args := mar.Called(ctx, destinationAddressesWithAmount, walletName, walletBalance)
+	return args.String(0), args.Error(1)
+}
+
+func (mar *mockAPIRequester) BumpFee(ctx context.Context, txId string) (string, error) {
+	args := mar.Called(ctx, txId)
 	return args.String(0), args.Error(1)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/jmoiron/sqlx"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -28,8 +30,8 @@ func TestProcessPayment(t *testing.T) {
 		MinConfirmations: 6,
 	}
 
-	s := NewServices(config, setupMockApiRequester(t), &mockHelper{}, btcNetworkParams)
-	require.NoError(t, s.ProcessPayment(context.Background(), setupMockBtcClient(), setupMockStorage()))
+	s := NewPayService(config, setupMockApiRequester(t), &mockHelper{}, btcNetworkParams)
+	require.NoError(t, s.Execute(context.Background(), setupMockBtcClient(), setupMockStorage()))
 }
 
 func setupMockApiRequester(t *testing.T) *mockAPIRequester {
@@ -157,10 +159,11 @@ func setupMockBtcClient() *mockBtcClient {
 	btcClient.On("GetBalance", mock.Anything).Return(btcutil.Amount(500000000), nil).Once()
 
 	btcClient.On("LoadWallet", "farm_1").Return(&btcjson.LoadWalletResult{}, nil).Once()
-	btcClient.On("LoadWallet", "farm_2").Return(&btcjson.LoadWalletResult{}, errors.New("faield to load wallet")).Once()
+	btcClient.On("LoadWallet", "farm_2").Return(&btcjson.LoadWalletResult{}, errors.New("failed to load wallet")).Once()
 	btcClient.On("UnloadWallet", mock.Anything).Return(nil)
 	btcClient.On("WalletPassphrase", mock.Anything, mock.Anything).Return(nil)
 	btcClient.On("WalletLock").Return(nil)
+	btcClient.On("GetRawTransactionVerbose").Return(nil)
 
 	return btcClient
 }
@@ -188,6 +191,11 @@ func (mbc *mockBtcClient) WalletPassphrase(passphrase string, timeoutSecs int64)
 func (mbc *mockBtcClient) WalletLock() error {
 	args := mbc.Called()
 	return args.Error(0)
+}
+
+func (mbc *mockBtcClient) GetRawTransactionVerbose(txHash *chainhash.Hash) (*btcjson.TxRawResult, error) {
+	args := mbc.Called(txHash)
+	return args.Get(0).(*btcjson.TxRawResult), args.Error(1)
 }
 
 type mockBtcClient struct {
@@ -232,7 +240,7 @@ func setupMockStorage() *mockStorage {
 				},
 			},
 		},
-		"farm_1_denom_1_nft_owner_2_tx_hash", "1").Return(nil)
+		"farm_1_denom_1_nft_owner_2_tx_hash", "1", "farm_1").Return(nil)
 
 	return storage
 }
@@ -242,8 +250,39 @@ func (ms *mockStorage) GetPayoutTimesForNFT(ctx context.Context, collectionDenom
 	return args.Get(0).([]types.NFTStatistics), args.Error(1)
 }
 
-func (ms *mockStorage) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string) error {
-	args := ms.Called(ctx, destinationAddressesWithAmount, statistics, txHash, farmId)
+func (ms *mockStorage) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) error {
+	args := ms.Called(ctx, destinationAddressesWithAmount, statistics, txHash, farmId, farmSubAccountName)
+	return args.Error(0)
+}
+
+func (ms *mockStorage) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashesToMarkCompleted []string, status string) error {
+	args := ms.Called(ctx, tx, txHashesToMarkCompleted, status)
+	return args.Error(0)
+}
+
+func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, status string, farmSubAccountName string, retryCount int) error {
+	args := ms.Called(ctx, tx, txHash, status, farmSubAccountName, retryCount)
+	return args.Error(0)
+}
+
+func (ms *mockStorage) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farmSubAccountName string) error {
+	args := ms.Called(ctx, tx, oldTxHash, newTxHash, farmSubAccountName)
+	return args.Error(0)
+}
+
+func (ms *mockStorage) GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error) {
+	args := ms.Called(ctx, status)
+	return args.Get(0).([]types.TransactionHashWithStatus), args.Error(1)
+}
+
+func (ms *mockStorage) SaveRBFTransactionInformation(ctx context.Context,
+	oldTxHash string,
+	oldTxStatus string,
+	newRBFTxHash string,
+	newRBFTXStatus string,
+	farmSubAccountName string,
+	retryCount int) error {
+	args := ms.Called(ctx, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount)
 	return args.Error(0)
 }
 
