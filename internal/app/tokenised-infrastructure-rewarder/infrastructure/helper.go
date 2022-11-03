@@ -25,3 +25,7 @@ func (h *Helper) Unix() int64 {
 func (h *Helper) Date() (year int, month time.Month, day int) {
 	return time.Now().Date()
 }
+
+func (h *Helper) Sleep(interval int) {
+	time.Sleep(time.Duration(interval) * time.Second) // 10, 20, 30 seconds
+}
