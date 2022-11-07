@@ -76,6 +76,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 	if err != nil {
 		return err
 	}
+	log.Debug().Msgf("Farm Wallet: {%s} loaded", tx.FarmSubAccountName)
 
 	defer func() {
 		if err := btcClient.WalletLock(); err != nil {

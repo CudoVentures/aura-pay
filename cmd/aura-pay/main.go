@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
+	"sync"
 )
 
 func main() {
@@ -24,9 +25,8 @@ func runService(ctx context.Context) {
 	config := infrastructure.NewConfig()
 	provider := infrastructure.NewProvider(config)
 	requestClient := requesters.NewRequester(config)
-
 	var btcNetworkParams types.BtcNetworkParams
-
+	mutex := sync.Mutex{}
 	if config.IsTesting {
 		btcNetworkParams.ChainParams = &chaincfg.SigNetParams
 		btcNetworkParams.MinConfirmations = 1
@@ -37,9 +37,9 @@ func runService(ctx context.Context) {
 
 	retryService := services.NewRetryService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
-	go worker.Start(ctx, config, retryService, provider)
+	go worker.Start(ctx, config, retryService, provider, &mutex, config.WorkerProcessIntervalPayment)
 
 	payService := services.NewPayService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
-	worker.Start(ctx, config, payService, provider)
+	worker.Start(ctx, config, payService, provider, &mutex, config.WorkerProcessIntervalRetry)
 }

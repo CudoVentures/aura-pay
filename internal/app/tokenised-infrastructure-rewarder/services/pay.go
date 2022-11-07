@@ -45,7 +45,8 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, storage Storage, farm types.Farm) error {
 	log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
 
-	if _, err := btcClient.LoadWallet(farm.SubAccountName); err != nil {
+	_, err := btcClient.LoadWallet(farm.SubAccountName)
+	if err != nil {
 		return err
 	}
 	log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.SubAccountName)
