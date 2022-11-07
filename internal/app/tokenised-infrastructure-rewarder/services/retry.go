@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/rs/zerolog/log"
 )
@@ -75,16 +74,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 	}
 	_, err = btcClient.LoadWallet(tx.FarmSubAccountName)
 	if err != nil {
-		log.Debug().Msgf("Farm Wallet was not loaded due to error: walletName {%s}, error: {%s}", tx.FarmSubAccountName, err)
-		serr, ok := err.(*btcjson.RPCError)
-		if ok {
-			walletSuccessfullyReloaded, newErr := retryWalletLoad(serr, btcClient, tx.FarmSubAccountName, s.helper)
-			if !walletSuccessfullyReloaded {
-				return newErr
-			}
-		} else {
-			return err
-		}
+		return err
 	}
 	log.Debug().Msgf("Farm Wallet: {%s} loaded", tx.FarmSubAccountName)
 

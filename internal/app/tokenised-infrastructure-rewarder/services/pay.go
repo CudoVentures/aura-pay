@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
@@ -48,16 +47,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	_, err := btcClient.LoadWallet(farm.SubAccountName)
 	if err != nil {
-		log.Debug().Msgf("Farm Wallet was not loaded due to error: walletName {%s}, error: {%s}", farm.SubAccountName, err)
-		serr, ok := err.(*btcjson.RPCError)
-		if ok {
-			walletSuccessfullyReloaded, newErr := retryWalletLoad(serr, btcClient, farm.SubAccountName, s.helper)
-			if !walletSuccessfullyReloaded {
-				return newErr
-			}
-		} else {
-			return err
-		}
+		return err
 	}
 	log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.SubAccountName)
 
@@ -239,28 +229,6 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	return nil
-}
-
-func retryWalletLoad(err *btcjson.RPCError, btcClient BtcClient, subAccountName string, h Helper) (bool, error) {
-	walletSuccessfullyLoaded := false
-	if strings.Contains(err.Message, "SQLiteDatabase: Unable to obtain an exclusive lock on the database") { // race condition - someone else has loaded the wallet
-		interval := 10
-		var newErr error
-		for i := 0; i < 3; i++ {
-			log.Debug().Msgf("Attempting another load in {%d} seconds", interval)
-			h.Sleep(interval)
-			_, newErr = btcClient.LoadWallet(subAccountName)
-			if newErr == nil {
-				walletSuccessfullyLoaded = true
-				break
-			}
-			interval += interval
-		}
-		return walletSuccessfullyLoaded, newErr
-	} else {
-		return walletSuccessfullyLoaded, err
-	}
-
 }
 
 // Converts Satoshi to BTC so it can accepted by the RPC interface
@@ -475,5 +443,4 @@ type Helper interface {
 	DaysIn(m time.Month, year int) int
 	Unix() int64
 	Date() (year int, month time.Month, day int)
-	Sleep(interval int)
 }

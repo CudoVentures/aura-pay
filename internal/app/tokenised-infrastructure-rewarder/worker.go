@@ -2,6 +2,7 @@ package tokenised_infrastructure_rewarder
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -14,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func Start(ctx context.Context, config *infrastructure.Config, s service, provider provider) {
+func Start(ctx context.Context, config *infrastructure.Config, s service, provider provider, mutex *sync.Mutex) {
 	log.Info().Msg("Application started")
 
 	retry := func(err error) {
@@ -55,7 +56,9 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 
 			select {
 			case <-ticker.C:
+				mutex.Lock()
 				processingError = s.Execute(ctx, rpcClient, sql_db.NewSqlDB(db))
+				mutex.Unlock()
 			case <-ctx.Done():
 				return
 			}
