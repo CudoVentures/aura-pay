@@ -29,7 +29,8 @@ type Config struct {
 	CUDOMaintenanceFeePercent         float64
 	CUDOMaintenanceFeePayoutAddress   string
 	AuraPoolTestFarmWalletPassword    string
-	WorkerProcessInterval             time.Duration
+	WorkerProcessIntervalPayment      time.Duration
+	WorkerProcessIntervalRetry        time.Duration
 	WorkerFailureRetryDelay           time.Duration
 	RBFTransactionRetryDelayInSeconds int
 	RBFTransactionRetryMaxCount       int
@@ -59,7 +60,8 @@ func NewConfig() *Config {
 		CUDOMaintenanceFeePercent:         getEnvAsFloat64("CUDO_MAINTENANCE_FEE_PERCENT", 10.0),
 		CUDOMaintenanceFeePayoutAddress:   getEnv("CUDO_MAINTENANCE_FEE_PAYOUT_ADDRESS", ""),
 		AuraPoolTestFarmWalletPassword:    getEnv("AURA_POOL_TEST_FARM_WALLET_PASSWORD", ""),
-		WorkerProcessInterval:             getEnvAsDuration("WORKER_PROCESS_INTERVAL", time.Second*5),
+		WorkerProcessIntervalPayment:      getEnvAsDuration("WORKER_PROCESS_INTERVAL_PAYMENT", time.Second*5),
+		WorkerProcessIntervalRetry:        getEnvAsDuration("WORKER_PROCESS_INTERVAL_RETRY", time.Second*13),
 		WorkerFailureRetryDelay:           getEnvAsDuration("WORKER_FAILURE_RETRY_DELAY", time.Second*5),
 		RBFTransactionRetryDelayInSeconds: getEnvAsInt("RBF_TRANSACTION_RETRY_DELAY_IN_SECONDS", 18000),
 		RBFTransactionRetryMaxCount:       getEnvAsInt("RBF_TRANSACTION_RETRY_MAX_COUNT", 2),

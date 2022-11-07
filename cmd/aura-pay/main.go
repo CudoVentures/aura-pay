@@ -37,9 +37,9 @@ func runService(ctx context.Context) {
 
 	retryService := services.NewRetryService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
-	go worker.Start(ctx, config, retryService, provider, &mutex)
+	go worker.Start(ctx, config, retryService, provider, &mutex, config.WorkerProcessIntervalPayment)
 
 	payService := services.NewPayService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
-	worker.Start(ctx, config, payService, provider, &mutex)
+	worker.Start(ctx, config, payService, provider, &mutex, config.WorkerProcessIntervalRetry)
 }

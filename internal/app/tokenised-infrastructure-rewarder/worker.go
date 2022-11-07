@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func Start(ctx context.Context, config *infrastructure.Config, s service, provider provider, mutex *sync.Mutex) {
+func Start(ctx context.Context, config *infrastructure.Config, s service, provider provider, mutex *sync.Mutex, interval time.Duration) {
 	log.Info().Msg("Application started")
 
 	retry := func(err error) {
@@ -51,7 +51,7 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 		defer db.Close()
 
 		for processingError == nil {
-			ticker := time.NewTicker(config.WorkerProcessInterval)
+			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 
 			select {

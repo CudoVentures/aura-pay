@@ -3,6 +3,7 @@ package tokenised_infrastructure_rewarder
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestWorkerShouldReturnIfContextIsCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	Start(ctx, &infrastructure.Config{}, nil, nil)
+	Start(ctx, &infrastructure.Config{}, nil, nil, &sync.Mutex{}, time.Second*1)
 
 	require.Error(t, ctx.Err())
 }
@@ -52,8 +53,7 @@ func TestWorkerShouldReturnIfContextIsCanceledDuringProcessPayment(t *testing.T)
 
 	Start(ctx, &infrastructure.Config{
 		WorkerFailureRetryDelay: 1 * time.Second,
-		WorkerProcessInterval:   1 * time.Second,
-	}, mps, mp)
+	}, mps, mp, &sync.Mutex{}, 1*time.Second)
 
 	require.Error(t, ctx.Err())
 }
@@ -75,8 +75,7 @@ func TestWorkerShouldRetryIfRpcConnectionFails(t *testing.T) {
 
 	go Start(ctx, &infrastructure.Config{
 		WorkerFailureRetryDelay: 200 * time.Millisecond,
-		WorkerProcessInterval:   200 * time.Millisecond,
-	}, nil, mp)
+	}, nil, mp, &sync.Mutex{}, 200*time.Millisecond)
 
 	time.Sleep(1 * time.Second)
 
@@ -107,8 +106,7 @@ func TestWorkerShouldRetryIfDbConnectionFails(t *testing.T) {
 
 	go Start(ctx, &infrastructure.Config{
 		WorkerFailureRetryDelay: 200 * time.Millisecond,
-		WorkerProcessInterval:   200 * time.Millisecond,
-	}, nil, mp)
+	}, nil, mp, &sync.Mutex{}, 200*time.Millisecond)
 
 	time.Sleep(1 * time.Second)
 
