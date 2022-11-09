@@ -192,14 +192,12 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
 	}
 
-	// utilised in case we had a maintenance fee greater then the nft reward.
-	// keys with 0 value were added in order to have statistics even for 0 reward
-	// and in order to avoid sending them as 0 - just remove them but still keep statistic
-	for key := range destinationAddressesWithAmount {
-		if destinationAddressesWithAmount[key] == 0 {
-			delete(destinationAddressesWithAmount, key)
-		}
+	removeAddressesWithZeroReward(destinationAddressesWithAmount)
+	err = s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
+	if err != nil {
+		return err
 	}
+
 	log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
 
 	convertedDestinationAddressesWithAmount := convertAmountToBTC(destinationAddressesWithAmount)
@@ -229,6 +227,52 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	return nil
+}
+
+func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) error {
+	thresholdInSatoshis, err := btcutil.NewAmount(s.config.GlobalPayoutThresholdInBTC)
+	if err != nil {
+		return err
+	}
+
+	for key, _ := range destinationAddressesWithAmounts {
+		amountAccumulated, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
+		if err != nil {
+			return err
+		}
+		amountAccumulatedSatoshis := btcutil.Amount(amountAccumulated)
+		if destinationAddressesWithAmounts[key]+amountAccumulatedSatoshis >= thresholdInSatoshis {
+			// reset threshold and keep the address for sending
+			err = storage.UpdateCurrentAcummulatedAmountForAddress(ctx, nil, key, farmId, 0)
+			if err != nil {
+				return err
+			}
+			destinationAddressesWithAmounts[key] += amountAccumulatedSatoshis
+		} else {
+			// increment amountAccumulated and remove the address
+			// 1. how to not repeat this block of code each time the application runs?
+			// 2. what are we doing with change transactions - they are getting distributed once more?
+			err = storage.UpdateCurrentAcummulatedAmountForAddress(ctx, nil, key, farmId, int64(destinationAddressesWithAmounts[key])+amountAccumulated)
+			if err != nil {
+				return err
+			}
+			delete(destinationAddressesWithAmounts, key)
+		}
+	}
+
+	return nil
+}
+
+// removeAddressesWithZeroReward utilised in case we had a maintenance fee greater than the nft reward.
+// keys with 0 value were added in order to have statistics even for 0 reward
+// and in order to avoid sending them as 0 - just remove them but still keep statistic
+func removeAddressesWithZeroReward(destinationAddressesWithAmount map[string]btcutil.Amount) {
+	for key := range destinationAddressesWithAmount {
+		if destinationAddressesWithAmount[key] == 0 {
+			delete(destinationAddressesWithAmount, key)
+		}
+
+	}
 }
 
 // Converts Satoshi to BTC so it can accepted by the RPC interface
@@ -354,7 +398,7 @@ func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.
 
 func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount, statistics *types.NFTStatistics) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
-		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100) // TODO: Change this to normal float64 percent as MULF64 is rounding
+		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)
 		destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
 		addPaymentAmountToStatistics(payoutAmount, nftPayoutAddress, statistics)
 	}
@@ -437,6 +481,9 @@ type Storage interface {
 		newRBFTXStatus string,
 		farmSubAccountName string,
 		retryCount int) error
+
+	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error)
+	UpdateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error
 }
 
 type Helper interface {

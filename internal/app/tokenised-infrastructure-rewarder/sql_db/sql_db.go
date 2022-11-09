@@ -118,6 +118,14 @@ func (sdb *SqlDB) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, ol
 		return fmt.Errorf("failed to commit transaction: %s", retErr)
 	}
 	return nil
+
+}
+
+func (sdb *SqlDB) UpdateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error {
+	if retErr := sdb.updateCurrentAcummulatedAmountForAddress(ctx, tx, address, farmId, amount); retErr != nil {
+		return fmt.Errorf("failed to commit transaction: %s", retErr)
+	}
+	return nil
 }
 
 type SqlDB struct {

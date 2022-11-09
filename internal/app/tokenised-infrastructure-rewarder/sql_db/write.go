@@ -73,6 +73,16 @@ func (sdb *SqlDB) updateTxHashesWithStatus(ctx context.Context, tx *sqlx.Tx, txH
 	return nil
 }
 
+func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) interface{} {
+	var err error
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
+	} else {
+		_, err = sdb.db.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
+	}
+	return err
+}
+
 const (
 	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status
 	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
@@ -92,4 +102,6 @@ const (
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
 	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
+
+	updateThresholdAmounts = `INSERT threshold_amounts SET amount=$1 where address=$2 and farm_id=$3`
 )

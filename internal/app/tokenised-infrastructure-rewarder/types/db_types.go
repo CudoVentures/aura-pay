@@ -46,6 +46,14 @@ type RBFTransactionHistory struct {
 	UpdatedAt int64  `db:"updatedAt"`
 }
 
+type AddressThresholdAmountByFarm struct {
+	BTCAddress string `db:"btc_address"`
+	FarmId     int64  `db:"farm_id"`
+	Amount     int64  `db:"amount"`
+	CreatedAt  int64  `db:"createdAt"`
+	UpdatedAt  int64  `db:"updatedAt"`
+}
+
 const (
 	TransactionPending   = "Pending"
 	TransactionCompleted = "Completed"
