@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/btcsuite/btcd/btcutil"
-
 	"github.com/rs/zerolog/log"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
@@ -356,7 +354,7 @@ func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []s
 
 // Issues a curl request to the btc node to send funds to many addresses:
 // curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "sendmany", "params": ["", {"bc1q09vm5lfy0j5reeulh4x5752q25uqqvz34hufdl":0.01,"bc1q02ad21edsxd23d32dfgqqsz4vv4nmtfzuklhy3":0.02}, 6, "testing"]}' -H 'content-type: text/plain;' http://127.0.0.1:8332/
-func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error) {
+func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64) (string, error) {
 
 	client := &http.Client{
 		Timeout: 60 * time.Second,

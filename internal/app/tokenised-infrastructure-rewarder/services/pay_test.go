@@ -20,9 +20,10 @@ import (
 
 func TestProcessPayment(t *testing.T) {
 	config := &infrastructure.Config{
-		Network:                         "BTC",
-		CUDOMaintenanceFeePercent:       50,
-		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_addr",
+		Network:                   "BTC",
+		CUDOMaintenanceFeePercent: 50,
+		CUDOFeeOnAllBTC:           2,
+		CUDOFeePayoutAddress:      "cudo_maintenance_fee_payout_addr",
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -143,12 +144,12 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 	// TODO: Verify that values are correct
 
 	apiRequester.On("SendMany", mock.Anything, map[string]float64{
-		"cudo_maintenance_fee_payout_addr": 5.928e-05,
+		"cudo_maintenance_fee_payout_addr": 0.10005928,
 		"maintenance_fee_payout_address_1": 5.928e-05,
-		"leftover_reward_payout_address_1": 4,
-		"nft_minter_payout_addr":           0.2631688,
-		"nft_owner_2_payout_addr":          0.73671264,
-	}, "farm_1", btcutil.Amount(500000000)).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
+		"leftover_reward_payout_address_1": 3.92,
+		"nft_minter_payout_addr":           0.2579048,
+		"nft_owner_2_payout_addr":          0.72197664,
+	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	return apiRequester
 }
@@ -207,11 +208,11 @@ func setupMockStorage() *mockStorage {
 
 	storage.On("GetPayoutTimesForNFT", mock.Anything, mock.Anything, mock.Anything).Return([]types.NFTStatistics{}, nil)
 	storage.On("SaveStatistics", mock.Anything, map[string]btcutil.Amount{
-		"cudo_maintenance_fee_payout_addr": 5928,
+		"cudo_maintenance_fee_payout_addr": 10005928,
 		"maintenance_fee_payout_address_1": 5928,
-		"leftover_reward_payout_address_1": 400000000,
-		"nft_minter_payout_addr":           26316880,
-		"nft_owner_2_payout_addr":          73671264,
+		"leftover_reward_payout_address_1": 392000000,
+		"nft_minter_payout_addr":           25790480,
+		"nft_owner_2_payout_addr":          72197664,
 	},
 		[]types.NFTStatistics{
 			{
@@ -219,7 +220,7 @@ func setupMockStorage() *mockStorage {
 				DenomId:                  "farm_1_denom_1",
 				PayoutPeriodStart:        1664999478,
 				PayoutPeriodEnd:          1666641078,
-				Reward:                   99988144,
+				Reward:                   97988144,
 				MaintenanceFee:           5928,
 				CUDOPartOfMaintenanceFee: 5928,
 				NFTOwnersForPeriod: []types.NFTOwnerInformation{
