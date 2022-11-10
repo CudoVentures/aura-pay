@@ -27,6 +27,7 @@ func (p *Provider) InitBtcRpcClient() (*rpcclient.Client, error) {
 	}
 
 	client, err := rpcclient.New(connCfg, nil)
+	client.ListUnspent()
 	if err != nil {
 		return nil, err
 	}

@@ -46,6 +46,13 @@ type RBFTransactionHistory struct {
 	UpdatedAt int64  `db:"updatedAt"`
 }
 
+type UTXOTransaction struct {
+	TxHash    string `db:"tx_hash"`
+	Status    string `db:"status"`
+	CreatedAt int64  `db:"createdAt"`
+	UpdatedAt int64  `db:"updatedAt"`
+}
+
 type AddressThresholdAmountByFarm struct {
 	BTCAddress string `db:"btc_address"`
 	FarmId     int64  `db:"farm_id"`

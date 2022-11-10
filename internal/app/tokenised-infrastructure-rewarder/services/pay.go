@@ -60,7 +60,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 	}()
 
-	totalRewardForFarm, err := btcClient.GetBalance("*") // returns the total balance in satoshis
+	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.GetTotalRewardForFarm(btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool, farm.LeftoverRewardPayoutAddress, farm.MaintenanceFeePayoutdAddress})
 	if err != nil {
 		return err
 	}
@@ -68,8 +68,8 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Info().Msgf("reward for farm {{%s}} is 0....skipping this farm", farm.SubAccountName)
 		return nil
 	}
-
 	log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
+
 	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.SubAccountName)
 	if err != nil {
 		return err
@@ -222,11 +222,69 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 
+	err = storage.MarkUTXOsAsProcessed(transactionIdsToMarkProcessed)
+
 	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
 	}
 
 	return nil
+}
+
+func (s *PayService) GetTotalRewardForFarm(btcClient BtcClient, storage Storage, farmAddresses []string) (btcutil.Amount, []string, error) {
+	var totalAmountBTC float64
+	var transactionIdsToMarkAsProcessed []string // to be marked as processed at the end of the loop
+	unspentTransactions, err := btcClient.ListUnspent()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	validUnspentTransactions, err := filterUnspentTransactions(unspentTransactions, storage, farmAddresses)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	for _, elem := range validUnspentTransactions {
+		totalAmountBTC += elem.Amount
+		transactionIdsToMarkAsProcessed = append(transactionIdsToMarkAsProcessed, elem.TxID)
+	}
+	totalAmountSatoshish, err := btcutil.NewAmount(totalAmountBTC)
+	if err != nil {
+		return 0, nil, err
+	}
+	return totalAmountSatoshish, transactionIdsToMarkAsProcessed, nil
+}
+
+func filterUnspentTransactions(transactions []btcjson.ListUnspentResult, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
+	var validTransactions []btcjson.ListUnspentResult
+	for _, unspentTx := range transactions {
+		isTransactionProcessed, err := isTransactionProcessed(unspentTx, storage)
+		if err != nil {
+			return nil, err
+		}
+		if !isTransactionProcessed || !isChangeTransaction(unspentTx, farmAddresses) {
+			validTransactions = append(validTransactions, unspentTx)
+		}
+	}
+
+	return validTransactions, nil
+}
+
+func isChangeTransaction(unspentTx btcjson.ListUnspentResult, farmAddresses []string) bool {
+	for _, address := range farmAddresses {
+		if address == unspentTx.Address {
+			return false
+		}
+	}
+	return true
+}
+
+func isTransactionProcessed(unspentTx btcjson.ListUnspentResult, storage Storage) (bool, error) {
+	transaction, err := storage.GetUTXOTransaction(unspentTx.TxID)
+	if err != nil {
+		return false, err
+	}
+	return transaction.Status == "Processed", nil
 }
 
 func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) error {
@@ -458,6 +516,8 @@ type BtcClient interface {
 	WalletLock() error
 
 	GetRawTransactionVerbose(txHash *chainhash.Hash) (*btcjson.TxRawResult, error)
+
+	ListUnspent() ([]btcjson.ListUnspentResult, error)
 }
 
 type Storage interface {
@@ -483,7 +543,12 @@ type Storage interface {
 		retryCount int) error
 
 	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error)
+
 	UpdateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error
+
+	GetUTXOTransaction(txId string) (types.UTXOTransaction, error)
+
+	MarkUTXOsAsProcessed(txIds []string) error
 }
 
 type Helper interface {
