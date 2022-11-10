@@ -48,7 +48,7 @@ type RBFTransactionHistory struct {
 
 type UTXOTransaction struct {
 	TxHash    string `db:"tx_hash"`
-	Status    string `db:"status"`
+	Processed bool   `db:"processed"`
 	CreatedAt int64  `db:"createdAt"`
 	UpdatedAt int64  `db:"updatedAt"`
 }

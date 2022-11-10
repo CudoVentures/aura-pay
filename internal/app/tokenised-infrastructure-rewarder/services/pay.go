@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"strconv"
@@ -60,7 +61,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 	}()
 
-	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.GetTotalRewardForFarm(btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool, farm.LeftoverRewardPayoutAddress, farm.MaintenanceFeePayoutdAddress})
+	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.GetTotalRewardForFarm(ctx, btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool, farm.LeftoverRewardPayoutAddress, farm.MaintenanceFeePayoutdAddress})
 	if err != nil {
 		return err
 	}
@@ -222,7 +223,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 
-	err = storage.MarkUTXOsAsProcessed(transactionIdsToMarkProcessed)
+	err = storage.MarkUTXOsAsProcessed(ctx, transactionIdsToMarkProcessed)
 
 	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
@@ -231,7 +232,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	return nil
 }
 
-func (s *PayService) GetTotalRewardForFarm(btcClient BtcClient, storage Storage, farmAddresses []string) (btcutil.Amount, []string, error) {
+func (s *PayService) GetTotalRewardForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) (btcutil.Amount, []string, error) {
 	var totalAmountBTC float64
 	var transactionIdsToMarkAsProcessed []string // to be marked as processed at the end of the loop
 	unspentTransactions, err := btcClient.ListUnspent()
@@ -239,7 +240,7 @@ func (s *PayService) GetTotalRewardForFarm(btcClient BtcClient, storage Storage,
 		return 0, nil, err
 	}
 
-	validUnspentTransactions, err := filterUnspentTransactions(unspentTransactions, storage, farmAddresses)
+	validUnspentTransactions, err := filterUnspentTransactions(ctx, unspentTransactions, storage, farmAddresses)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -255,10 +256,10 @@ func (s *PayService) GetTotalRewardForFarm(btcClient BtcClient, storage Storage,
 	return totalAmountSatoshish, transactionIdsToMarkAsProcessed, nil
 }
 
-func filterUnspentTransactions(transactions []btcjson.ListUnspentResult, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
+func filterUnspentTransactions(ctx context.Context, transactions []btcjson.ListUnspentResult, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
 	var validTransactions []btcjson.ListUnspentResult
 	for _, unspentTx := range transactions {
-		isTransactionProcessed, err := isTransactionProcessed(unspentTx, storage)
+		isTransactionProcessed, err := isTransactionProcessed(ctx, unspentTx, storage)
 		if err != nil {
 			return nil, err
 		}
@@ -279,12 +280,16 @@ func isChangeTransaction(unspentTx btcjson.ListUnspentResult, farmAddresses []st
 	return true
 }
 
-func isTransactionProcessed(unspentTx btcjson.ListUnspentResult, storage Storage) (bool, error) {
-	transaction, err := storage.GetUTXOTransaction(unspentTx.TxID)
-	if err != nil {
+func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentResult, storage Storage) (bool, error) {
+	transaction, err := storage.GetUTXOTransaction(ctx, unspentTx.TxID)
+	switch err {
+	case nil:
+		return transaction.Processed == true, nil
+	case sql.ErrNoRows:
+		return false, nil // not found thus not processed
+	default:
 		return false, err
 	}
-	return transaction.Status == "Processed", nil
 }
 
 func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) error {
@@ -546,9 +551,9 @@ type Storage interface {
 
 	UpdateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error
 
-	GetUTXOTransaction(txId string) (types.UTXOTransaction, error)
+	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
 
-	MarkUTXOsAsProcessed(txIds []string) error
+	MarkUTXOsAsProcessed(ctx context.Context, txIds []string) error
 }
 
 type Helper interface {
