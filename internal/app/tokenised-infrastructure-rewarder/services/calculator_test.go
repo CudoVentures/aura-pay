@@ -481,8 +481,8 @@ func (mar *mockAPIRequester) GetPayoutAddressFromNode(ctx context.Context, cudos
 	return args.String(0), args.Error(1)
 }
 
-func (mar *mockAPIRequester) SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error) {
-	args := mar.Called(ctx, destinationAddressesWithAmount, walletName, walletBalance)
+func (mar *mockAPIRequester) SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64) (string, error) {
+	args := mar.Called(ctx, destinationAddressesWithAmount)
 	return args.String(0), args.Error(1)
 }
 
