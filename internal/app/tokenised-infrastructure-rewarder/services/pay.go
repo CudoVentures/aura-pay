@@ -61,7 +61,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 	}()
 
-	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.GetTotalRewardForFarm(ctx, btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool, farm.LeftoverRewardPayoutAddress, farm.MaintenanceFeePayoutdAddress})
+	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.GetTotalRewardForFarm(ctx, btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool})
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 
-	err = storage.MarkUTXOsAsProcessed(ctx, transactionIdsToMarkProcessed)
+	err = storage.MarkUTXOsAsProcessed(ctx, nil, transactionIdsToMarkProcessed)
 
 	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
@@ -298,7 +298,7 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 		return err
 	}
 
-	for key, _ := range destinationAddressesWithAmounts {
+	for key := range destinationAddressesWithAmounts {
 		amountAccumulated, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
 		if err != nil {
 			return err
@@ -553,7 +553,7 @@ type Storage interface {
 
 	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
 
-	MarkUTXOsAsProcessed(ctx context.Context, txIds []string) error
+	MarkUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, txIds []string) error
 }
 
 type Helper interface {

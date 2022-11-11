@@ -83,7 +83,35 @@ func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, 
 	return err
 }
 
+func (sdb *SqlDB) markUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, tx_hashes []string) interface{} {
+	var UTXOMaps []map[string]interface{}
+	for _, hash := range tx_hashes {
+		m := map[string]interface{}{
+			"tx_hash":   hash,
+			"processed": true,
+			"createdAt": time.Now().UTC(),
+			"updatedAt": nil,
+		}
+		UTXOMaps = append(UTXOMaps, m)
+	}
+
+	var err error
+	if tx != nil {
+		_, err = tx.NamedExec(insertUTXOWithStatus, UTXOMaps)
+	} else {
+		_, err = tx.NamedExecContext(ctx, insertUTXOWithStatus, UTXOMaps)
+	}
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 const (
+	insertUTXOWithStatus = `INSERT INTO utxo_transactions (tx_hash, processed, createdAt, updatedAt)
+	   VALUES (:tx_hash, :processed, :createdAt, :updatedAt)`
+
 	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status
 	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
@@ -103,5 +131,5 @@ const (
 
 	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
 
-	updateThresholdAmounts = `INSERT threshold_amounts SET amount=$1 where address=$2 and farm_id=$3`
+	updateThresholdAmounts = `UPDATE threshold_amounts SET amount=$1 where address=$2 and farm_id=$3`
 )

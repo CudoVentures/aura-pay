@@ -29,9 +29,9 @@ func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, add
 	return result.Amount, nil
 }
 
-func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error) {
+func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txHash string) (types.UTXOTransaction, error) {
 	result := types.UTXOTransaction{}
-	if err := sdb.db.SelectContext(ctx, &result, selectUTXOById, txId); err != nil {
+	if err := sdb.db.SelectContext(ctx, &result, selectUTXOById, txHash); err != nil {
 		return result, err
 	}
 	return result, nil
@@ -40,4 +40,4 @@ func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txId string) (types.UT
 const selectNFTPayoutHistory = `SELECT * FROM statistics_nft_payout_history WHERE denom_id=$1 and token_id=$2 ORDER BY payout_period_end ASC`
 const selectTxHashStatus = `SELECT * FROM statistics_tx_hash_status WHERE status=$1 ORDER BY time_sent ASC`
 const selectThresholdByAddress = `SELECT * FROM threshold_amounts WHERE address=$1 AND farm_id=$2`
-const selectUTXOById = `SELECT * FROM utxo_transactions WHERE transaction_id=$1`
+const selectUTXOById = `SELECT * FROM utxo_transactions WHERE tx_hash=$1`

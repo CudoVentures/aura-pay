@@ -131,3 +131,10 @@ func (sdb *SqlDB) UpdateCurrentAcummulatedAmountForAddress(ctx context.Context, 
 type SqlDB struct {
 	db *sqlx.DB
 }
+
+func (sdb *SqlDB) MarkUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, txIds []string) error {
+	if retErr := sdb.markUTXOsAsProcessed(ctx, tx, txIds); retErr != nil {
+		return fmt.Errorf("failed to commit transaction: %s", retErr)
+	}
+	return nil
+}
