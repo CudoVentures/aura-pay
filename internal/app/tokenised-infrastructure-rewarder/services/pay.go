@@ -194,7 +194,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	removeAddressesWithZeroReward(destinationAddressesWithAmount)
-	err = s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
+	addressesWithThresholdToUpdate, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
 	if err != nil {
 		return err
 	}
@@ -217,13 +217,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} locked", farm.SubAccountName)
 	}()
 
+	err = storage.UpdateThresholdStatuses(ctx, transactionIdsToMarkProcessed, addressesWithThresholdToUpdate, farm.Id)
+	if err != nil {
+		return err
+	}
 	txHash, err := s.apiRequester.SendMany(ctx, convertedDestinationAddressesWithAmount, farm.SubAccountName, totalRewardForFarm)
 	if err != nil {
 		return err
 	}
 	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
-
-	err = storage.MarkUTXOsAsProcessed(ctx, nil, transactionIdsToMarkProcessed)
 
 	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
@@ -263,7 +265,7 @@ func filterUnspentTransactions(ctx context.Context, transactions []btcjson.ListU
 		if err != nil {
 			return nil, err
 		}
-		if !isTransactionProcessed || !isChangeTransaction(unspentTx, farmAddresses) {
+		if !isTransactionProcessed && !isChangeTransaction(unspentTx, farmAddresses) {
 			validTransactions = append(validTransactions, unspentTx)
 		}
 	}
@@ -292,38 +294,30 @@ func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentRe
 	}
 }
 
-func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) error {
+func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) (map[string]int64, error) {
 	thresholdInSatoshis, err := btcutil.NewAmount(s.config.GlobalPayoutThresholdInBTC)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	addressesWithThresholdToUpdate := make(map[string]int64)
 
 	for key := range destinationAddressesWithAmounts {
 		amountAccumulated, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		amountAccumulatedSatoshis := btcutil.Amount(amountAccumulated)
 		if destinationAddressesWithAmounts[key]+amountAccumulatedSatoshis >= thresholdInSatoshis {
-			// reset threshold and keep the address for sending
-			err = storage.UpdateCurrentAcummulatedAmountForAddress(ctx, nil, key, farmId, 0)
-			if err != nil {
-				return err
-			}
+			addressesWithThresholdToUpdate[key] = 0 // threshold reached, reset it to 0 and update it later in DB
 			destinationAddressesWithAmounts[key] += amountAccumulatedSatoshis
 		} else {
-			// increment amountAccumulated and remove the address
-			// 1. how to not repeat this block of code each time the application runs?
-			// 2. what are we doing with change transactions - they are getting distributed once more?
-			err = storage.UpdateCurrentAcummulatedAmountForAddress(ctx, nil, key, farmId, int64(destinationAddressesWithAmounts[key])+amountAccumulated)
-			if err != nil {
-				return err
-			}
+			addressesWithThresholdToUpdate[key] += int64(destinationAddressesWithAmounts[key]) + amountAccumulated
 			delete(destinationAddressesWithAmounts, key)
 		}
 	}
 
-	return nil
+	return addressesWithThresholdToUpdate, nil
 }
 
 // removeAddressesWithZeroReward utilised in case we had a maintenance fee greater than the nft reward.
@@ -547,13 +541,11 @@ type Storage interface {
 		farmSubAccountName string,
 		retryCount int) error
 
-	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error)
-
-	UpdateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error
-
 	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
 
-	MarkUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, txIds []string) error
+	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error)
+
+	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) error
 }
 
 type Helper interface {

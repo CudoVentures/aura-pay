@@ -121,20 +121,34 @@ func (sdb *SqlDB) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, ol
 
 }
 
-func (sdb *SqlDB) UpdateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error {
-	if retErr := sdb.updateCurrentAcummulatedAmountForAddress(ctx, tx, address, farmId, amount); retErr != nil {
-		return fmt.Errorf("failed to commit transaction: %s", retErr)
-	}
-	return nil
-}
-
 type SqlDB struct {
 	db *sqlx.DB
 }
 
-func (sdb *SqlDB) MarkUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, txIds []string) error {
-	if retErr := sdb.markUTXOsAsProcessed(ctx, tx, txIds); retErr != nil {
+func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) (retErr error) {
+	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %s", err)
+	}
+
+	defer func() {
+		if retErr != nil {
+			if err := sqlTx.Rollback(); err != nil {
+				log.Error().Msgf("failed to rollback: %s, during: %s", err, retErr)
+			}
+		}
+	}()
+
+	if retErr := sdb.markUTXOsAsProcessed(ctx, sqlTx, processedTransactions); retErr != nil {
 		return fmt.Errorf("failed to commit transaction: %s", retErr)
 	}
+
+	for address, amount := range addressesWithThresholdToUpdate {
+		if retErr := sdb.updateCurrentAcummulatedAmountForAddress(ctx, sqlTx, address, farmId, amount); retErr != nil {
+			return fmt.Errorf("failed to commit transaction: %s", retErr)
+		}
+		return nil
+	}
+
 	return nil
 }
