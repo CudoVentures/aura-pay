@@ -305,7 +305,13 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 	for key := range destinationAddressesWithAmounts {
 		amountAccumulated, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
 		if err != nil {
-			return nil, err
+			switch err {
+			case sql.ErrNoRows:
+				log.Info().Msgf("No threshold found, inserting...")
+				err = storage.SetInitialAccumulatedAmountForAddress(ctx, nil, key, farmId, 0)
+			default:
+				return nil, err
+			}
 		}
 		amountAccumulatedSatoshis := btcutil.Amount(amountAccumulated)
 		if destinationAddressesWithAmounts[key]+amountAccumulatedSatoshis >= thresholdInSatoshis {
@@ -546,6 +552,8 @@ type Storage interface {
 	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error)
 
 	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) error
+
+	SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error
 }
 
 type Helper interface {

@@ -49,7 +49,7 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		}
 	}
 
-	if retErr = sdb.saveTxHashWithStatus(ctx, sqlTx, txHash, types.TransactionPending, farmSubAccountName, 0); retErr != nil {
+	if retErr = sdb.SaveTxHashWithStatus(ctx, sqlTx, txHash, types.TransactionPending, farmSubAccountName, 0); retErr != nil {
 		return
 	}
 
@@ -81,42 +81,20 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context,
 	}()
 
 	// update old tx status
-	if retErr := sdb.updateTxHashesWithStatus(ctx, sqlTx, []string{oldTxHash}, oldTxStatus); retErr != nil {
+	if retErr := sdb.UpdateTransactionsStatus(ctx, sqlTx, []string{oldTxHash}, oldTxStatus); retErr != nil {
 		return fmt.Errorf("failed to updateTxHashesWithStatus: %s", retErr)
 	}
 
 	// link replaced transaction with the tx that replaced it
-	if retErr := sdb.saveRBFTransactionHistory(ctx, sqlTx, oldTxHash, newRBFTxHash, farmSubAccountName); retErr != nil {
+	if retErr := sdb.SaveRBFTransactionHistory(ctx, sqlTx, oldTxHash, newRBFTxHash, farmSubAccountName); retErr != nil {
 		return fmt.Errorf("failed to saveRBFTransactionHistory: %s", retErr)
 	}
 
 	// save the new tx with status, new timestamp, and retryCount of old one + 1
-	if retErr := sdb.saveTxHashWithStatus(ctx, sqlTx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount); retErr != nil {
+	if retErr := sdb.SaveTxHashWithStatus(ctx, sqlTx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount); retErr != nil {
 		return fmt.Errorf("failed to saveTxHashWithStatus: %s", retErr)
 	}
 
-	return nil
-
-}
-func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, status string, farmSubAccountName string, retryCount int) error {
-	if retErr := sdb.saveTxHashWithStatus(ctx, tx, txHash, status, farmSubAccountName, retryCount); retErr != nil {
-		return retErr
-	}
-	return nil
-}
-
-func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashesToUpdate []string, status string) error {
-	if retErr := sdb.updateTxHashesWithStatus(ctx, tx, txHashesToUpdate, status); retErr != nil {
-		return fmt.Errorf("failed to commit transaction: %s", retErr)
-	}
-
-	return nil
-}
-
-func (sdb *SqlDB) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farmSubAccountName string) error {
-	if retErr := sdb.saveRBFTransactionHistory(ctx, tx, oldTxHash, newTxHash, farmSubAccountName); retErr != nil {
-		return fmt.Errorf("failed to commit transaction: %s", retErr)
-	}
 	return nil
 
 }

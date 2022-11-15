@@ -31,7 +31,7 @@ func saveNFTOwnersForPeriodHistory(ctx context.Context, tx *sqlx.Tx, collectionD
 	return err
 }
 
-func (sdb *SqlDB) saveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farm_id string) error {
+func (sdb *SqlDB) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farm_id string) error {
 	now := time.Now()
 	var err error
 	if tx != nil {
@@ -45,7 +45,7 @@ func (sdb *SqlDB) saveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, ol
 	return err
 }
 
-func (sdb *SqlDB) saveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmSubAccountName string, retryCount int) error {
+func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmSubAccountName string, retryCount int) error {
 	now := time.Now()
 	var err error
 	if tx != nil {
@@ -56,7 +56,7 @@ func (sdb *SqlDB) saveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash 
 	return err
 }
 
-func (sdb *SqlDB) updateTxHashesWithStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
+func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
 	qry, args, err := sqlx.In(updateTxHashesWithStatusQuery, txStatus, txHashes)
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func (sdb *SqlDB) updateTxHashesWithStatus(ctx context.Context, tx *sqlx.Tx, txH
 	return nil
 }
 
-func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) interface{} {
+func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error {
 	var err error
 	if tx != nil {
 		_, err = tx.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
@@ -108,6 +108,18 @@ func (sdb *SqlDB) markUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, tx_hash
 	return nil
 }
 
+func (sdb *SqlDB) SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error {
+
+	var err error
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, insertInitialThresholdAmount, amount, address, farmId, time.Now().UTC(), time.Now().UTC())
+	} else {
+		_, err = sdb.db.ExecContext(ctx, insertInitialThresholdAmount, amount, address, farmId, time.Now().UTC(), time.Now().UTC())
+	}
+	return err
+
+}
+
 const (
 	insertUTXOWithStatus = `INSERT INTO utxo_transactions (tx_hash, processed, createdAt, updatedAt)
 	   VALUES (:tx_hash, :processed, :createdAt, :updatedAt)`
@@ -132,4 +144,7 @@ const (
 	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
 
 	updateThresholdAmounts = `UPDATE threshold_amounts SET amount=$1 where address=$2 and farm_id=$3`
+
+	insertInitialThresholdAmount = `INSERT INTO threshold_amounts
+	(address, farm_id, amount, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
 )
