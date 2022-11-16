@@ -1,6 +1,9 @@
 package types
 
-import "github.com/btcsuite/btcd/btcutil"
+import (
+	"github.com/btcsuite/btcd/btcutil"
+	"time"
+)
 
 type NFTStatistics struct {
 	Id                       string `db:"id"`
@@ -22,14 +25,15 @@ type NFTOwnerInformation struct {
 	TimeOwnedTo        int64   `db:"time_owned_to"`
 	TotalTimeOwned     int64   `db:"total_time_owned"`
 	PercentOfTimeOwned float64 `db:"percent_of_time_owned"`
-	Owner              string  // not used anywhere?
-	PayoutAddress      string  `db:"payout_address"`
+	Owner              string
+	PayoutAddress      string `db:"payout_address"`
 	Reward             btcutil.Amount
 	CreatedAt          int64 `db:"createdAt"`
 	UpdatedAt          int64 `db:"updatedAt"`
 }
 
 type TransactionHashWithStatus struct {
+	Id                 string `db:"id"`
 	TxHash             string `db:"tx_hash"`
 	Status             string `db:"status"`
 	TimeSent           int64  `db:"time_sent"`
@@ -40,6 +44,7 @@ type TransactionHashWithStatus struct {
 }
 
 type RBFTransactionHistory struct {
+	Id        string `db:"id"`
 	OldTxHash string `db:"old_tx_hash"`
 	NewTxHash string `db:"new_tx_hash"`
 	CreatedAt int64  `db:"createdAt"`
@@ -47,18 +52,20 @@ type RBFTransactionHistory struct {
 }
 
 type UTXOTransaction struct {
-	TxHash    string `db:"tx_hash"`
-	Processed bool   `db:"processed"`
-	CreatedAt int64  `db:"createdAt"`
-	UpdatedAt int64  `db:"updatedAt"`
+	Id        string    `db:"id"`
+	TxHash    string    `db:"tx_hash"`
+	Processed bool      `db:"processed"`
+	CreatedAt time.Time `db:"createdAt"`
+	UpdatedAt time.Time `db:"updatedAt"`
 }
 
 type AddressThresholdAmountByFarm struct {
-	BTCAddress string `db:"btc_address"`
-	FarmId     int64  `db:"farm_id"`
-	Amount     int64  `db:"amount"`
-	CreatedAt  int64  `db:"createdAt"`
-	UpdatedAt  int64  `db:"updatedAt"`
+	Id         string    `db:"id"`
+	BTCAddress string    `db:"btc_address"`
+	FarmId     int64     `db:"farm_id"`
+	Amount     int64     `db:"amount"`
+	CreatedAt  time.Time `db:"createdAt"`
+	UpdatedAt  time.Time `db:"updatedAt"`
 }
 
 const (

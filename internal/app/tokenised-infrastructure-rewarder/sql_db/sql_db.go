@@ -95,6 +95,11 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context,
 		return fmt.Errorf("failed to saveTxHashWithStatus: %s", retErr)
 	}
 
+	err = sqlTx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %s", err)
+	}
+
 	return nil
 
 }
@@ -125,7 +130,11 @@ func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransact
 		if retErr := sdb.updateCurrentAcummulatedAmountForAddress(ctx, sqlTx, address, farmId, amount); retErr != nil {
 			return fmt.Errorf("failed to commit transaction: %s", retErr)
 		}
-		return nil
+	}
+
+	if retErr = sqlTx.Commit(); retErr != nil {
+		retErr = fmt.Errorf("failed to commit transaction: %s", retErr)
+		return
 	}
 
 	return nil

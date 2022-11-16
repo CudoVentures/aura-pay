@@ -221,11 +221,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	if err != nil {
 		return err
 	}
-	txHash, err := s.apiRequester.SendMany(ctx, convertedDestinationAddressesWithAmount, farm.SubAccountName, totalRewardForFarm)
-	if err != nil {
-		return err
+
+	txHash := ""
+	if len(convertedDestinationAddressesWithAmount) > 0 {
+		txHash, err = s.apiRequester.SendMany(ctx, convertedDestinationAddressesWithAmount, farm.SubAccountName, totalRewardForFarm)
+		if err != nil {
+			return err
+		}
+		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 	}
-	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 
 	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)

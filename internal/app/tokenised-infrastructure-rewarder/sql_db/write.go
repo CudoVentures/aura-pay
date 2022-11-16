@@ -90,7 +90,7 @@ func (sdb *SqlDB) markUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, tx_hash
 			"tx_hash":   hash,
 			"processed": true,
 			"createdAt": time.Now().UTC(),
-			"updatedAt": nil,
+			"updatedAt": time.Now().UTC(),
 		}
 		UTXOMaps = append(UTXOMaps, m)
 	}
@@ -112,39 +112,38 @@ func (sdb *SqlDB) SetInitialAccumulatedAmountForAddress(ctx context.Context, tx 
 
 	var err error
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, insertInitialThresholdAmount, amount, address, farmId, time.Now().UTC(), time.Now().UTC())
+		_, err = tx.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
 	} else {
-		_, err = sdb.db.ExecContext(ctx, insertInitialThresholdAmount, amount, address, farmId, time.Now().UTC(), time.Now().UTC())
+		_, err = sdb.db.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
 	}
 	return err
 
 }
 
 const (
-	insertUTXOWithStatus = `INSERT INTO utxo_transactions (tx_hash, processed, createdAt, updatedAt)
+	insertUTXOWithStatus = `INSERT INTO utxo_transactions (tx_hash, processed, "createdAt", "updatedAt")
 	   VALUES (:tx_hash, :processed, :createdAt, :updatedAt)`
 
 	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status
-	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-
+	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7)`
 	insertRBFTransactionHistory = `INSERT INTO rbf_transaction_history
 	(old_tx_hash, new_tx_hash, farm_sub_account_name, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
 
 	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount
-		(address, amount, tx_hash, farm_id, payout_time, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+		(address, amount, tx_hash, farm_id, payout_time, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 	insertNFTInformationHistory = `INSERT INTO statistics_nft_payout_history (denom_id, token_id, payout_period_start,
-		payout_period_end, reward, tx_hash, maintenance_fee, cudo_part_of_maintenance_fee, createdAt, updatedAt)
+		payout_period_end, reward, tx_hash, maintenance_fee, cudo_part_of_maintenance_fee, "createdAt", "updatedAt")
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	insertNFTOnwersForPeriodHistory = `INSERT INTO statistics_nft_owners_payout_history (denom_id, token_id, time_owned_from, time_owned_to,
-		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, createdAt, updatedAt)
+		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, "createdAt", "updatedAt")
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
 	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
 
-	updateThresholdAmounts = `UPDATE threshold_amounts SET amount=$1 where address=$2 and farm_id=$3`
+	updateThresholdAmounts = `UPDATE threshold_amounts SET amount=$1 where btc_address=$2 and farm_id=$3`
 
 	insertInitialThresholdAmount = `INSERT INTO threshold_amounts
-	(address, farm_id, amount, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
+	(btc_address, farm_id, amount, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5)`
 )
