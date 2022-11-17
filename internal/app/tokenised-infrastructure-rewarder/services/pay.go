@@ -169,7 +169,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart, periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutdAddress)
-			payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOMaintenanceFeePayoutAddress)
+			payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOFeePayoutAddress)
 			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNftAfterFee)
 			log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, maintenanceFee)
 			log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
@@ -226,7 +226,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	txHash := ""
 	if len(addressesToSend) > 0 {
-		txHash, err = s.apiRequester.SendMany(ctx, addressesToSend, farm.SubAccountName, totalRewardForFarm)
+		txHash, err = s.apiRequester.SendMany(ctx, addressesToSend)
 		if err != nil {
 			return err
 		}
@@ -510,7 +510,7 @@ type ApiRequester interface {
 
 	GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error)
 
-	SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64, walletName string, walletBalance btcutil.Amount) (string, error)
+	SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64) (string, error)
 
 	BumpFee(ctx context.Context, txId string) (string, error)
 }

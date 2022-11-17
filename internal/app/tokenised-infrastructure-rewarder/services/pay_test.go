@@ -11,7 +11,6 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/mock"
@@ -20,10 +19,10 @@ import (
 
 func TestProcessPayment(t *testing.T) {
 	config := &infrastructure.Config{
-		Network:                         "BTC",
-		CUDOMaintenanceFeePercent:       50,
-		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC:      0.01,
+		Network:                    "BTC",
+		CUDOMaintenanceFeePercent:  50,
+		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC: 0.01,
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -150,7 +149,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 		"leftover_reward_payout_address_1": 4,
 		"nft_minter_payout_addr":           0.2631688,
 		"nft_owner_2_payout_addr":          0.73671264,
-	}, "farm_1", btcutil.Amount(500000000)).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
+	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	return apiRequester
 }
