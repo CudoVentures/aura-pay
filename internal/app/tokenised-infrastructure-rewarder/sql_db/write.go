@@ -40,26 +40,25 @@ func saveNFTOwnersForPeriodHistory(ctx context.Context, tx *sqlx.Tx, collectionD
 
 func (sdb *SqlDB) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farm_id string) error {
 	now := time.Now()
-	var err error
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash,
+		_, err := tx.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash,
 			farm_id, now.UTC(), now.UTC())
-	} else {
-		_, err = sdb.db.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash,
-			farm_id, now.UTC(), now.UTC())
+		return err
 	}
+	_, err := sdb.db.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash,
+		farm_id, now.UTC(), now.UTC())
 
 	return err
 }
 
 func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmSubAccountName string, retryCount int) error {
 	now := time.Now()
-	var err error
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
-	} else {
-		_, err = sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
+		_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
+		return err
 	}
+	_, err := sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
+
 	return err
 }
 
@@ -71,22 +70,18 @@ func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txH
 
 	if tx != nil {
 		_, err = tx.ExecContext(ctx, qry, args...)
-	} else {
-		_, err = sdb.db.ExecContext(ctx, qry, args...)
-	}
-	if err != nil {
 		return err
 	}
-	return nil
+	_, err = sdb.db.ExecContext(ctx, qry, args...)
+	return err
 }
 
 func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error {
-	var err error
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
-	} else {
-		_, err = sdb.db.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
+		_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
+		return err
 	}
+	_, err := sdb.db.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
 	return err
 }
 
@@ -102,27 +97,23 @@ func (sdb *SqlDB) markUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, tx_hash
 		UTXOMaps = append(UTXOMaps, m)
 	}
 
-	var err error
 	if tx != nil {
-		_, err = tx.NamedExec(insertUTXOWithStatus, UTXOMaps)
-	} else {
-		_, err = tx.NamedExecContext(ctx, insertUTXOWithStatus, UTXOMaps)
-	}
-
-	if err != nil {
+		_, err := tx.NamedExecContext(ctx, insertUTXOWithStatus, UTXOMaps)
 		return err
 	}
-	return nil
+	_, err := tx.NamedExecContext(ctx, insertUTXOWithStatus, UTXOMaps)
+
+	return err
 }
 
 func (sdb *SqlDB) SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error {
 
-	var err error
 	if tx != nil {
-		_, err = tx.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
-	} else {
-		_, err = sdb.db.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
+		_, err := tx.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
+		return err
 	}
+	_, err := sdb.db.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
+
 	return err
 
 }
