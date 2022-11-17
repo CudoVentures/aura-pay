@@ -17,7 +17,7 @@ func TestRetryService_Execute(t *testing.T) {
 	config := &infrastructure.Config{
 		Network:                           "BTC",
 		CUDOMaintenanceFeePercent:         50,
-		CUDOMaintenanceFeePayoutAddress:   "cudo_maintenance_fee_payout_addr",
+		CUDOFeePayoutAddress:              "cudo_maintenance_fee_payout_addr",
 		RBFTransactionRetryDelayInSeconds: 10,
 		RBFTransactionRetryMaxCount:       2,
 	}

@@ -27,7 +27,8 @@ type Config struct {
 	AuraPoolBackEndUrl                string
 	Network                           string
 	CUDOMaintenanceFeePercent         float64
-	CUDOMaintenanceFeePayoutAddress   string
+	CUDOFeePayoutAddress              string
+	CUDOFeeOnAllBTC                   float64
 	AuraPoolTestFarmWalletPassword    string
 	WorkerProcessIntervalPayment      time.Duration
 	WorkerProcessIntervalRetry        time.Duration
@@ -59,7 +60,8 @@ func NewConfig() *Config {
 		AuraPoolBackEndUrl:                getEnv("AURA_POOL_BACKEND_URL", ""),
 		Network:                           getEnv("NETWORK", ""),
 		CUDOMaintenanceFeePercent:         getEnvAsFloat64("CUDO_MAINTENANCE_FEE_PERCENT", 10.0),
-		CUDOMaintenanceFeePayoutAddress:   getEnv("CUDO_MAINTENANCE_FEE_PAYOUT_ADDRESS", ""),
+		CUDOFeeOnAllBTC:                   getEnvAsFloat64("CUDO_FEE_ON_ALL_BTC", 2.0),
+		CUDOFeePayoutAddress:              getEnv("CUDO_FEE_PAYOUT_ADDRESS", ""),
 		AuraPoolTestFarmWalletPassword:    getEnv("AURA_POOL_TEST_FARM_WALLET_PASSWORD", ""),
 		WorkerProcessIntervalPayment:      getEnvAsDuration("WORKER_PROCESS_INTERVAL_PAYMENT", time.Second*5),
 		WorkerProcessIntervalRetry:        getEnvAsDuration("WORKER_PROCESS_INTERVAL_RETRY", time.Second*13),
