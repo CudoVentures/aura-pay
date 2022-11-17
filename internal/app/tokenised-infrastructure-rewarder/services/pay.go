@@ -194,14 +194,16 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	removeAddressesWithZeroReward(destinationAddressesWithAmount)
-	addressesWithThresholdToUpdate, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
+	addressesWithThresholdToUpdate, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
 	if err != nil {
 		return err
 	}
 
-	log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
+	log.Debug().Msgf("Destination addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
 
-	convertedDestinationAddressesWithAmount := convertAmountToBTC(destinationAddressesWithAmount)
+	addressesToSend := convertAmountToBTC(addressesWithAmountInfo)
+
+	log.Debug().Msgf("Addresses { above threshold that will be sent for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(addressesToSend))
 
 	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
 	if err != nil {
@@ -223,15 +225,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	txHash := ""
-	if len(convertedDestinationAddressesWithAmount) > 0 {
-		txHash, err = s.apiRequester.SendMany(ctx, convertedDestinationAddressesWithAmount, farm.SubAccountName, totalRewardForFarm)
+	if len(addressesToSend) > 0 {
+		txHash, err = s.apiRequester.SendMany(ctx, addressesToSend, farm.SubAccountName, totalRewardForFarm)
 		if err != nil {
 			return err
 		}
 		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 	}
 
-	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
+	if err := storage.SaveStatistics(ctx, addressesWithAmountInfo, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
 	}
 
@@ -298,13 +300,15 @@ func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentRe
 	}
 }
 
-func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) (map[string]int64, error) {
+func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) (map[string]int64, map[string]types.AmountInfo, error) {
 	thresholdInSatoshis, err := btcutil.NewAmount(s.config.GlobalPayoutThresholdInBTC)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	addressesWithThresholdToUpdate := make(map[string]int64)
+
+	addressesToSend := make(map[string]types.AmountInfo)
 
 	for key := range destinationAddressesWithAmounts {
 		amountAccumulated, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
@@ -314,20 +318,21 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 				log.Info().Msgf("No threshold found, inserting...")
 				err = storage.SetInitialAccumulatedAmountForAddress(ctx, nil, key, farmId, 0)
 			default:
-				return nil, err
+				return nil, nil, err
 			}
 		}
 		amountAccumulatedSatoshis := btcutil.Amount(amountAccumulated)
 		if destinationAddressesWithAmounts[key]+amountAccumulatedSatoshis >= thresholdInSatoshis {
 			addressesWithThresholdToUpdate[key] = 0 // threshold reached, reset it to 0 and update it later in DB
-			destinationAddressesWithAmounts[key] += amountAccumulatedSatoshis
+			amountToSend := destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis
+			addressesToSend[key] = types.AmountInfo{Amount: amountToSend, ThresholdReached: true}
 		} else {
 			addressesWithThresholdToUpdate[key] += int64(destinationAddressesWithAmounts[key]) + amountAccumulated
-			delete(destinationAddressesWithAmounts, key)
+			addressesToSend[key] = types.AmountInfo{Amount: destinationAddressesWithAmounts[key], ThresholdReached: false}
 		}
 	}
 
-	return addressesWithThresholdToUpdate, nil
+	return addressesWithThresholdToUpdate, addressesToSend, nil
 }
 
 // removeAddressesWithZeroReward utilised in case we had a maintenance fee greater than the nft reward.
@@ -343,10 +348,12 @@ func removeAddressesWithZeroReward(destinationAddressesWithAmount map[string]btc
 }
 
 // Converts Satoshi to BTC so it can accepted by the RPC interface
-func convertAmountToBTC(destinationAddressesWithAmount map[string]btcutil.Amount) map[string]float64 {
+func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountInfo) map[string]float64 {
 	result := make(map[string]float64)
 	for k, v := range destinationAddressesWithAmount {
-		result[k] = v.ToBTC()
+		if v.ThresholdReached {
+			result[k] = v.Amount.ToBTC()
+		}
 	}
 	return result
 }
@@ -514,8 +521,6 @@ type Provider interface {
 }
 
 type BtcClient interface {
-	GetBalance(account string) (btcutil.Amount, error)
-
 	LoadWallet(walletName string) (*btcjson.LoadWalletResult, error)
 
 	UnloadWallet(walletName *string) error
@@ -532,7 +537,7 @@ type BtcClient interface {
 type Storage interface {
 	GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error)
 
-	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) error
+	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId, farmSubAccountName string) error
 
 	GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error)
 

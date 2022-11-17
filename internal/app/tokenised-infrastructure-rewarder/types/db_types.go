@@ -15,9 +15,9 @@ type NFTStatistics struct {
 	MaintenanceFee           btcutil.Amount `db:"maintenance_fee"`
 	CUDOPartOfMaintenanceFee btcutil.Amount `db:"cudo_part_of_maintenance_fee"`
 	NFTOwnersForPeriod       []NFTOwnerInformation
-	TxHash                   string `db:"tx_hash"`
-	CreatedAt                int64  `db:"createdAt"`
-	UpdatedAt                int64  `db:"updatedAt"`
+	TxHash                   string    `db:"tx_hash"`
+	CreatedAt                time.Time `db:"createdAt"`
+	UpdatedAt                time.Time `db:"updatedAt"`
 }
 
 type NFTOwnerInformation struct {
@@ -28,27 +28,27 @@ type NFTOwnerInformation struct {
 	Owner              string
 	PayoutAddress      string `db:"payout_address"`
 	Reward             btcutil.Amount
-	CreatedAt          int64 `db:"createdAt"`
-	UpdatedAt          int64 `db:"updatedAt"`
+	CreatedAt          time.Time `db:"createdAt"`
+	UpdatedAt          time.Time `db:"updatedAt"`
 }
 
 type TransactionHashWithStatus struct {
-	Id                 string `db:"id"`
-	TxHash             string `db:"tx_hash"`
-	Status             string `db:"status"`
-	TimeSent           int64  `db:"time_sent"`
-	FarmSubAccountName string `db:"farm_sub_account_name"`
-	RetryCount         int    `db:"retry_count"`
-	CreatedAt          int64  `db:"createdAt"`
-	UpdatedAt          int64  `db:"updatedAt"`
+	Id                 string    `db:"id"`
+	TxHash             string    `db:"tx_hash"`
+	Status             string    `db:"status"`
+	TimeSent           int64     `db:"time_sent"`
+	FarmSubAccountName string    `db:"farm_sub_account_name"`
+	RetryCount         int       `db:"retry_count"`
+	CreatedAt          time.Time `db:"createdAt"`
+	UpdatedAt          time.Time `db:"updatedAt"`
 }
 
 type RBFTransactionHistory struct {
-	Id        string `db:"id"`
-	OldTxHash string `db:"old_tx_hash"`
-	NewTxHash string `db:"new_tx_hash"`
-	CreatedAt int64  `db:"createdAt"`
-	UpdatedAt int64  `db:"updatedAt"`
+	Id        string    `db:"id"`
+	OldTxHash string    `db:"old_tx_hash"`
+	NewTxHash string    `db:"new_tx_hash"`
+	CreatedAt time.Time `db:"createdAt"`
+	UpdatedAt time.Time `db:"updatedAt"`
 }
 
 type UTXOTransaction struct {

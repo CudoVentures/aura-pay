@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
@@ -14,7 +13,7 @@ func NewSqlDB(db *sqlx.DB) *SqlDB {
 	return &SqlDB{db: db}
 }
 
-func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) (retErr error) {
+func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId, farmSubAccountName string) (retErr error) {
 	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %s", err)
@@ -28,8 +27,8 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		}
 	}()
 
-	for address, amount := range destinationAddressesWithAmount {
-		if retErr = saveDestinationAddressesWithAmountHistory(ctx, sqlTx, address, amount, txHash, farmId); retErr != nil {
+	for address, amountInfo := range destinationAddressesWithAmount {
+		if retErr = saveDestinationAddressesWithAmountHistory(ctx, sqlTx, address, amountInfo, txHash, farmId); retErr != nil {
 			return
 		}
 	}

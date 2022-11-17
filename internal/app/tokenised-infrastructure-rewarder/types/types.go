@@ -1,6 +1,9 @@
 package types
 
-import "github.com/btcsuite/btcd/chaincfg"
+import (
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
+)
 
 type Farm struct {
 	Id                                 int          `json:"id"`
@@ -45,4 +48,9 @@ type NFTDataJson struct {
 type BtcNetworkParams struct {
 	ChainParams      *chaincfg.Params
 	MinConfirmations int
+}
+
+type AmountInfo struct {
+	Amount           btcutil.Amount
+	ThresholdReached bool
 }

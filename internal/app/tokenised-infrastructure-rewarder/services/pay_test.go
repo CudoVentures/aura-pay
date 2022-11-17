@@ -22,7 +22,8 @@ func TestProcessPayment(t *testing.T) {
 	config := &infrastructure.Config{
 		Network:                         "BTC",
 		CUDOMaintenanceFeePercent:       50,
-		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_addr",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -39,18 +40,20 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	farms := []types.Farm{
 		{
-			Id:                           1,
-			SubAccountName:               "farm_1",
-			LeftoverRewardPayoutAddress:  "leftover_reward_payout_address_1",
-			MaintenanceFeePayoutdAddress: "maintenance_fee_payout_address_1",
-			MonthlyMaintenanceFeeInBTC:   "1",
+			Id:                                 1,
+			SubAccountName:                     "farm_1",
+			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
+			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
+			MaintenanceFeePayoutdAddress:       "maintenance_fee_payout_address_1",
+			MonthlyMaintenanceFeeInBTC:         "1",
 		},
 		{
-			Id:                           2,
-			SubAccountName:               "farm_2",
-			LeftoverRewardPayoutAddress:  "leftover_reward_payout_address_2",
-			MaintenanceFeePayoutdAddress: "maintenance_fee_payout_address_2",
-			MonthlyMaintenanceFeeInBTC:   "0.01",
+			Id:                                 2,
+			SubAccountName:                     "farm_2",
+			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
+			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
+			MaintenanceFeePayoutdAddress:       "maintenance_fee_payout_address_2",
+			MonthlyMaintenanceFeeInBTC:         "0.01",
 		},
 	}
 
@@ -142,9 +145,8 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	// TODO: Verify that values are correct
 
+	// cudo_maintenance_fee_payout_addr and maintenance_fee_payout_address_1 are below threshold of 0.01 with values 5.928e-05
 	apiRequester.On("SendMany", mock.Anything, map[string]float64{
-		"cudo_maintenance_fee_payout_addr": 5.928e-05,
-		"maintenance_fee_payout_address_1": 5.928e-05,
 		"leftover_reward_payout_address_1": 4,
 		"nft_minter_payout_addr":           0.2631688,
 		"nft_owner_2_payout_addr":          0.73671264,
@@ -156,7 +158,12 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 func setupMockBtcClient() *mockBtcClient {
 	btcClient := &mockBtcClient{}
 
-	btcClient.On("GetBalance", mock.Anything).Return(btcutil.Amount(500000000), nil).Once()
+	btcClient.On("ListUnspent").Return([]btcjson.ListUnspentResult{
+		btcjson.ListUnspentResult{TxID: "1", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+		btcjson.ListUnspentResult{TxID: "2", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+		btcjson.ListUnspentResult{TxID: "3", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+		btcjson.ListUnspentResult{TxID: "4", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+	}, nil).Once()
 
 	btcClient.On("LoadWallet", "farm_1").Return(&btcjson.LoadWalletResult{}, nil).Once()
 	btcClient.On("LoadWallet", "farm_2").Return(&btcjson.LoadWalletResult{}, errors.New("failed to load wallet")).Once()
@@ -166,11 +173,6 @@ func setupMockBtcClient() *mockBtcClient {
 	btcClient.On("GetRawTransactionVerbose").Return(nil)
 
 	return btcClient
-}
-
-func (mbc *mockBtcClient) GetBalance(account string) (btcutil.Amount, error) {
-	args := mbc.Called(account)
-	return args.Get(0).(btcutil.Amount), args.Error(1)
 }
 
 func (mbc *mockBtcClient) LoadWallet(walletName string) (*btcjson.LoadWalletResult, error) {
@@ -202,17 +204,24 @@ type mockBtcClient struct {
 	mock.Mock
 }
 
+func (mbc *mockBtcClient) ListUnspent() ([]btcjson.ListUnspentResult, error) {
+	args := mbc.Called()
+	return args.Get(0).([]btcjson.ListUnspentResult), args.Error(1)
+}
+
 func setupMockStorage() *mockStorage {
 	storage := &mockStorage{}
 
 	storage.On("GetPayoutTimesForNFT", mock.Anything, mock.Anything, mock.Anything).Return([]types.NFTStatistics{}, nil)
-	storage.On("SaveStatistics", mock.Anything, map[string]btcutil.Amount{
-		"cudo_maintenance_fee_payout_addr": 5928,
-		"maintenance_fee_payout_address_1": 5928,
-		"leftover_reward_payout_address_1": 400000000,
-		"nft_minter_payout_addr":           26316880,
-		"nft_owner_2_payout_addr":          73671264,
-	},
+	storage.On("SaveStatistics", mock.Anything,
+		map[string]types.AmountInfo{
+			"leftover_reward_payout_address_1":      {Amount: 400000000, ThresholdReached: true},
+			"nft_minter_payout_addr":                {Amount: 26316880, ThresholdReached: true},
+			"nft_owner_2_payout_addr":               {Amount: 73671264, ThresholdReached: true},
+			"cudo_maintenance_fee_payout_address_1": {Amount: 5928, ThresholdReached: false},
+			"maintenance_fee_payout_address_1":      {Amount: 5928, ThresholdReached: false},
+		},
+
 		[]types.NFTStatistics{
 			{
 				TokenId:                  "1",
@@ -241,7 +250,14 @@ func setupMockStorage() *mockStorage {
 			},
 		},
 		"farm_1_denom_1_nft_owner_2_tx_hash", "1", "farm_1").Return(nil)
+	storage.On("GetUTXOTransaction", mock.Anything, "1").Return(types.UTXOTransaction{TxHash: "1", Processed: false}, nil)
+	storage.On("GetUTXOTransaction", mock.Anything, "2").Return(types.UTXOTransaction{TxHash: "2", Processed: false}, nil)
+	storage.On("GetUTXOTransaction", mock.Anything, "3").Return(types.UTXOTransaction{TxHash: "3", Processed: false}, nil)
+	storage.On("GetUTXOTransaction", mock.Anything, "4").Return(types.UTXOTransaction{TxHash: "4", Processed: false}, nil)
 
+	storage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, mock.Anything, mock.Anything).Return(int64(0), nil)
+
+	storage.On("UpdateThresholdStatuses", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	return storage
 }
 
@@ -250,7 +266,7 @@ func (ms *mockStorage) GetPayoutTimesForNFT(ctx context.Context, collectionDenom
 	return args.Get(0).([]types.NFTStatistics), args.Error(1)
 }
 
-func (ms *mockStorage) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) error {
+func (ms *mockStorage) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) error {
 	args := ms.Called(ctx, destinationAddressesWithAmount, statistics, txHash, farmId, farmSubAccountName)
 	return args.Error(0)
 }
@@ -288,6 +304,26 @@ func (ms *mockStorage) SaveRBFTransactionInformation(ctx context.Context,
 
 type mockStorage struct {
 	mock.Mock
+}
+
+func (ms *mockStorage) GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error) {
+	args := ms.Called(ctx, txId)
+	return args.Get(0).(types.UTXOTransaction), args.Error(1)
+}
+
+func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error) {
+	args := ms.Called(ctx, key, farmId)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) error {
+	args := ms.Called(ctx, processedTransactions, addressesWithThresholdToUpdate)
+	return args.Error(0)
+}
+
+func (ms *mockStorage) SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error {
+	args := ms.Called(ctx, tx, address, farmId, amount)
+	return args.Error(0)
 }
 
 func (_ *mockHelper) DaysIn(m time.Month, year int) int {
