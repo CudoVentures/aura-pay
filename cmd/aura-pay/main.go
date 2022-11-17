@@ -18,7 +18,7 @@ func main() {
 }
 
 func runService(ctx context.Context) {
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Error().Msgf("No .env file found: %s", err)
 	}
 
@@ -35,9 +35,9 @@ func runService(ctx context.Context) {
 		btcNetworkParams.MinConfirmations = 6
 	}
 
-	retryService := services.NewRetryService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
+	//retryService := services.NewRetryService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
-	go worker.Start(ctx, config, retryService, provider, &mutex, config.WorkerProcessIntervalPayment)
+	//go worker.Start(ctx, config, retryService, provider, &mutex, config.WorkerProcessIntervalPayment)
 
 	payService := services.NewPayService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 

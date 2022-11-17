@@ -29,6 +29,7 @@ const (
 )
 
 func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error) {
+
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}

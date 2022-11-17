@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"strconv"
@@ -60,20 +61,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 	}()
 
-	totalRewardForFarm, err := btcClient.GetBalance("*") // returns the total balance in satoshis
+	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.GetTotalRewardForFarm(ctx, btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool})
 	if err != nil {
 		return err
 	}
-
 	if totalRewardForFarm == 0 {
 		log.Info().Msgf("reward for farm {{%s}} is 0....skipping this farm", farm.SubAccountName)
 		return nil
 	}
-	log.Debug().Msgf("Total reward for farm %s: %d", farm.SubAccountName, totalRewardForFarm)
-
-	feeOnAllMinedBTCForCudo := totalRewardForFarm.MulF64(s.config.CUDOFeeOnAllBTC / 100)
-	totalRewardForFarm -= feeOnAllMinedBTCForCudo
-	log.Info().Msgf("reward for farm {{%s}} after cudo fee {{%d}} is {{%d}}", farm.SubAccountName, feeOnAllMinedBTCForCudo, totalRewardForFarm)
+	log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
 
 	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.SubAccountName)
 	if err != nil {
@@ -136,7 +132,6 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	var rewardToReturn btcutil.Amount
 
 	destinationAddressesWithAmount := make(map[string]btcutil.Amount)
-	destinationAddressesWithAmount[s.config.CUDOFeePayoutAddress] = feeOnAllMinedBTCForCudo
 
 	// return to the farm owner whatever is left
 	if leftoverHashPower > 0 {
@@ -198,17 +193,17 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
 	}
 
-	// utilised in case we had a maintenance fee greater then the nft reward.
-	// keys with 0 value were added in order to have statistics even for 0 reward
-	// and in order to avoid sending them as 0 - just remove them but still keep statistic
-	for key := range destinationAddressesWithAmount {
-		if destinationAddressesWithAmount[key] == 0 {
-			delete(destinationAddressesWithAmount, key)
-		}
+	removeAddressesWithZeroReward(destinationAddressesWithAmount)
+	addressesWithThresholdToUpdate, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
+	if err != nil {
+		return err
 	}
-	log.Debug().Msgf("Destionation addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
 
-	convertedDestinationAddressesWithAmount := convertAmountToBTC(destinationAddressesWithAmount)
+	log.Debug().Msgf("Destination addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
+
+	addressesToSend := convertAmountToBTC(addressesWithAmountInfo)
+
+	log.Debug().Msgf("Addresses { above threshold that will be sent for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(addressesToSend))
 
 	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
 	if err != nil {
@@ -224,24 +219,141 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} locked", farm.SubAccountName)
 	}()
 
-	txHash, err := s.apiRequester.SendMany(ctx, convertedDestinationAddressesWithAmount)
+	err = storage.UpdateThresholdStatuses(ctx, transactionIdsToMarkProcessed, addressesWithThresholdToUpdate, farm.Id)
 	if err != nil {
 		return err
 	}
-	log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 
-	if err := storage.SaveStatistics(ctx, destinationAddressesWithAmount, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
+	txHash := ""
+	if len(addressesToSend) > 0 {
+		txHash, err = s.apiRequester.SendMany(ctx, addressesToSend)
+		if err != nil {
+			return err
+		}
+		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
+	}
+
+	if err := storage.SaveStatistics(ctx, addressesWithAmountInfo, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
 	}
 
 	return nil
 }
 
+func (s *PayService) GetTotalRewardForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) (btcutil.Amount, []string, error) {
+	var totalAmountBTC float64
+	var transactionIdsToMarkAsProcessed []string // to be marked as processed at the end of the loop
+	unspentTransactions, err := btcClient.ListUnspent()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	validUnspentTransactions, err := filterUnspentTransactions(ctx, unspentTransactions, storage, farmAddresses)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	for _, elem := range validUnspentTransactions {
+		totalAmountBTC += elem.Amount
+		transactionIdsToMarkAsProcessed = append(transactionIdsToMarkAsProcessed, elem.TxID)
+	}
+	totalAmountSatoshish, err := btcutil.NewAmount(totalAmountBTC)
+	if err != nil {
+		return 0, nil, err
+	}
+	return totalAmountSatoshish, transactionIdsToMarkAsProcessed, nil
+}
+
+func filterUnspentTransactions(ctx context.Context, transactions []btcjson.ListUnspentResult, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
+	var validTransactions []btcjson.ListUnspentResult
+	for _, unspentTx := range transactions {
+		isTransactionProcessed, err := isTransactionProcessed(ctx, unspentTx, storage)
+		if err != nil {
+			return nil, err
+		}
+		if !isTransactionProcessed && !isChangeTransaction(unspentTx, farmAddresses) {
+			validTransactions = append(validTransactions, unspentTx)
+		}
+	}
+
+	return validTransactions, nil
+}
+
+func isChangeTransaction(unspentTx btcjson.ListUnspentResult, farmAddresses []string) bool {
+	for _, address := range farmAddresses {
+		if address == unspentTx.Address {
+			return false
+		}
+	}
+	return true
+}
+
+func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentResult, storage Storage) (bool, error) {
+	transaction, err := storage.GetUTXOTransaction(ctx, unspentTx.TxID)
+	switch err {
+	case nil:
+		return transaction.Processed == true, nil
+	case sql.ErrNoRows:
+		return false, nil // not found thus not processed
+	default:
+		return false, err
+	}
+}
+
+func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) (map[string]int64, map[string]types.AmountInfo, error) {
+	thresholdInSatoshis, err := btcutil.NewAmount(s.config.GlobalPayoutThresholdInBTC)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	addressesWithThresholdToUpdate := make(map[string]int64)
+
+	addressesToSend := make(map[string]types.AmountInfo)
+
+	for key := range destinationAddressesWithAmounts {
+		amountAccumulated, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
+		if err != nil {
+			switch err {
+			case sql.ErrNoRows:
+				log.Info().Msgf("No threshold found, inserting...")
+				err = storage.SetInitialAccumulatedAmountForAddress(ctx, nil, key, farmId, 0)
+			default:
+				return nil, nil, err
+			}
+		}
+		amountAccumulatedSatoshis := btcutil.Amount(amountAccumulated)
+		if destinationAddressesWithAmounts[key]+amountAccumulatedSatoshis >= thresholdInSatoshis {
+			addressesWithThresholdToUpdate[key] = 0 // threshold reached, reset it to 0 and update it later in DB
+			amountToSend := destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis
+			addressesToSend[key] = types.AmountInfo{Amount: amountToSend, ThresholdReached: true}
+		} else {
+			addressesWithThresholdToUpdate[key] += int64(destinationAddressesWithAmounts[key]) + amountAccumulated
+			addressesToSend[key] = types.AmountInfo{Amount: destinationAddressesWithAmounts[key], ThresholdReached: false}
+		}
+	}
+
+	return addressesWithThresholdToUpdate, addressesToSend, nil
+}
+
+// removeAddressesWithZeroReward utilised in case we had a maintenance fee greater than the nft reward.
+// keys with 0 value were added in order to have statistics even for 0 reward
+// and in order to avoid sending them as 0 - just remove them but still keep statistic
+func removeAddressesWithZeroReward(destinationAddressesWithAmount map[string]btcutil.Amount) {
+	for key := range destinationAddressesWithAmount {
+		if destinationAddressesWithAmount[key] == 0 {
+			delete(destinationAddressesWithAmount, key)
+		}
+
+	}
+}
+
 // Converts Satoshi to BTC so it can accepted by the RPC interface
-func convertAmountToBTC(destinationAddressesWithAmount map[string]btcutil.Amount) map[string]float64 {
+func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountInfo) map[string]float64 {
 	result := make(map[string]float64)
 	for k, v := range destinationAddressesWithAmount {
-		result[k] = v.ToBTC()
+		if v.ThresholdReached {
+			result[k] = v.Amount.ToBTC()
+		}
 	}
 	return result
 }
@@ -360,7 +472,7 @@ func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.
 
 func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount, statistics *types.NFTStatistics) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
-		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100) // TODO: Change this to normal float64 percent as MULF64 is rounding
+		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)
 		destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
 		addPaymentAmountToStatistics(payoutAmount, nftPayoutAddress, statistics)
 	}
@@ -409,8 +521,6 @@ type Provider interface {
 }
 
 type BtcClient interface {
-	GetBalance(account string) (btcutil.Amount, error)
-
 	LoadWallet(walletName string) (*btcjson.LoadWalletResult, error)
 
 	UnloadWallet(walletName *string) error
@@ -420,12 +530,14 @@ type BtcClient interface {
 	WalletLock() error
 
 	GetRawTransactionVerbose(txHash *chainhash.Hash) (*btcjson.TxRawResult, error)
+
+	ListUnspent() ([]btcjson.ListUnspentResult, error)
 }
 
 type Storage interface {
 	GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error)
 
-	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]btcutil.Amount, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) error
+	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId, farmSubAccountName string) error
 
 	GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error)
 
@@ -443,6 +555,14 @@ type Storage interface {
 		newRBFTXStatus string,
 		farmSubAccountName string,
 		retryCount int) error
+
+	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
+
+	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error)
+
+	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) error
+
+	SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error
 }
 
 type Helper interface {
