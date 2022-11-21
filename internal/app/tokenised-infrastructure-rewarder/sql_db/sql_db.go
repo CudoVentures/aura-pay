@@ -48,8 +48,10 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		}
 	}
 
-	if retErr = sdb.SaveTxHashWithStatus(ctx, sqlTx, txHash, types.TransactionPending, farmSubAccountName, 0); retErr != nil {
-		return
+	if txHash != "" {
+		if retErr = sdb.SaveTxHashWithStatus(ctx, sqlTx, txHash, types.TransactionPending, farmSubAccountName, 0); retErr != nil {
+			return
+		}
 	}
 
 	if retErr = sqlTx.Commit(); retErr != nil {
