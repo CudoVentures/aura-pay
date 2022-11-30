@@ -61,10 +61,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 	}()
 
-	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.GetTotalRewardForFarm(ctx, btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool})
+	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.GetTotalRewardForFarm(
+		ctx,
+		btcClient,
+		storage,
+		[]string{farm.AddressForReceivingRewardsFromPool})
 	if err != nil {
 		return err
 	}
+
 	if totalRewardForFarm == 0 {
 		log.Info().Msgf("reward for farm {{%s}} is 0....skipping this farm", farm.SubAccountName)
 		return nil
@@ -80,7 +85,8 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	if s.config.IsTesting {
 		currentHashPowerForFarm = 1200 // hardcoded for testing & QA
 	} else {
-		currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName, time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+		currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName,
+			time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
 		if err != nil {
 			return err
 		}
@@ -167,12 +173,16 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			rewardForNft := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
 
-			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart, periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft)
+			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart,
+				periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutdAddress)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOFeePayoutAddress)
-			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNftAfterFee)
-			log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, maintenanceFee)
-			log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
+			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s",
+				collection.Denom.Id, nft.Id, rewardForNftAfterFee)
+			log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
+				collection.Denom.Id, nft.Id, maintenanceFee)
+			log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
+				s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
 			nftStatistics.Reward = rewardForNftAfterFee
 			nftStatistics.MaintenanceFee = maintenanceFee
 			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
@@ -311,23 +321,26 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 	addressesToSend := make(map[string]types.AmountInfo)
 
 	for key := range destinationAddressesWithAmounts {
-		amountAccumulated, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
+		amountAccumulatedBTC, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
 		if err != nil {
 			switch err {
 			case sql.ErrNoRows:
 				log.Info().Msgf("No threshold found, inserting...")
 				err = storage.SetInitialAccumulatedAmountForAddress(ctx, nil, key, farmId, 0)
+				if err != nil {
+					return nil, nil, err
+				}
 			default:
 				return nil, nil, err
 			}
 		}
-		amountAccumulatedSatoshis := btcutil.Amount(amountAccumulated)
+		amountAccumulatedSatoshis := btcutil.Amount(amountAccumulatedBTC)
 		if destinationAddressesWithAmounts[key]+amountAccumulatedSatoshis >= thresholdInSatoshis {
 			addressesWithThresholdToUpdate[key] = 0 // threshold reached, reset it to 0 and update it later in DB
 			amountToSend := destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis
 			addressesToSend[key] = types.AmountInfo{Amount: amountToSend, ThresholdReached: true}
 		} else {
-			addressesWithThresholdToUpdate[key] += int64(destinationAddressesWithAmounts[key]) + amountAccumulated
+			addressesWithThresholdToUpdate[key] += int64(destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis)
 			addressesToSend[key] = types.AmountInfo{Amount: destinationAddressesWithAmounts[key], ThresholdReached: false}
 		}
 	}
@@ -479,11 +492,9 @@ func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPay
 }
 
 func addPaymentAmountToStatistics(amount btcutil.Amount, payoutAddress string, nftStatistics *types.NFTStatistics) {
-	// bug here if no nft owners for time period
 	for i := 0; i < len(nftStatistics.NFTOwnersForPeriod); i++ {
-		additionalData := nftStatistics.NFTOwnersForPeriod[i]
-		if additionalData.PayoutAddress == payoutAddress {
-			additionalData.Reward = amount
+		if nftStatistics.NFTOwnersForPeriod[i].PayoutAddress == payoutAddress {
+			nftStatistics.NFTOwnersForPeriod[i].Reward = amount
 		}
 	}
 }
@@ -558,7 +569,7 @@ type Storage interface {
 
 	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
 
-	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error)
+	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (float64, error)
 
 	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) error
 

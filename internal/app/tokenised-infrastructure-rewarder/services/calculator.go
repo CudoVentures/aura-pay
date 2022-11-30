@@ -75,6 +75,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		statisticsAdditionalData.TotalTimeOwned = periodEnd - periodStart
 		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
 		statisticsAdditionalData.PercentOfTimeOwned = 100
+		statisticsAdditionalData.Owner = currentNftOwner
 
 		statistics.NFTOwnersForPeriod = []types.NFTOwnerInformation{statisticsAdditionalData}
 
@@ -116,6 +117,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		}
 
 		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
+		statisticsAdditionalData.Owner = transferHistoryForTimePeriod[i].To
 
 		ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
 

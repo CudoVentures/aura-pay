@@ -34,15 +34,17 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 	}
 
 	for _, nftStatistic := range statistics {
-		if retErr = saveNFTInformationHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
+		var nftPayoutHistoryId int
+		if nftPayoutHistoryId, retErr = saveNFTInformationHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
 			nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash,
 			nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee); retErr != nil {
 			return
 		}
+
 		for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
-			if retErr = saveNFTOwnersForPeriodHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
+			if retErr = saveNFTOwnersForPeriodHistory(ctx, sqlTx,
 				ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned,
-				ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward); retErr != nil {
+				ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward, nftPayoutHistoryId); retErr != nil {
 				return
 			}
 		}
