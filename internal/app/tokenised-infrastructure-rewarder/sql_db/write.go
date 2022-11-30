@@ -62,11 +62,10 @@ func (sdb *SqlDB) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, ol
 func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmSubAccountName string, retryCount int) error {
 	now := time.Now()
 	if tx != nil {
-		_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), farmSubAccountName, retryCount, now.UTC(), now.UTC())
-		return err
+		_, err = tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
+	} else {
+		_, err = sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
 	}
-	_, err := sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
-
 	return err
 }
 
