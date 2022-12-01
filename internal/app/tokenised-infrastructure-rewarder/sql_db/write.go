@@ -28,7 +28,7 @@ func saveNFTInformationHistory(ctx context.Context, tx *sqlx.Tx, collectionDenom
 	now := time.Now()
 
 	err := tx.QueryRowContext(ctx, insertNFTInformationHistory, collectionDenomId, tokenId, payoutPeriodStart,
-		payoutPeriodEnd, reward, txHash, maintenanceFee, CudoPartOfMaintenanceFee, now.UTC(), now.UTC()).Scan(&id)
+		payoutPeriodEnd, reward.ToBTC(), txHash, maintenanceFee.ToBTC(), CudoPartOfMaintenanceFee.ToBTC(), now.UTC(), now.UTC()).Scan(&id)
 
 	if err != nil {
 		return -1, err
@@ -37,12 +37,11 @@ func saveNFTInformationHistory(ctx context.Context, tx *sqlx.Tx, collectionDenom
 	return id, nil
 }
 
-// add to this table
 func saveNFTOwnersForPeriodHistory(ctx context.Context, tx *sqlx.Tx, timedOwnedFrom int64, timedOwnedTo int64, totalTimeOwned int64,
 	percentOfTimeOwned float64, owner string, payoutAddress string, reward btcutil.Amount, nftPayoutHistoryId int) error {
 	now := time.Now()
 	_, err := tx.ExecContext(ctx, insertNFTOnwersForPeriodHistory,
-		timedOwnedFrom, timedOwnedTo, totalTimeOwned, percentOfTimeOwned, owner, payoutAddress, reward, nftPayoutHistoryId, now.UTC(), now.UTC())
+		timedOwnedFrom, timedOwnedTo, totalTimeOwned, percentOfTimeOwned, owner, payoutAddress, reward.ToBTC(), nftPayoutHistoryId, now.UTC(), now.UTC())
 	return err
 }
 
@@ -84,12 +83,12 @@ func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txH
 	return err
 }
 
-func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int64) error {
+func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount btcutil.Amount) error {
 	if tx != nil {
-		_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
+		_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
 		return err
 	}
-	_, err := sdb.db.ExecContext(ctx, updateThresholdAmounts, amount, address, farmId)
+	_, err := sdb.db.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
 	return err
 }
 

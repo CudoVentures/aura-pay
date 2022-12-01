@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/jmoiron/sqlx"
 	"os"
 	"testing"
@@ -63,7 +64,7 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 		tearDownDatabase(sqlxDB)
 	}()
 
-	err := dbStorage.UpdateThresholdStatuses(context.Background(), []string{"3"}, map[string]int64{}, 1)
+	err := dbStorage.UpdateThresholdStatuses(context.Background(), []string{"3"}, map[string]btcutil.Amount{}, 1)
 	if err != nil {
 		panic(err)
 	}
@@ -329,6 +330,8 @@ func setupMockStorage() *mockStorage {
 						TotalTimeOwned:     432000,
 						PercentOfTimeOwned: 26.32,
 						PayoutAddress:      "nft_minter_payout_addr",
+						Owner:              "nft_minter",
+						Reward:             26316880,
 					},
 					{
 						TimeOwnedFrom:      1665431478,
@@ -336,6 +339,8 @@ func setupMockStorage() *mockStorage {
 						TotalTimeOwned:     1209600,
 						PercentOfTimeOwned: 73.68,
 						PayoutAddress:      "nft_owner_2_payout_addr",
+						Owner:              "nft_owner_2",
+						Reward:             73671264,
 					},
 				},
 			},
@@ -420,7 +425,7 @@ func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context
 	return args.Get(0).(float64), args.Error(1)
 }
 
-func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) error {
+func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) error {
 	args := ms.Called(ctx, processedTransactions, addressesWithThresholdToUpdate)
 	return args.Error(0)
 }
@@ -447,6 +452,6 @@ type mockHelper struct {
 
 func skipDBTests(t *testing.T) {
 	if os.Getenv("EXECUTE_DB_TEST") == "" || os.Getenv("EXECUTE_DB_TEST") == "false" {
-		t.Skip("Skipping testing in CI environment")
+		t.Skip("Skipping DB Tests in this env")
 	}
 }

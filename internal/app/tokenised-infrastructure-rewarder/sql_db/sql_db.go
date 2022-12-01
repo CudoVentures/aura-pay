@@ -3,6 +3,7 @@ package sql_db
 import (
 	"context"
 	"fmt"
+	"github.com/btcsuite/btcd/btcutil"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/jmoiron/sqlx"
@@ -111,7 +112,7 @@ type SqlDB struct {
 	db *sqlx.DB
 }
 
-func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) (retErr error) {
+func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) (retErr error) {
 	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %s", err)

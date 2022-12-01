@@ -106,6 +106,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnHundredPerc
 				TotalTimeOwned:     periodEnd - periodStart,
 				PayoutAddress:      payoutAddr,
 				PercentOfTimeOwned: 100,
+				Owner:              "addr1",
 			},
 		},
 	}
@@ -158,6 +159,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 			TotalTimeOwned:     63,
 			PercentOfTimeOwned: 63.64,
 			PayoutAddress:      "nft_owner_1_payout_addr",
+			Owner:              "nft_owner_1",
 		},
 		{
 			TimeOwnedFrom:      64,
@@ -165,6 +167,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 			TotalTimeOwned:     36,
 			PercentOfTimeOwned: 36.36,
 			PayoutAddress:      "nft_owner_2_payout_addr",
+			Owner:              "nft_owner_2",
 		},
 	}
 
@@ -250,6 +253,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     9,
 			PercentOfTimeOwned: 9.09,
 			PayoutAddress:      "nft_minter_payout_addr",
+			Owner:              "nft_minter",
 		},
 		{
 			TimeOwnedFrom:      10,
@@ -257,6 +261,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     3,
 			PercentOfTimeOwned: 3.03,
 			PayoutAddress:      "nft_owner_1_payout_addr",
+			Owner:              "nft_owner_1",
 		},
 		{
 			TimeOwnedFrom:      13,
@@ -264,6 +269,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     37,
 			PercentOfTimeOwned: 37.37,
 			PayoutAddress:      "nft_owner_2_payout_addr",
+			Owner:              "nft_owner_2",
 		},
 		{
 			TimeOwnedFrom:      50,
@@ -271,6 +277,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     30,
 			PercentOfTimeOwned: 30.30,
 			PayoutAddress:      "nft_owner_3_payout_addr",
+			Owner:              "nft_owner_3",
 		},
 		{
 			TimeOwnedFrom:      80,
@@ -278,6 +285,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     15,
 			PercentOfTimeOwned: 15.15,
 			PayoutAddress:      "nft_owner_4_payout_addr",
+			Owner:              "nft_owner_4",
 		},
 		{
 			TimeOwnedFrom:      95,
@@ -285,6 +293,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     5,
 			PercentOfTimeOwned: 5.05,
 			PayoutAddress:      "nft_owner_5_payout_addr",
+			Owner:              "nft_owner_5",
 		},
 	}
 
@@ -365,6 +374,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     9,
 			PercentOfTimeOwned: 9.09,
 			PayoutAddress:      "nft_minter_payout_addr",
+			Owner:              "nft_minter",
 		},
 		{
 			TimeOwnedFrom:      10,
@@ -372,6 +382,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     3,
 			PercentOfTimeOwned: 3.03,
 			PayoutAddress:      "nft_owner_1_payout_addr",
+			Owner:              "nft_owner_1",
 		},
 		{
 			TimeOwnedFrom:      13,
@@ -379,6 +390,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     37,
 			PercentOfTimeOwned: 37.37,
 			PayoutAddress:      "nft_owner_2_payout_addr",
+			Owner:              "nft_owner_2",
 		},
 		{
 			TimeOwnedFrom:      50,
@@ -386,6 +398,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     30,
 			PercentOfTimeOwned: 30.30,
 			PayoutAddress:      "nft_owner_3_payout_addr",
+			Owner:              "nft_owner_3",
 		},
 		{
 			TimeOwnedFrom:      80,
@@ -393,6 +406,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     15,
 			PercentOfTimeOwned: 15.15,
 			PayoutAddress:      "nft_owner_4_payout_addr",
+			Owner:              "nft_owner_4",
 		},
 		{
 			TimeOwnedFrom:      95,
@@ -400,6 +414,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TotalTimeOwned:     5,
 			PercentOfTimeOwned: 5.05,
 			PayoutAddress:      "nft_owner_5_payout_addr",
+			Owner:              "nft_owner_5",
 		},
 	}
 

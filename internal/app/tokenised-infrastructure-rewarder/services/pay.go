@@ -310,13 +310,13 @@ func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentRe
 	}
 }
 
-func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) (map[string]int64, map[string]types.AmountInfo, error) {
+func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) (map[string]btcutil.Amount, map[string]types.AmountInfo, error) {
 	thresholdInSatoshis, err := btcutil.NewAmount(s.config.GlobalPayoutThresholdInBTC)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	addressesWithThresholdToUpdate := make(map[string]int64)
+	addressesWithThresholdToUpdate := make(map[string]btcutil.Amount)
 
 	addressesToSend := make(map[string]types.AmountInfo)
 
@@ -340,7 +340,7 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 			amountToSend := destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis
 			addressesToSend[key] = types.AmountInfo{Amount: amountToSend, ThresholdReached: true}
 		} else {
-			addressesWithThresholdToUpdate[key] += int64(destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis)
+			addressesWithThresholdToUpdate[key] += destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis
 			addressesToSend[key] = types.AmountInfo{Amount: destinationAddressesWithAmounts[key], ThresholdReached: false}
 		}
 	}
@@ -571,7 +571,7 @@ type Storage interface {
 
 	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (float64, error)
 
-	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) error
+	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) error
 
 	SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error
 }
