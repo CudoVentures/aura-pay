@@ -3,6 +3,7 @@ package sql_db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 )
 
@@ -29,7 +30,7 @@ func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, add
 	}
 
 	if len(result) > 1 {
-		//return 0, fmt.Errorf("more then one threshold address for farm! Address: %s, FarmId: %s", address, farmId)
+		return 0, fmt.Errorf("more then one threshold address for farm! Address: %s, FarmId: %s", address, farmId)
 	} else if len(result) == 0 {
 		return 0, sql.ErrNoRows
 	}
@@ -44,7 +45,7 @@ func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txHash string) (types.
 	}
 
 	if len(result) > 1 {
-		//return types.UTXOTransaction{}, fmt.Errorf("tx_hash with %s is duplicated in table utxo_transactions", txHash)
+		return types.UTXOTransaction{}, fmt.Errorf("tx_hash with %s is duplicated in table utxo_transactions", txHash)
 	} else if len(result) == 0 {
 		return types.UTXOTransaction{}, sql.ErrNoRows
 	}

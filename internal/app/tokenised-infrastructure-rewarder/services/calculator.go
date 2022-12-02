@@ -100,6 +100,12 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		Timestamp: periodEnd,
 	})
 
+	//BUG HERE:
+	// For the first transfer ( mint ) we are having two transfers which will result in duplicate sub statistics for each owner
+	// also when we have one person own the same nft more than once in the same payout period - we will have duplicate sub statistics for the owner
+	// Solution: Remove the duplication by merging using the payout address; Create map[string]AdditionalData using the payoutaddress as the key and the additional data as the value
+	// if we already have the payoutaddress in the map - increment the current additionalData values with the incoming
+
 	for i := 0; i < len(transferHistoryForTimePeriod)-1; i++ {
 
 		timeOwned := transferHistoryForTimePeriod[i+1].Timestamp - transferHistoryForTimePeriod[i].Timestamp
