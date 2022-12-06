@@ -42,8 +42,8 @@ func calculatePercent(available float64, actual float64, reward btcutil.Amount) 
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
-func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory, collectionDenomId, nftId string,
-	periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, payoutAddrNetwork string) (map[string]float64, error) {
+func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory,
+	collectionDenomId, nftId string, periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, payoutAddrNetwork string, rewardForNftAfterFee btcutil.Amount) (map[string]float64, error) {
 
 	totalPeriodTimeInSeconds := periodEnd - periodStart
 	if totalPeriodTimeInSeconds <= 0 {
@@ -76,6 +76,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
 		statisticsAdditionalData.PercentOfTimeOwned = 100
 		statisticsAdditionalData.Owner = currentNftOwner
+		statisticsAdditionalData.Reward = rewardForNftAfterFee
 
 		statistics.NFTOwnersForPeriod = []types.NFTOwnerInformation{statisticsAdditionalData}
 
@@ -100,12 +101,6 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		Timestamp: periodEnd,
 	})
 
-	//BUG HERE:
-	// For the first transfer ( mint ) we are having two transfers which will result in duplicate sub statistics for each owner
-	// also when we have one person own the same nft more than once in the same payout period - we will have duplicate sub statistics for the owner
-	// Solution: Remove the duplication by merging using the payout address; Create map[string]AdditionalData using the payoutaddress as the key and the additional data as the value
-	// if we already have the payoutaddress in the map - increment the current additionalData values with the incoming
-
 	for i := 0; i < len(transferHistoryForTimePeriod)-1; i++ {
 
 		timeOwned := transferHistoryForTimePeriod[i+1].Timestamp - transferHistoryForTimePeriod[i].Timestamp
@@ -124,6 +119,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 
 		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
 		statisticsAdditionalData.Owner = transferHistoryForTimePeriod[i].To
+		statisticsAdditionalData.Reward = rewardForNftAfterFee.MulF64(percentOfTimeOwned / 100)
 
 		ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
 

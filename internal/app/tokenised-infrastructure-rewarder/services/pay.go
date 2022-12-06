@@ -188,14 +188,14 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
 
 			allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
-				ctx, nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, &nftStatistics, nft.Owner, s.config.Network)
+				ctx, nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, &nftStatistics, nft.Owner, s.config.Network, rewardForNftAfterFee)
 			if err != nil {
 				return err
 			}
 
 			statistics = append(statistics, nftStatistics)
 
-			distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFee, destinationAddressesWithAmount, &nftStatistics)
+			distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFee, destinationAddressesWithAmount)
 		}
 	}
 
@@ -483,19 +483,10 @@ func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.
 	return verifiedCollectionIds, nil
 }
 
-func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount, statistics *types.NFTStatistics) {
+func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
 		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)
 		destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
-		addPaymentAmountToStatistics(payoutAmount, nftPayoutAddress, statistics)
-	}
-}
-
-func addPaymentAmountToStatistics(amount btcutil.Amount, payoutAddress string, nftStatistics *types.NFTStatistics) {
-	for i := 0; i < len(nftStatistics.NFTOwnersForPeriod); i++ {
-		if nftStatistics.NFTOwnersForPeriod[i].PayoutAddress == payoutAddress {
-			nftStatistics.NFTOwnersForPeriod[i].Reward = amount
-		}
 	}
 }
 
