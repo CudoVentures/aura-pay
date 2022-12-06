@@ -63,7 +63,7 @@ type AddressThresholdAmountByFarm struct {
 	Id         string    `db:"id"`
 	BTCAddress string    `db:"btc_address"`
 	FarmId     int64     `db:"farm_id"`
-	Amount     int64     `db:"amount"`
+	AmountBTC  float64   `db:"amount_btc"`
 	CreatedAt  time.Time `db:"createdAt"`
 	UpdatedAt  time.Time `db:"updatedAt"`
 }

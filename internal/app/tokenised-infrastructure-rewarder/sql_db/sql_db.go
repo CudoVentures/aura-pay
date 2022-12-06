@@ -3,6 +3,7 @@ package sql_db
 import (
 	"context"
 	"fmt"
+	"github.com/btcsuite/btcd/btcutil"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/jmoiron/sqlx"
@@ -34,15 +35,17 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 	}
 
 	for _, nftStatistic := range statistics {
-		if retErr = saveNFTInformationHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
+		var nftPayoutHistoryId int
+		if nftPayoutHistoryId, retErr = saveNFTInformationHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
 			nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash,
 			nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee); retErr != nil {
 			return
 		}
+
 		for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
-			if retErr = saveNFTOwnersForPeriodHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
+			if retErr = saveNFTOwnersForPeriodHistory(ctx, sqlTx,
 				ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned,
-				ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward); retErr != nil {
+				ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward, nftPayoutHistoryId); retErr != nil {
 				return
 			}
 		}
@@ -109,7 +112,7 @@ type SqlDB struct {
 	db *sqlx.DB
 }
 
-func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) (retErr error) {
+func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) (retErr error) {
 	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %s", err)

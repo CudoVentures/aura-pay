@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/jmoiron/sqlx"
+	"os"
 	"testing"
 	"time"
 
@@ -32,6 +36,95 @@ func TestProcessPayment(t *testing.T) {
 
 	s := NewPayService(config, setupMockApiRequester(t), &mockHelper{}, btcNetworkParams)
 	require.NoError(t, s.Execute(context.Background(), setupMockBtcClient(), setupMockStorage()))
+}
+
+func TestPayService_ProcessPayment_Threshold(t *testing.T) {
+	skipDBTests(t)
+
+	config := &infrastructure.Config{
+		Network:                    "BTC",
+		CUDOMaintenanceFeePercent:  50,
+		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC: 0.01,
+		DbDriverName:               "postgres",
+		DbUser:                     "postgresUser",
+		DbPassword:                 "mysecretpassword",
+		DbHost:                     "127.0.0.1",
+		DbPort:                     "5432",
+		DbName:                     "aura-pay-test-db",
+	}
+
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	dbStorage, sqlxDB := setupInMemoryStorage(config)
+	defer func() {
+		tearDownDatabase(sqlxDB)
+	}()
+
+	err := dbStorage.UpdateThresholdStatuses(context.Background(), []string{"3"}, map[string]btcutil.Amount{}, 1)
+	if err != nil {
+		panic(err)
+	}
+
+	mockAPIRequester := setupMockApiRequester(t)
+	// cudo_maintenance_fee_payout_addr and maintenance_fee_payout_address_1 are below threshold of 0.01 with values 5.928e-05
+	mockAPIRequester.On("SendMany", mock.Anything, map[string]float64{
+		"leftover_reward_payout_address_1": 3,
+		"nft_minter_payout_addr":           0.1973688,
+		"nft_owner_2_payout_addr":          0.55251264,
+	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
+
+	s := NewPayService(config, mockAPIRequester, &mockHelper{}, btcNetworkParams)
+
+	require.NoError(t, s.Execute(context.Background(), setupMockBtcClient(), dbStorage))
+	processTx1, _ := dbStorage.GetUTXOTransaction(context.Background(), "1")
+	require.Equal(t, true, processTx1.Processed)
+	processTx2, _ := dbStorage.GetUTXOTransaction(context.Background(), "2")
+	require.Equal(t, true, processTx2.Processed)
+	processTx4, _ := dbStorage.GetUTXOTransaction(context.Background(), "4")
+	require.Equal(t, true, processTx4.Processed)
+
+	amountAccumulatedBTC, err := dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "maintenance_fee_payout_address_1", 1)
+	require.Equal(t, float64(5928), amountAccumulatedBTC)
+	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "cudo_maintenance_fee_payout_address_1", 1)
+	require.Equal(t, float64(5928), amountAccumulatedBTC)
+	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_minter_payout_addr", 1)
+	require.Equal(t, float64(0), amountAccumulatedBTC)
+	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_owner_2_payout_addr", 1)
+	require.Equal(t, float64(0), amountAccumulatedBTC)
+	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "leftover_reward_payout_address_1", 1)
+	require.Equal(t, float64(0), amountAccumulatedBTC)
+
+}
+
+func tearDownDatabase(sqlxDB *sqlx.DB) {
+	_, err := sqlxDB.Exec("TRUNCATE TABLE utxo_transactions")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE threshold_amounts")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_destination_addresses_with_amount")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_nft_owners_payout_history CASCADE ")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_nft_payout_history CASCADE")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_tx_hash_status")
+	if err != nil {
+		panic(err)
+	}
 }
 
 func setupMockApiRequester(t *testing.T) *mockAPIRequester {
@@ -237,6 +330,8 @@ func setupMockStorage() *mockStorage {
 						TotalTimeOwned:     432000,
 						PercentOfTimeOwned: 26.32,
 						PayoutAddress:      "nft_minter_payout_addr",
+						Owner:              "nft_minter",
+						Reward:             26316880,
 					},
 					{
 						TimeOwnedFrom:      1665431478,
@@ -244,6 +339,8 @@ func setupMockStorage() *mockStorage {
 						TotalTimeOwned:     1209600,
 						PercentOfTimeOwned: 73.68,
 						PayoutAddress:      "nft_owner_2_payout_addr",
+						Owner:              "nft_owner_2",
+						Reward:             73671264,
 					},
 				},
 			},
@@ -254,10 +351,23 @@ func setupMockStorage() *mockStorage {
 	storage.On("GetUTXOTransaction", mock.Anything, "3").Return(types.UTXOTransaction{TxHash: "3", Processed: false}, nil)
 	storage.On("GetUTXOTransaction", mock.Anything, "4").Return(types.UTXOTransaction{TxHash: "4", Processed: false}, nil)
 
-	storage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, mock.Anything, mock.Anything).Return(int64(0), nil)
+	storage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, mock.Anything, mock.Anything).Return(float64(0), nil)
 
 	storage.On("UpdateThresholdStatuses", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	return storage
+}
+
+func setupInMemoryStorage(c *infrastructure.Config) (Storage, *sqlx.DB) {
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		c.DbHost, c.DbPort, c.DbUser, c.DbPassword, c.DbName)
+
+	db, err := sqlx.Connect(c.DbDriverName, psqlInfo)
+	if err != nil {
+		panic(err)
+	}
+	storage := sql_db.NewSqlDB(db)
+	return storage, db
 }
 
 func (ms *mockStorage) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error) {
@@ -310,12 +420,12 @@ func (ms *mockStorage) GetUTXOTransaction(ctx context.Context, txId string) (typ
 	return args.Get(0).(types.UTXOTransaction), args.Error(1)
 }
 
-func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (int64, error) {
+func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (float64, error) {
 	args := ms.Called(ctx, key, farmId)
-	return args.Get(0).(int64), args.Error(1)
+	return args.Get(0).(float64), args.Error(1)
 }
 
-func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]int64, farmId int) error {
+func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) error {
 	args := ms.Called(ctx, processedTransactions, addressesWithThresholdToUpdate)
 	return args.Error(0)
 }
@@ -338,4 +448,10 @@ func (_ *mockHelper) Date() (year int, month time.Month, day int) {
 }
 
 type mockHelper struct {
+}
+
+func skipDBTests(t *testing.T) {
+	if os.Getenv("EXECUTE_DB_TEST") == "" || os.Getenv("EXECUTE_DB_TEST") == "false" {
+		t.Skip("Skipping DB Tests in this env")
+	}
 }

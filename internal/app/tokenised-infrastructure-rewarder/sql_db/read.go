@@ -23,7 +23,7 @@ func (sdb *SqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]typ
 	return txHashesWithStatus, nil
 }
 
-func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int) (int64, error) {
+func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int) (float64, error) {
 	var result []types.AddressThresholdAmountByFarm
 	if err := sdb.db.SelectContext(ctx, &result, selectThresholdByAddress, address, farmId); err != nil {
 		return 0, err
@@ -35,7 +35,7 @@ func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, add
 		return 0, sql.ErrNoRows
 	}
 
-	return result[0].Amount, nil
+	return result[0].AmountBTC, nil
 }
 
 func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txHash string) (types.UTXOTransaction, error) {
