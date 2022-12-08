@@ -240,7 +240,7 @@ func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
 		return []types.Farm{}, err
 	}
-	if response.StatusCode != 201 {
+	if response.StatusCode != StatusCodeOK {
 		return []types.Farm{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
 	}
 
