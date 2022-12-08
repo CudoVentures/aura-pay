@@ -2,8 +2,9 @@ package sql_db
 
 import (
 	"context"
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"time"
+
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/jmoiron/sqlx"
@@ -92,7 +93,7 @@ func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, 
 	return err
 }
 
-func (sdb *SqlDB) markUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, tx_hashes []string) interface{} {
+func (sdb *SqlDB) markUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, tx_hashes []string) error {
 	var UTXOMaps []map[string]interface{}
 	for _, hash := range tx_hashes {
 		m := map[string]interface{}{
