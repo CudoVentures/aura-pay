@@ -175,7 +175,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart,
 				periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft)
-			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutdAddress)
+			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutAddress)
 			payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOFeePayoutAddress)
 			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s",
 				collection.Denom.Id, nft.Id, rewardForNftAfterFee)
@@ -419,7 +419,7 @@ func payMaintenanceFeeForNFT(destinationAddressesWithAmount map[string]btcutil.A
 func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) (btcutil.Amount, error) {
 	currentYear, currentMonth, _ := s.helper.Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
-	mtFeeInBTC, err := strconv.ParseFloat(farm.MonthlyMaintenanceFeeInBTC, 64)
+	mtFeeInBTC, err := strconv.ParseFloat(farm.MaintenanceFeeInBtc, 64)
 	if err != nil {
 		return -1, err
 	}
