@@ -213,41 +213,47 @@ func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
 	//	return []types.Farm{testFarm}, nil
 	//}
 
-	client := &http.Client{
-		Timeout: 60 * time.Second,
+	jsonData := map[string]interface{}{
+		"miningFarmIds":  "null",
+		"status":         "approved",
+		"searchString":   "",
+		"sessionAccount": 0,
+		"orderBy":        -1,
+		"from":           0,
+		"count":          2147483647,
 	}
-
-	requestString := "/farm"
-
-	req, err := http.NewRequestWithContext(ctx, "GET", r.config.AuraPoolBackEndUrl+requestString, nil)
+	jsonValue, _ := json.Marshal(jsonData)
+	request, err := http.NewRequestWithContext(ctx, "POST", r.config.AuraPoolBackEndUrl+"/farm", bytes.NewBuffer(jsonValue))
 	if err != nil {
-		return nil, err
+		return []types.Farm{}, err
 	}
-
-	req.Header.Set("Content-Type", "application/json")
-	res, err := client.Do(req)
+	client := &http.Client{Timeout: time.Second * 10}
+	response, err := client.Do(request)
 	if err != nil {
-		return nil, err
+		log.Error().Msgf("The HTTP request failed with error %s\n", err)
+		return []types.Farm{}, nil
 	}
+	defer response.Body.Close()
 
-	defer res.Body.Close()
-
-	bytes, err := ioutil.ReadAll(res.Body)
+	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return []types.Farm{}, err
+	}
+	if response.StatusCode != 201 {
+		return []types.Farm{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
+	}
+
+	okStruct := struct {
+		Farms []types.Farm `json:"miningFarmEntities"`
+	}{}
+
+	if err := json.Unmarshal(data, &okStruct); err != nil {
+		log.Error().Msgf("Could not unmarshall farm data [%s] from platform backend to the specific type, error is: [%s]", data, err)
 		return nil, err
 	}
 
-	if res.StatusCode != StatusCodeOK {
-		return nil, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", res.Status, res.StatusCode, string(bytes))
-	}
-
-	okStruct := []types.Farm{}
-
-	if err := json.Unmarshal(bytes, &okStruct); err != nil {
-		return nil, err
-	}
-
-	return okStruct, nil
+	return okStruct.Farms, nil
 
 }
 

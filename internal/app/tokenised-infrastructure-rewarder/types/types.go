@@ -6,13 +6,14 @@ import (
 )
 
 type Farm struct {
-	Id                                 int          `json:"id"`
-	SubAccountName                     string       `json:"sub_account_name"`
-	AddressForReceivingRewardsFromPool string       `json:"address_for_receiving_rewards_from_pool"` // Address set in the mining pool that receives the farm rewards
-	LeftoverRewardPayoutAddress        string       `json:"leftover_reward_payout_address"`
-	MaintenanceFeePayoutdAddress       string       `json:"maintenance_fee_payout_address"`
-	Collections                        []Collection `json:"collections"`
-	MonthlyMaintenanceFeeInBTC         string       `json:"maintenance_fee_in_btc"`
+	Id                                 int    `json:"id"`
+	Name                               string `json:"name"`
+	Description                        string `json:"description"`
+	SubAccountName                     string `json:"sub_account_name"`
+	AddressForReceivingRewardsFromPool string `json:"address_for_receiving_rewards_from_pool"`
+	LeftoverRewardPayoutAddress        string `json:"leftover_reward_payout_address"`
+	MaintenanceFeePayoutAddress        string `json:"maintenance_fee_payout_address"`
+	MaintenanceFeeInBtc                string `json:"maintenance_fee_in_btc"`
 }
 type Collection struct {
 	Denom Denom `json:"denom"`
