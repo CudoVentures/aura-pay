@@ -33,44 +33,45 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 	errorCount := 0
 
 	for ctx.Err() == nil {
+		func() {
+			var processingError error
 
-		var processingError error
-
-		rpcClient, err := provider.InitBtcRpcClient()
-		if err != nil {
-			retry(err)
-			continue
-		}
-		defer rpcClient.Shutdown()
-
-		db, err := provider.InitDBConnection()
-		if err != nil {
-			retry(err)
-			continue
-		}
-		defer db.Close()
-
-		for processingError == nil {
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
-
-			select {
-			case <-ticker.C:
-				mutex.Lock()
-				processingError = s.Execute(ctx, rpcClient, sql_db.NewSqlDB(db))
-				mutex.Unlock()
-			case <-ctx.Done():
+			rpcClient, err := provider.InitBtcRpcClient()
+			if err != nil {
+				retry(err)
 				return
 			}
-		}
+			defer rpcClient.Shutdown()
 
-		// TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
+			db, err := provider.InitDBConnection()
+			if err != nil {
+				retry(err)
+				return
+			}
+			defer db.Close()
 
-		if processingError != nil {
-			//TODO: add grafana if errorCount >= val
-			errorCount++
-			log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
-		}
+			for processingError == nil {
+				ticker := time.NewTicker(interval)
+				defer ticker.Stop()
+
+				select {
+				case <-ticker.C:
+					mutex.Lock()
+					processingError = s.Execute(ctx, rpcClient, sql_db.NewSqlDB(db))
+					mutex.Unlock()
+				case <-ctx.Done():
+					return
+				}
+			}
+
+			// TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
+
+			if processingError != nil {
+				//TODO: add grafana if errorCount >= val
+				errorCount++
+				log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
+			}
+		}()
 	}
 }
 
