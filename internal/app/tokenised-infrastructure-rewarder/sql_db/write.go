@@ -70,17 +70,14 @@ func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash 
 }
 
 func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
-	qry, args, err := sqlx.In(updateTxHashesWithStatusQuery, txStatus, txHashes)
-	if err != nil {
+	for _, hash := range txHashes {
+		if tx != nil {
+			_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
+			return err
+		}
+		_, err := sdb.db.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
 		return err
 	}
-
-	if tx != nil {
-		_, err = tx.ExecContext(ctx, qry, args...)
-		return err
-	}
-	_, err = sdb.db.ExecContext(ctx, qry, args...)
-	return err
 }
 
 func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount btcutil.Amount) error {
@@ -146,7 +143,7 @@ const (
 		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, nft_payout_history_id, "createdAt", "updatedAt")
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
-	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
+	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=$1 where tx_hash=$2`
 
 	updateThresholdAmounts = `UPDATE threshold_amounts SET amount_btc=$1 where btc_address=$2 and farm_id=$3`
 

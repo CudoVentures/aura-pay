@@ -7,6 +7,7 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -54,6 +55,72 @@ func TestRetryService_Execute(t *testing.T) {
 	assert.Equal(t, expectedReplacedTransactions, repalcedTransactions)
 	assert.Equal(t, expectedFailedTransactions, failedTransactions)
 
+}
+
+func TestRetryService_Execute_With_Database(t *testing.T) {
+	//skipDBTests(t)
+
+	config := &infrastructure.Config{
+		Network:                    "BTC",
+		CUDOMaintenanceFeePercent:  50,
+		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC: 0.01,
+		DbDriverName:               "postgres",
+		DbUser:                     "postgresUser",
+		DbPassword:                 "mysecretpassword",
+		DbHost:                     "127.0.0.1",
+		DbPort:                     "5432",
+		DbName:                     "aura-pay-test-db",
+	}
+
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	dbStorage, sqlxDB := setupInMemoryStorage(config)
+	defer func() {
+		tearDownDatabaseRBF(sqlxDB)
+	}()
+
+	seedDatabase(dbStorage)
+
+	s := NewRetryService(config, setupMockApiRequesterRetryService(), &mockHelper{}, btcNetworkParams)
+	require.NoError(t, s.Execute(context.Background(), setupMockBtcClientRetryService(), dbStorage))
+
+}
+
+func seedDatabase(dbStorage Storage) {
+	err := dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881",
+		types.TransactionPending, "1", 0)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882",
+		types.TransactionPending, "1", 0)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883",
+		types.TransactionPending, "1", 0)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884",
+		types.TransactionPending, "1", 0)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886",
+		types.TransactionPending, "1", 0)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887",
+		types.TransactionPending, "1", 0)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func setupMockApiRequesterRetryService() *mockAPIRequester {
@@ -156,4 +223,11 @@ func setupMockStorageRetryService() *mockStorage {
 	storage.On("SaveRBFTransactionInformation", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	return storage
+}
+
+func tearDownDatabaseRBF(sqlxDB *sqlx.DB) {
+	_, err := sqlxDB.Exec("TRUNCATE TABLE statistics_tx_hash_status")
+	if err != nil {
+		panic(err)
+	}
 }
