@@ -3,6 +3,7 @@ package sql_db
 import (
 	"context"
 	"fmt"
+
 	"github.com/btcsuite/btcd/btcutil"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -126,12 +127,12 @@ func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransact
 		}
 	}()
 
-	if retErr := sdb.markUTXOsAsProcessed(ctx, sqlTx, processedTransactions); retErr != nil {
+	if retErr = sdb.markUTXOsAsProcessed(ctx, sqlTx, processedTransactions); retErr != nil {
 		return fmt.Errorf("failed to commit transaction: %s", retErr)
 	}
 
 	for address, amount := range addressesWithThresholdToUpdate {
-		if retErr := sdb.updateCurrentAcummulatedAmountForAddress(ctx, sqlTx, address, farmId, amount); retErr != nil {
+		if retErr = sdb.updateCurrentAcummulatedAmountForAddress(ctx, sqlTx, address, farmId, amount); retErr != nil {
 			return fmt.Errorf("failed to commit transaction: %s", retErr)
 		}
 	}
