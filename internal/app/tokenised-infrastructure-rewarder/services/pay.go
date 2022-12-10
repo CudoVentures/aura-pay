@@ -545,7 +545,7 @@ type Storage interface {
 
 	UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashesToMarkCompleted []string, status string) error
 
-	SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, status string, farmId string, retryCount int) error
+	SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, status string, farmSubAccountName string, retryCount int) error
 
 	SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farmId string) error
 

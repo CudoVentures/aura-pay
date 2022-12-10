@@ -44,11 +44,12 @@ type TransactionHashWithStatus struct {
 }
 
 type RBFTransactionHistory struct {
-	Id        string    `db:"id"`
-	OldTxHash string    `db:"old_tx_hash"`
-	NewTxHash string    `db:"new_tx_hash"`
-	CreatedAt time.Time `db:"createdAt"`
-	UpdatedAt time.Time `db:"updatedAt"`
+	Id                 string    `db:"id"`
+	OldTxHash          string    `db:"old_tx_hash"`
+	NewTxHash          string    `db:"new_tx_hash"`
+	FarmSubAccountName string    `db:"farm_sub_account_name"`
+	CreatedAt          time.Time `db:"createdAt"`
+	UpdatedAt          time.Time `db:"updatedAt"`
 }
 
 type UTXOTransaction struct {

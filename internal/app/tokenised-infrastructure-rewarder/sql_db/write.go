@@ -64,7 +64,7 @@ func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash 
 		_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), farmSubAccountName, retryCount, now.UTC(), now.UTC())
 		return err
 	}
-	_, err := sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
+	_, err := sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), farmSubAccountName, retryCount, now.UTC(), now.UTC())
 
 	return err
 }
@@ -72,12 +72,18 @@ func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash 
 func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
 	for _, hash := range txHashes {
 		if tx != nil {
-			_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
-			return err
+			_, err := tx.ExecContext(ctx, updateTxHashesWithStatusQuery, txStatus, hash)
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err := sdb.db.ExecContext(ctx, updateTxHashesWithStatusQuery, txStatus, hash)
+			if err != nil {
+				return err
+			}
 		}
-		_, err := sdb.db.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
-		return err
 	}
+	return nil
 }
 
 func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount btcutil.Amount) error {
@@ -130,7 +136,7 @@ const (
 	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 	insertRBFTransactionHistory = `INSERT INTO rbf_transaction_history
-	(old_tx_hash, new_tx_hash, farm_sub_account_name, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
+	(old_tx_hash, new_tx_hash, farm_sub_account_name, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5)`
 
 	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount
 		(address, amount_btc, tx_hash, farm_id, payout_time, threshold_reached, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
