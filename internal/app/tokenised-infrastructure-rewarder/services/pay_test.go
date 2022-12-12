@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/jmoiron/sqlx"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/jmoiron/sqlx"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -251,10 +252,10 @@ func setupMockBtcClient() *mockBtcClient {
 	btcClient := &mockBtcClient{}
 
 	btcClient.On("ListUnspent").Return([]btcjson.ListUnspentResult{
-		btcjson.ListUnspentResult{TxID: "1", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
-		btcjson.ListUnspentResult{TxID: "2", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
-		btcjson.ListUnspentResult{TxID: "3", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
-		btcjson.ListUnspentResult{TxID: "4", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "1", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "2", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "3", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "4", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
 	}, nil).Once()
 
 	btcClient.On("LoadWallet", "farm_1").Return(&btcjson.LoadWalletResult{}, nil).Once()
@@ -380,18 +381,13 @@ func (ms *mockStorage) SaveStatistics(ctx context.Context, destinationAddressesW
 	return args.Error(0)
 }
 
-func (ms *mockStorage) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashesToMarkCompleted []string, status string) error {
-	args := ms.Called(ctx, tx, txHashesToMarkCompleted, status)
+func (ms *mockStorage) UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error {
+	args := ms.Called(ctx, txHashesToMarkCompleted, status)
 	return args.Error(0)
 }
 
-func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, status string, farmSubAccountName string, retryCount int) error {
-	args := ms.Called(ctx, tx, txHash, status, farmSubAccountName, retryCount)
-	return args.Error(0)
-}
-
-func (ms *mockStorage) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farmSubAccountName string) error {
-	args := ms.Called(ctx, tx, oldTxHash, newTxHash, farmSubAccountName)
+func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, sqlExec sql_db.SqlExecutor, txHash, status, farmSubAccountName string, retryCount int) error {
+	args := ms.Called(ctx, sqlExec, txHash, status, farmSubAccountName, retryCount)
 	return args.Error(0)
 }
 
@@ -400,13 +396,7 @@ func (ms *mockStorage) GetTxHashesByStatus(ctx context.Context, status string) (
 	return args.Get(0).([]types.TransactionHashWithStatus), args.Error(1)
 }
 
-func (ms *mockStorage) SaveRBFTransactionInformation(ctx context.Context,
-	oldTxHash string,
-	oldTxStatus string,
-	newRBFTxHash string,
-	newRBFTXStatus string,
-	farmSubAccountName string,
-	retryCount int) error {
+func (ms *mockStorage) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, retryCount int) error {
 	args := ms.Called(ctx, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount)
 	return args.Error(0)
 }
@@ -430,8 +420,8 @@ func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTra
 	return args.Error(0)
 }
 
-func (ms *mockStorage) SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error {
-	args := ms.Called(ctx, tx, address, farmId, amount)
+func (ms *mockStorage) SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId, amount int) error {
+	args := ms.Called(ctx, address, farmId, amount)
 	return args.Error(0)
 }
 

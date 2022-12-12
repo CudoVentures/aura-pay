@@ -12,135 +12,114 @@ import (
 )
 
 func NewSqlDB(db *sqlx.DB) *SqlDB {
-	return &SqlDB{db: db}
+	return &SqlDB{db}
 }
 
 func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId, farmSubAccountName string) (retErr error) {
-	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %s", err)
-	}
 
-	defer func() {
-		if retErr != nil {
-			if err := sqlTx.Rollback(); err != nil {
-				log.Error().Msgf("failed to rollback: %s, during: %s", err, retErr)
+	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
+
+		for address, amountInfo := range destinationAddressesWithAmount {
+			if err := tx.saveDestinationAddressesWithAmountHistory(ctx, address, amountInfo, txHash, farmId); err != nil {
+				return err
 			}
 		}
-	}()
 
-	for address, amountInfo := range destinationAddressesWithAmount {
-		if retErr = saveDestinationAddressesWithAmountHistory(ctx, sqlTx, address, amountInfo, txHash, farmId); retErr != nil {
-			return
-		}
-	}
+		for _, nftStatistic := range statistics {
+			var nftPayoutHistoryId int
+			var err error
+			if nftPayoutHistoryId, err = tx.saveNFTInformationHistory(ctx, nftStatistic.DenomId, nftStatistic.TokenId,
+				nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash,
+				nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee); err != nil {
+				return err
+			}
 
-	for _, nftStatistic := range statistics {
-		var nftPayoutHistoryId int
-		if nftPayoutHistoryId, retErr = saveNFTInformationHistory(ctx, sqlTx, nftStatistic.DenomId, nftStatistic.TokenId,
-			nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash,
-			nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee); retErr != nil {
-			return
-		}
-
-		for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
-			if retErr = saveNFTOwnersForPeriodHistory(ctx, sqlTx,
-				ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned,
-				ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward, nftPayoutHistoryId); retErr != nil {
-				return
+			for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
+				if err := tx.saveNFTOwnersForPeriodHistory(ctx,
+					ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned,
+					ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward, nftPayoutHistoryId); err != nil {
+					return err
+				}
 			}
 		}
-	}
 
-	if txHash != "" {
-		if retErr = sdb.SaveTxHashWithStatus(ctx, sqlTx, txHash, types.TransactionPending, farmSubAccountName, 0); retErr != nil {
-			return
+		if txHash != "" {
+			if err := sdb.SaveTxHashWithStatus(ctx, tx, txHash, types.TransactionPending, farmSubAccountName, 0); err != nil {
+				return err
+			}
 		}
-	}
 
-	if retErr = sqlTx.Commit(); retErr != nil {
-		retErr = fmt.Errorf("failed to commit transaction: %s", retErr)
-		return
-	}
-
-	return nil
+		return nil
+	})
 }
 
-func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context,
-	oldTxHash string,
-	oldTxStatus string,
-	newRBFTxHash string,
-	newRBFTXStatus string,
-	farmSubAccountName string,
-	retryCount int) error {
+func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, retryCount int) error {
 
-	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %s", err)
-	}
-
-	defer func() {
-		if err := sqlTx.Rollback(); err != nil {
-			log.Error().Msgf("failed to rollback: %s, during: %s", err, err)
+	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
+		// update old tx status
+		if retErr := updateTransactionsStatus(ctx, tx, []string{oldTxHash}, oldTxStatus); retErr != nil {
+			return fmt.Errorf("failed to updateTxHashesWithStatus: %s", retErr)
 		}
-	}()
 
-	// update old tx status
-	if retErr := sdb.UpdateTransactionsStatus(ctx, sqlTx, []string{oldTxHash}, oldTxStatus); retErr != nil {
-		return fmt.Errorf("failed to updateTxHashesWithStatus: %s", retErr)
-	}
+		// link replaced transaction with the tx that replaced it
+		if retErr := tx.saveRBFTransactionHistory(ctx, oldTxHash, newRBFTxHash, farmSubAccountName); retErr != nil {
+			return fmt.Errorf("failed to saveRBFTransactionHistory: %s", retErr)
+		}
 
-	// link replaced transaction with the tx that replaced it
-	if retErr := sdb.SaveRBFTransactionHistory(ctx, sqlTx, oldTxHash, newRBFTxHash, farmSubAccountName); retErr != nil {
-		return fmt.Errorf("failed to saveRBFTransactionHistory: %s", retErr)
-	}
+		// save the new tx with status, new timestamp, and retryCount of old one + 1
+		if retErr := sdb.SaveTxHashWithStatus(ctx, tx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount); retErr != nil {
+			return fmt.Errorf("failed to saveTxHashWithStatus: %s", retErr)
+		}
 
-	// save the new tx with status, new timestamp, and retryCount of old one + 1
-	if retErr := sdb.SaveTxHashWithStatus(ctx, sqlTx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount); retErr != nil {
-		return fmt.Errorf("failed to saveTxHashWithStatus: %s", retErr)
-	}
-
-	err = sqlTx.Commit()
-	if err != nil {
-		return fmt.Errorf("failed to commit transaction: %s", err)
-	}
-
-	return nil
-
-}
-
-type SqlDB struct {
-	db *sqlx.DB
+		return nil
+	})
 }
 
 func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) (retErr error) {
-	sqlTx, err := sdb.db.BeginTxx(ctx, nil)
+
+	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
+		if retErr = tx.markUTXOsAsProcessed(ctx, processedTransactions); retErr != nil {
+			return fmt.Errorf("failed to commit transaction: %s", retErr)
+		}
+
+		for address, amount := range addressesWithThresholdToUpdate {
+			if retErr = tx.updateCurrentAcummulatedAmountForAddress(ctx, address, farmId, amount); retErr != nil {
+				return fmt.Errorf("failed to commit transaction: %s", retErr)
+			}
+		}
+
+		return nil
+	})
+}
+
+func (sdb *SqlDB) ExecuteTx(ctx context.Context, callback func(*DbTx) error) (retErr error) {
+	tx, err := sdb.BeginTxx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %s", err)
+		return err
 	}
 
 	defer func() {
 		if retErr != nil {
-			if err := sqlTx.Rollback(); err != nil {
-				log.Error().Msgf("failed to rollback: %s, during: %s", err, retErr)
+			if err := tx.Rollback(); err != nil {
+				log.Error().Err(fmt.Errorf("error while executing tx: %s\nerror while making rollback: %s", retErr, err)).Send()
 			}
 		}
 	}()
 
-	if retErr = sdb.markUTXOsAsProcessed(ctx, sqlTx, processedTransactions); retErr != nil {
-		return fmt.Errorf("failed to commit transaction: %s", retErr)
+	if retErr = callback(&DbTx{tx}); retErr != nil {
+		return
 	}
 
-	for address, amount := range addressesWithThresholdToUpdate {
-		if retErr = sdb.updateCurrentAcummulatedAmountForAddress(ctx, sqlTx, address, farmId, amount); retErr != nil {
-			return fmt.Errorf("failed to commit transaction: %s", retErr)
-		}
-	}
-
-	if retErr = sqlTx.Commit(); retErr != nil {
-		retErr = fmt.Errorf("failed to commit transaction: %s", retErr)
+	if retErr = tx.Commit(); retErr != nil {
 		return
 	}
 
 	return nil
+}
+
+type SqlDB struct {
+	*sqlx.DB
+}
+type DbTx struct {
+	*sqlx.Tx
 }

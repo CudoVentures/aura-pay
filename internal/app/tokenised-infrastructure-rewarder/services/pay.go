@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
@@ -326,7 +327,7 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 			switch err {
 			case sql.ErrNoRows:
 				log.Info().Msgf("No threshold found, inserting...")
-				err = storage.SetInitialAccumulatedAmountForAddress(ctx, nil, key, farmId, 0)
+				err = storage.SetInitialAccumulatedAmountForAddress(ctx, key, farmId, 0)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -537,26 +538,17 @@ type BtcClient interface {
 }
 
 type Storage interface {
-	GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error)
+	GetPayoutTimesForNFT(ctx context.Context, collectionDenomId, nftId string) ([]types.NFTStatistics, error)
 
 	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId, farmSubAccountName string) error
 
 	GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error)
 
-	UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashesToMarkCompleted []string, status string) error
+	UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error
 
-	SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, status string, farmSubAccountName string, retryCount int) error
+	SaveTxHashWithStatus(ctx context.Context, sqlExec sql_db.SqlExecutor, txHash, status, farmSubAccountName string, retryCount int) error
 
-	SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farmId string) error
-
-	SaveRBFTransactionInformation(
-		ctx context.Context,
-		oldTxHash string,
-		oldTxStatus string,
-		newRBFTxHash string,
-		newRBFTXStatus string,
-		farmSubAccountName string,
-		retryCount int) error
+	SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, retryCount int) error
 
 	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
 
@@ -564,7 +556,7 @@ type Storage interface {
 
 	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) error
 
-	SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error
+	SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId, amount int) error
 }
 
 type Helper interface {

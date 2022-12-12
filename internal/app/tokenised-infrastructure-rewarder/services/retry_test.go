@@ -2,6 +2,9 @@ package services
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
@@ -11,8 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func TestRetryService_Execute(t *testing.T) {
@@ -254,8 +255,7 @@ func setupMockStorageRetryService() *mockStorage {
 	})
 
 	storage.On("GetTxHashesByStatus", mock.Anything, types.TransactionPending).Return(uncomfirmedTransactions, nil)
-	storage.On("UpdateTransactionsStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	storage.On("SaveRBFTransactionHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("UpdateTransactionsStatus", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	storage.On("SaveTxHashWithStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	storage.On("SaveRBFTransactionInformation", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
