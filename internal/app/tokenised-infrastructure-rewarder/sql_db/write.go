@@ -65,23 +65,26 @@ func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash 
 		_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), farmSubAccountName, retryCount, now.UTC(), now.UTC())
 		return err
 	}
-	_, err := sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, farmSubAccountName, retryCount, now.Unix(), now.UTC(), now.UTC())
+	_, err := sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), farmSubAccountName, retryCount, now.UTC(), now.UTC())
 
 	return err
 }
 
 func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
-	qry, args, err := sqlx.In(updateTxHashesWithStatusQuery, txStatus, txHashes)
-	if err != nil {
-		return err
+	for _, hash := range txHashes {
+		if tx != nil {
+			_, err := tx.ExecContext(ctx, updateTxHashesWithStatusQuery, txStatus, hash)
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err := sdb.db.ExecContext(ctx, updateTxHashesWithStatusQuery, txStatus, hash)
+			if err != nil {
+				return err
+			}
+		}
 	}
-
-	if tx != nil {
-		_, err = tx.ExecContext(ctx, qry, args...)
-		return err
-	}
-	_, err = sdb.db.ExecContext(ctx, qry, args...)
-	return err
+	return nil
 }
 
 func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount btcutil.Amount) error {
@@ -134,7 +137,7 @@ const (
 	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 	insertRBFTransactionHistory = `INSERT INTO rbf_transaction_history
-	(old_tx_hash, new_tx_hash, farm_sub_account_name, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5)`
+	(old_tx_hash, new_tx_hash, farm_sub_account_name, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5)`
 
 	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount
 		(address, amount_btc, tx_hash, farm_id, payout_time, threshold_reached, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
@@ -147,7 +150,7 @@ const (
 		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, nft_payout_history_id, "createdAt", "updatedAt")
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
-	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=? where tx_hash IN (?)`
+	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=$1 where tx_hash=$2`
 
 	updateThresholdAmounts = `UPDATE threshold_amounts SET amount_btc=$1 where btc_address=$2 and farm_id=$3`
 

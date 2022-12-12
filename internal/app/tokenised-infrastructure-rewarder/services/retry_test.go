@@ -7,10 +7,12 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 )
 
 func TestRetryService_Execute(t *testing.T) {
@@ -56,12 +58,114 @@ func TestRetryService_Execute(t *testing.T) {
 
 }
 
+func TestRetryService_Execute_With_Database(t *testing.T) {
+	skipDBTests(t)
+
+	config := &infrastructure.Config{
+		Network:                     "BTC",
+		CUDOMaintenanceFeePercent:   50,
+		CUDOFeePayoutAddress:        "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:  0.01,
+		DbDriverName:                "postgres",
+		DbUser:                      "postgresUser",
+		DbPassword:                  "mysecretpassword",
+		DbHost:                      "127.0.0.1",
+		DbPort:                      "5432",
+		DbName:                      "aura-pay-test-db",
+		RBFTransactionRetryMaxCount: 2,
+	}
+
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	dbStorage, sqlxDB := setupInMemoryStorage(config)
+	defer func() {
+		tearDownDatabaseRBF(sqlxDB)
+	}()
+
+	seedDatabase(dbStorage)
+
+	s := NewRetryService(config, setupMockApiRequesterRetryService(), &mockHelperRetry{}, btcNetworkParams)
+	require.NoError(t, s.Execute(context.Background(), setupMockBtcClientRetryService(), dbStorage))
+	// fetch from db and check:
+	confirmedTx, _ := dbStorage.GetTxHashesByStatus(context.Background(), types.TransactionCompleted)
+	assert.Equal(t, 2, len(confirmedTx))
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881", confirmedTx[0].TxHash)
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882", confirmedTx[1].TxHash)
+
+	failedTx, _ := dbStorage.GetTxHashesByStatus(context.Background(), types.TransactionFailed)
+	assert.Equal(t, 2, len(failedTx))
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883", failedTx[0].TxHash)
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886", failedTx[1].TxHash)
+
+	replacedTx, _ := dbStorage.GetTxHashesByStatus(context.Background(), types.TransactionReplaced)
+	assert.Equal(t, 2, len(replacedTx))
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884", replacedTx[0].TxHash)
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887", replacedTx[1].TxHash)
+
+	newPendingTx, _ := dbStorage.GetTxHashesByStatus(context.Background(), types.TransactionPending)
+	assert.Equal(t, 2, len(newPendingTx))
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885", newPendingTx[0].TxHash)
+	assert.Equal(t, 1, newPendingTx[0].RetryCount)
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f888", newPendingTx[1].TxHash)
+	assert.Equal(t, 1, newPendingTx[1].RetryCount)
+
+	var rbfHistory []types.RBFTransactionHistory
+	err := sqlxDB.SelectContext(context.Background(), &rbfHistory, `SELECT * FROM rbf_transaction_history`)
+	if err != nil {
+		panic(err)
+	}
+	assert.Equal(t, 2, len(rbfHistory))
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884", rbfHistory[0].OldTxHash)
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887", rbfHistory[1].OldTxHash)
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885", rbfHistory[0].NewTxHash)
+	assert.Equal(t, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f888", rbfHistory[1].NewTxHash)
+
+}
+
+func seedDatabase(dbStorage Storage) {
+	err := dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881",
+		types.TransactionPending, "farm_sub_account_name_1", 0)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882",
+		types.TransactionPending, "farm_sub_account_name_1", 0)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883",
+		types.TransactionPending, "farm_sub_account_name_1", 2)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884",
+		types.TransactionPending, "farm_sub_account_name_1", 0)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886",
+		types.TransactionPending, "farm_sub_account_name_1", 2)
+	if err != nil {
+		panic(err)
+	}
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887",
+		types.TransactionPending, "farm_sub_account_name_1", 0)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func setupMockApiRequesterRetryService() *mockAPIRequester {
 	apiRequester := &mockAPIRequester{}
 
 	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
-	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884").Return("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885", nil)
-	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887").Return("b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f888", nil)
+	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884").Return(
+		"b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885", nil)
+	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887").Return(
+		"b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f888", nil)
 
 	return apiRequester
 }
@@ -156,4 +260,30 @@ func setupMockStorageRetryService() *mockStorage {
 	storage.On("SaveRBFTransactionInformation", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	return storage
+}
+
+func tearDownDatabaseRBF(sqlxDB *sqlx.DB) {
+	_, err := sqlxDB.Exec("TRUNCATE TABLE statistics_tx_hash_status")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE rbf_transaction_history")
+	if err != nil {
+		panic(err)
+	}
+}
+
+type mockHelperRetry struct {
+}
+
+func (_ *mockHelperRetry) DaysIn(m time.Month, year int) int {
+	panic("not used")
+}
+
+func (_ *mockHelperRetry) Date() (year int, month time.Month, day int) {
+	panic("not used")
+}
+
+func (_ *mockHelperRetry) Unix() int64 {
+	return 4132020742
 }
