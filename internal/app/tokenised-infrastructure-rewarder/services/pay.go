@@ -562,4 +562,5 @@ type Helper interface {
 	DaysIn(m time.Month, year int) int
 	Unix() int64
 	Date() (year int, month time.Month, day int)
+	SendMail(message string, to []string) error
 }

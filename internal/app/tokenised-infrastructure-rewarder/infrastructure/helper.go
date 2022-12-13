@@ -1,6 +1,9 @@
 package infrastructure
 
-import "time"
+import (
+	"net/smtp"
+	"time"
+)
 
 func NewHelper(config *Config) *Helper {
 	return &Helper{config: *config}
@@ -24,4 +27,24 @@ func (h *Helper) Unix() int64 {
 
 func (h *Helper) Date() (year int, month time.Month, day int) {
 	return time.Now().Date()
+}
+
+func (h *Helper) SendMail(message string, to []string) error {
+	from := h.config.SMTPFromAddress
+	password := h.config.SMTPPassword
+	smtpHost := h.config.SMTPHost
+	smtpPort := h.config.SMTPPort
+
+	bt := []byte(message)
+
+	// Create authentication
+	auth := smtp.PlainAuth("", from, password, smtpHost)
+
+	// Send actual message
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, bt)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
