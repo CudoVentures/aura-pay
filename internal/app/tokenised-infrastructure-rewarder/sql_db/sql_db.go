@@ -44,7 +44,7 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		}
 
 		if txHash != "" {
-			if err := sdb.SaveTxHashWithStatus(ctx, tx, txHash, types.TransactionPending, farmSubAccountName, 0); err != nil {
+			if err := saveTxHashWithStatus(ctx, tx, txHash, types.TransactionPending, farmSubAccountName, 0); err != nil {
 				return err
 			}
 		}
@@ -67,7 +67,7 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, 
 		}
 
 		// save the new tx with status, new timestamp, and retryCount of old one + 1
-		if retErr := sdb.SaveTxHashWithStatus(ctx, tx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount); retErr != nil {
+		if retErr := saveTxHashWithStatus(ctx, tx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount); retErr != nil {
 			return fmt.Errorf("failed to saveTxHashWithStatus: %s", retErr)
 		}
 

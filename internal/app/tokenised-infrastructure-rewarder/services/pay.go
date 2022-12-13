@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
@@ -546,7 +545,7 @@ type Storage interface {
 
 	UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error
 
-	SaveTxHashWithStatus(ctx context.Context, sqlExec sql_db.SqlExecutor, txHash, status, farmSubAccountName string, retryCount int) error
+	SaveTxHashWithStatus(ctx context.Context, txHash, status, farmSubAccountName string, retryCount int) error
 
 	SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, retryCount int) error
 

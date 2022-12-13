@@ -41,10 +41,10 @@ func TestRetryService_Execute(t *testing.T) {
 	failedTransactions := 0
 	expectedFailedTransactions := 1
 	for _, elem := range mockStorageService.Calls {
-		if elem.Method == "UpdateTransactionsStatus" && elem.Arguments[3].(string) == "Completed" {
+		if elem.Method == "UpdateTransactionsStatus" && elem.Arguments[2].(string) == "Completed" {
 			completedTransactions++
 		}
-		if elem.Method == "UpdateTransactionsStatus" && elem.Arguments[3].(string) == "Failed" {
+		if elem.Method == "UpdateTransactionsStatus" && elem.Arguments[2].(string) == "Failed" {
 			failedTransactions++
 		}
 		if elem.Method == "SaveRBFTransactionInformation" && elem.Arguments[2].(string) == "Replaced" {
@@ -127,32 +127,32 @@ func TestRetryService_Execute_With_Database(t *testing.T) {
 }
 
 func seedDatabase(dbStorage Storage) {
-	err := dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881",
+	err := dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881",
 		types.TransactionPending, "farm_sub_account_name_1", 0)
 	if err != nil {
 		panic(err)
 	}
-	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882",
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882",
 		types.TransactionPending, "farm_sub_account_name_1", 0)
 	if err != nil {
 		panic(err)
 	}
-	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883",
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883",
 		types.TransactionPending, "farm_sub_account_name_1", 2)
 	if err != nil {
 		panic(err)
 	}
-	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884",
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884",
 		types.TransactionPending, "farm_sub_account_name_1", 0)
 	if err != nil {
 		panic(err)
 	}
-	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886",
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886",
 		types.TransactionPending, "farm_sub_account_name_1", 2)
 	if err != nil {
 		panic(err)
 	}
-	err = dbStorage.SaveTxHashWithStatus(context.Background(), nil, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887",
+	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887",
 		types.TransactionPending, "farm_sub_account_name_1", 0)
 	if err != nil {
 		panic(err)
@@ -214,25 +214,25 @@ func setupMockStorageRetryService() *mockStorage {
 	storage := &mockStorage{}
 
 	var uncomfirmedTransactions = []types.TransactionHashWithStatus{
-		types.TransactionHashWithStatus{
+		{
 			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881",
 			TimeSent:           1666641098,
 			FarmSubAccountName: "farm_sub_account_name_1",
 			RetryCount:         0,
 		},
-		types.TransactionHashWithStatus{
+		{
 			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882",
 			TimeSent:           1666641098,
 			FarmSubAccountName: "farm_sub_account_name_1",
 			RetryCount:         0,
 		},
-		types.TransactionHashWithStatus{
+		{
 			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883", // skipped
 			TimeSent:           1666641098,
 			FarmSubAccountName: "farm_sub_account_name_1",
 			RetryCount:         0,
 		},
-		types.TransactionHashWithStatus{
+		{
 			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884",
 			TimeSent:           10,
 			FarmSubAccountName: "farm_sub_account_name_1",
@@ -256,7 +256,7 @@ func setupMockStorageRetryService() *mockStorage {
 
 	storage.On("GetTxHashesByStatus", mock.Anything, types.TransactionPending).Return(uncomfirmedTransactions, nil)
 	storage.On("UpdateTransactionsStatus", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	storage.On("SaveTxHashWithStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("SaveTxHashWithStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	storage.On("SaveRBFTransactionInformation", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	return storage

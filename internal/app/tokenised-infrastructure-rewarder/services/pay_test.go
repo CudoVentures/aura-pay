@@ -386,8 +386,8 @@ func (ms *mockStorage) UpdateTransactionsStatus(ctx context.Context, txHashesToM
 	return args.Error(0)
 }
 
-func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, sqlExec sql_db.SqlExecutor, txHash, status, farmSubAccountName string, retryCount int) error {
-	args := ms.Called(ctx, sqlExec, txHash, status, farmSubAccountName, retryCount)
+func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, txHash, status, farmSubAccountName string, retryCount int) error {
+	args := ms.Called(ctx, txHash, status, farmSubAccountName, retryCount)
 	return args.Error(0)
 }
 
