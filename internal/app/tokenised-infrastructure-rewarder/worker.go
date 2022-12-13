@@ -68,7 +68,6 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 			// TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
 
 			if processingError != nil {
-				//TODO: add grafana if errorCount >= val
 				errorCount++
 				log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
 				if errorCount >= config.ServiceMaxErrorCount {
