@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -45,7 +46,7 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 	}
 
 	// all the ones that were included in at least 1 block - mark them as completed
-	err = storage.UpdateTransactionsStatus(ctx, nil, txToConfirm, types.TransactionCompleted)
+	err = storage.UpdateTransactionsStatus(ctx, txToConfirm, types.TransactionCompleted)
 	if err != nil {
 		return err
 	}
@@ -108,7 +109,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 
 func (s *RetryService) retryCountExceeded(tx types.TransactionHashWithStatus, storage Storage, ctx context.Context) (bool, error) {
 	if tx.RetryCount >= s.config.RBFTransactionRetryMaxCount {
-		err := storage.UpdateTransactionsStatus(ctx, nil, []string{tx.TxHash}, types.TransactionFailed)
+		err := storage.UpdateTransactionsStatus(ctx, []string{tx.TxHash}, types.TransactionFailed)
 		if err != nil {
 			return true, err
 		}

@@ -10,7 +10,7 @@ import (
 
 func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error) {
 	payoutTimes := []types.NFTStatistics{}
-	if err := sdb.db.SelectContext(ctx, &payoutTimes, selectNFTPayoutHistory, collectionDenomId, nftId); err != nil {
+	if err := sdb.SelectContext(ctx, &payoutTimes, selectNFTPayoutHistory, collectionDenomId, nftId); err != nil {
 		return nil, err
 	}
 	return payoutTimes, nil
@@ -18,7 +18,7 @@ func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId st
 
 func (sdb *SqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error) {
 	txHashesWithStatus := []types.TransactionHashWithStatus{}
-	if err := sdb.db.SelectContext(ctx, &txHashesWithStatus, selectTxHashStatus, status); err != nil {
+	if err := sdb.SelectContext(ctx, &txHashesWithStatus, selectTxHashStatus, status); err != nil {
 		return nil, err
 	}
 	return txHashesWithStatus, nil
@@ -26,7 +26,7 @@ func (sdb *SqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]typ
 
 func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int) (float64, error) {
 	var result []types.AddressThresholdAmountByFarm
-	if err := sdb.db.SelectContext(ctx, &result, selectThresholdByAddress, address, farmId); err != nil {
+	if err := sdb.SelectContext(ctx, &result, selectThresholdByAddress, address, farmId); err != nil {
 		return 0, err
 	}
 
@@ -41,7 +41,7 @@ func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, add
 
 func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txHash string) (types.UTXOTransaction, error) {
 	var result []types.UTXOTransaction
-	if err := sdb.db.SelectContext(ctx, &result, selectUTXOById, txHash); err != nil {
+	if err := sdb.SelectContext(ctx, &result, selectUTXOById, txHash); err != nil {
 		return types.UTXOTransaction{}, err
 	}
 

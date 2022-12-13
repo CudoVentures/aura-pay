@@ -2,15 +2,15 @@ package sql_db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/jmoiron/sqlx"
 )
 
-func saveDestinationAddressesWithAmountHistory(ctx context.Context, tx *sqlx.Tx, address string, amountInfo types.AmountInfo, txHash string, farmId string) error {
+func (tx *DbTx) saveDestinationAddressesWithAmountHistory(ctx context.Context, address string, amountInfo types.AmountInfo, txHash string, farmId string) error {
 	now := time.Now()
 	if !amountInfo.ThresholdReached {
 		txHash = "" // the funds were not sent but accumulated, we keep this record as statistic that they were spread but with empty tx hash
@@ -21,24 +21,22 @@ func saveDestinationAddressesWithAmountHistory(ctx context.Context, tx *sqlx.Tx,
 }
 
 // add to this table
-func saveNFTInformationHistory(ctx context.Context, tx *sqlx.Tx, collectionDenomId, tokenId string,
+func (tx *DbTx) saveNFTInformationHistory(ctx context.Context, collectionDenomId, tokenId string,
 	payoutPeriodStart, payoutPeriodEnd int64, reward btcutil.Amount, txHash string,
 	maintenanceFee, CudoPartOfMaintenanceFee btcutil.Amount) (int, error) {
 
 	var id int
 	now := time.Now()
 
-	err := tx.QueryRowContext(ctx, insertNFTInformationHistory, collectionDenomId, tokenId, payoutPeriodStart,
-		payoutPeriodEnd, reward.ToBTC(), txHash, maintenanceFee.ToBTC(), CudoPartOfMaintenanceFee.ToBTC(), now.UTC(), now.UTC()).Scan(&id)
-
-	if err != nil {
+	if err := tx.QueryRowContext(ctx, insertNFTInformationHistory, collectionDenomId, tokenId, payoutPeriodStart,
+		payoutPeriodEnd, reward.ToBTC(), txHash, maintenanceFee.ToBTC(), CudoPartOfMaintenanceFee.ToBTC(), now.UTC(), now.UTC()).Scan(&id); err != nil {
 		return -1, err
 	}
 
 	return id, nil
 }
 
-func saveNFTOwnersForPeriodHistory(ctx context.Context, tx *sqlx.Tx, timedOwnedFrom int64, timedOwnedTo int64, totalTimeOwned int64,
+func (tx *DbTx) saveNFTOwnersForPeriodHistory(ctx context.Context, timedOwnedFrom int64, timedOwnedTo int64, totalTimeOwned int64,
 	percentOfTimeOwned float64, owner string, payoutAddress string, reward btcutil.Amount, nftPayoutHistoryId int) error {
 	now := time.Now()
 	_, err := tx.ExecContext(ctx, insertNFTOnwersForPeriodHistory,
@@ -46,57 +44,42 @@ func saveNFTOwnersForPeriodHistory(ctx context.Context, tx *sqlx.Tx, timedOwnedF
 	return err
 }
 
-func (sdb *SqlDB) SaveRBFTransactionHistory(ctx context.Context, tx *sqlx.Tx, oldTxHash string, newTxHash string, farm_id string) error {
+func (tx *DbTx) saveRBFTransactionHistory(ctx context.Context, oldTxHash string, newTxHash string, farmId string) error {
 	now := time.Now()
-	if tx != nil {
-		_, err := tx.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash,
-			farm_id, now.UTC(), now.UTC())
-		return err
-	}
-	_, err := sdb.db.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash,
-		farm_id, now.UTC(), now.UTC())
-
+	_, err := tx.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash, farmId, now.UTC(), now.UTC())
 	return err
 }
 
-func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, tx *sqlx.Tx, txHash string, txStatus string, farmSubAccountName string, retryCount int) error {
-	now := time.Now()
-	if tx != nil {
-		_, err := tx.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), farmSubAccountName, retryCount, now.UTC(), now.UTC())
-		return err
-	}
-	_, err := sdb.db.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), farmSubAccountName, retryCount, now.UTC(), now.UTC())
+func (sdb *SqlDB) SaveTxHashWithStatus(ctx context.Context, txHash, txStatus, farmSubAccountName string, retryCount int) error {
+	return saveTxHashWithStatus(ctx, sdb, txHash, txStatus, farmSubAccountName, retryCount)
+}
 
+func saveTxHashWithStatus(ctx context.Context, sqlExec SqlExecutor, txHash, txStatus, farmSubAccountName string, retryCount int) error {
+	now := time.Now()
+	_, err := sqlExec.ExecContext(ctx, insertTxHashWithStatus, txHash, txStatus, now.Unix(), farmSubAccountName, retryCount, now.UTC(), now.UTC())
 	return err
 }
 
-func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, tx *sqlx.Tx, txHashes []string, txStatus string) error {
+func (sdb *SqlDB) UpdateTransactionsStatus(ctx context.Context, txHashes []string, txStatus string) error {
+	return updateTransactionsStatus(ctx, sdb, txHashes, txStatus)
+}
+
+func updateTransactionsStatus(ctx context.Context, sqlExec SqlExecutor, txHashes []string, txStatus string) error {
 	for _, hash := range txHashes {
-		if tx != nil {
-			_, err := tx.ExecContext(ctx, updateTxHashesWithStatusQuery, txStatus, hash)
-			if err != nil {
-				return err
-			}
-		} else {
-			_, err := sdb.db.ExecContext(ctx, updateTxHashesWithStatusQuery, txStatus, hash)
-			if err != nil {
-				return err
-			}
+		_, err := sqlExec.ExecContext(ctx, updateTxHashesWithStatusQuery, txStatus, hash)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func (sdb *SqlDB) updateCurrentAcummulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount btcutil.Amount) error {
-	if tx != nil {
-		_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
-		return err
-	}
-	_, err := sdb.db.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
+func (tx *DbTx) updateCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int, amount btcutil.Amount) error {
+	_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
 	return err
 }
 
-func (sdb *SqlDB) markUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, tx_hashes []string) error {
+func (tx *DbTx) markUTXOsAsProcessed(ctx context.Context, tx_hashes []string) error {
 	var UTXOMaps []map[string]interface{}
 	for _, hash := range tx_hashes {
 		m := map[string]interface{}{
@@ -108,23 +91,12 @@ func (sdb *SqlDB) markUTXOsAsProcessed(ctx context.Context, tx *sqlx.Tx, tx_hash
 		UTXOMaps = append(UTXOMaps, m)
 	}
 
-	if tx != nil {
-		_, err := tx.NamedExecContext(ctx, insertUTXOWithStatus, UTXOMaps)
-		return err
-	}
 	_, err := tx.NamedExecContext(ctx, insertUTXOWithStatus, UTXOMaps)
-
 	return err
 }
 
-func (sdb *SqlDB) SetInitialAccumulatedAmountForAddress(ctx context.Context, tx *sqlx.Tx, address string, farmId int, amount int) error {
-
-	if tx != nil {
-		_, err := tx.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
-		return err
-	}
-	_, err := sdb.db.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
-
+func (sdb *SqlDB) SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId, amount int) error {
+	_, err := sdb.ExecContext(ctx, insertInitialThresholdAmount, address, farmId, amount, time.Now().UTC(), time.Now().UTC())
 	return err
 
 }
@@ -157,3 +129,7 @@ const (
 	insertInitialThresholdAmount = `INSERT INTO threshold_amounts
 	(btc_address, farm_id, amount_btc, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5)`
 )
+
+type SqlExecutor interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
