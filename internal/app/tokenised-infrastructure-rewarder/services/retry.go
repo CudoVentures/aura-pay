@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -69,8 +70,12 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return err
 	}
 	if retryCountExceeded {
-		//TODO: Alert via grafana/prometheus to someone that can manually handle the problem
-		log.Error().Msgf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; FarmId: {%s}", tx.TxHash, tx.FarmSubAccountName)
+		message := fmt.Sprintf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; Farm Name: {%s}", tx.TxHash, tx.FarmSubAccountName)
+		log.Error().Msg(message)
+		err = s.helper.SendMail(message, []string{s.config.SMTPToAddress})
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 	_, err = btcClient.LoadWallet(tx.FarmSubAccountName)

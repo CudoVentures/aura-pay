@@ -36,6 +36,12 @@ type Config struct {
 	RBFTransactionRetryDelayInSeconds int
 	RBFTransactionRetryMaxCount       int
 	GlobalPayoutThresholdInBTC        float64
+	SMTPFromAddress                   string
+	SMTPPassword                      string
+	SMTPHost                          string
+	SMTPPort                          string
+	SMTPToAddress                     string
+	ServiceMaxErrorCount              int
 }
 
 // NewConfig New returns a new Config struct
@@ -69,6 +75,12 @@ func NewConfig() *Config {
 		RBFTransactionRetryDelayInSeconds: getEnvAsInt("RBF_TRANSACTION_RETRY_DELAY_IN_SECONDS", 18000),
 		RBFTransactionRetryMaxCount:       getEnvAsInt("RBF_TRANSACTION_RETRY_MAX_COUNT", 2),
 		GlobalPayoutThresholdInBTC:        getEnvAsFloat64("GLOBAL_PAYOUT_THRESHOLD_IN_BTC", 0.1),
+		SMTPFromAddress:                   getEnv("SMTP_FROM_ADDRESS", ""),
+		SMTPPassword:                      getEnv("SMTP_PASSWORD", ""),
+		SMTPHost:                          getEnv("SMTP_HOST", ""),
+		SMTPPort:                          getEnv("SMTP_PORT", ""),
+		SMTPToAddress:                     getEnv("SMTP_TO_ADDRESS", ""),
+		ServiceMaxErrorCount:              getEnvAsInt("SERVICE_MAX_ERROR_COUNT", 5),
 	}
 }
 

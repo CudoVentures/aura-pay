@@ -287,3 +287,7 @@ func (_ *mockHelperRetry) Date() (year int, month time.Month, day int) {
 func (_ *mockHelperRetry) Unix() int64 {
 	return 4132020742
 }
+
+func (_ *mockHelperRetry) SendMail(message string, to []string) error {
+	return nil
+}

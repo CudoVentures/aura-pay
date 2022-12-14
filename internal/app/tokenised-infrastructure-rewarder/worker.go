@@ -2,6 +2,7 @@ package tokenised_infrastructure_rewarder
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -67,11 +68,24 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 			// TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
 
 			if processingError != nil {
-				//TODO: add grafana if errorCount >= val
 				errorCount++
 				log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
+				if errorCount >= config.ServiceMaxErrorCount {
+					maxErrorCountReached(config, err)
+					return
+				}
 			}
 		}()
+	}
+}
+
+func maxErrorCountReached(config *infrastructure.Config, err error) {
+	h := infrastructure.NewHelper(config)
+	message := fmt.Sprintf("Application has exceeded the ServiceMaxErrorCount: {%d} and needs manual intervention!", config.ServiceMaxErrorCount)
+	log.Error().Msg(message)
+	err = h.SendMail(message, []string{config.SMTPToAddress})
+	if err != nil {
+		panic(err)
 	}
 }
 
