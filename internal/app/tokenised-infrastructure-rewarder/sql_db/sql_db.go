@@ -34,10 +34,11 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 				return err
 			}
 
-			for _, ownersForPeriod := range nftStatistic.NFTOwnersForPeriod {
+			for _, ownerForPeriod := range nftStatistic.NFTOwnersForPeriod {
+				isSent := fundsHaveBeenSent(destinationAddressesWithAmount, ownerForPeriod)
 				if err := tx.saveNFTOwnersForPeriodHistory(ctx,
-					ownersForPeriod.TimeOwnedFrom, ownersForPeriod.TimeOwnedTo, ownersForPeriod.TotalTimeOwned,
-					ownersForPeriod.PercentOfTimeOwned, ownersForPeriod.Owner, ownersForPeriod.PayoutAddress, ownersForPeriod.Reward, nftPayoutHistoryId); err != nil {
+					ownerForPeriod.TimeOwnedFrom, ownerForPeriod.TimeOwnedTo, ownerForPeriod.TotalTimeOwned,
+					ownerForPeriod.PercentOfTimeOwned, ownerForPeriod.Owner, ownerForPeriod.PayoutAddress, ownerForPeriod.Reward, nftPayoutHistoryId, isSent); err != nil {
 					return err
 				}
 			}
@@ -51,6 +52,17 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 
 		return nil
 	})
+}
+
+func fundsHaveBeenSent(destinationAddressesWithAmount map[string]types.AmountInfo, ownerInfo types.NFTOwnerInformation) bool {
+	for address, info := range destinationAddressesWithAmount {
+		if address == ownerInfo.PayoutAddress {
+			if info.ThresholdReached {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, retryCount int) error {
