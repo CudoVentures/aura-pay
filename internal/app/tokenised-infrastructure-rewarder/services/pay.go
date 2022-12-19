@@ -43,8 +43,12 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 
 func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, storage Storage, farm types.Farm) error {
 	log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
+	err := validateFarm(farm)
+	if err != nil {
+		return err
+	}
 
-	_, err := btcClient.LoadWallet(farm.SubAccountName)
+	_, err = btcClient.LoadWallet(farm.SubAccountName)
 	if err != nil {
 		return err
 	}
@@ -242,6 +246,32 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	if err := storage.SaveStatistics(ctx, addressesWithAmountInfo, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
+	}
+
+	return nil
+}
+
+func validateFarm(farm types.Farm) error {
+	if farm.SubAccountName == "" {
+		return fmt.Errorf("farm has empty Sub Account Name. Farm Id: {%d}", farm.Id)
+	}
+
+	i, err := strconv.Atoi(farm.MaintenanceFeeInBtc)
+	if err != nil {
+		return fmt.Errorf("farm has no maintenance fee set. Farm Id: {%d}", farm.Id)
+	}
+	if i <= 0 {
+		return fmt.Errorf("farm has maintenance fee set below 0. Farm Id: {%d}", farm.Id)
+	}
+
+	if farm.AddressForReceivingRewardsFromPool == "" {
+		return fmt.Errorf("farm has no AddressForReceivingRewardsFromPool, farm Id: {%d}", farm.Id)
+	}
+	if farm.MaintenanceFeePayoutAddress == "" {
+		return fmt.Errorf("farm has no MaintenanceFeePayoutAddress, farm Id: {%d}", farm.Id)
+	}
+	if farm.LeftoverRewardPayoutAddress == "" {
+		return fmt.Errorf("farm has no LeftoverRewardPayoutAddress, farm Id: {%d}", farm.Id)
 	}
 
 	return nil

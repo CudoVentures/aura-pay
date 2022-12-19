@@ -84,8 +84,6 @@ func NewConfig() *Config {
 	}
 }
 
-// TODO: NewTestConfig() *Config {...}
-
 // Simple helper function to read an environment or return a default value
 func getEnv(key string, defaultVal string) string {
 	if value, exists := os.LookupEnv(key); exists {
