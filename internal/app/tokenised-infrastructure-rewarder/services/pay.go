@@ -256,7 +256,7 @@ func validateFarm(farm types.Farm) error {
 		return fmt.Errorf("farm has empty Sub Account Name. Farm Id: {%d}", farm.Id)
 	}
 
-	i, err := strconv.Atoi(farm.MaintenanceFeeInBtc)
+	i, err := strconv.ParseFloat(farm.MaintenanceFeeInBtc, 32)
 	if err != nil {
 		return fmt.Errorf("farm has no maintenance fee set. Farm Id: {%d}", farm.Id)
 	}
