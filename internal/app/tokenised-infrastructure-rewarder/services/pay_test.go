@@ -133,7 +133,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	farms := []types.Farm{
 		{
-			Id:                                 1,
+			Id:                                 "1",
 			SubAccountName:                     "farm_1",
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
@@ -141,7 +141,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 			MaintenanceFeeInBtc:                "1",
 		},
 		{
-			Id:                                 2,
+			Id:                                 "2",
 			SubAccountName:                     "farm_2",
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
@@ -171,7 +171,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 	var farm1CollectionData types.CollectionData
 	require.NoError(t, json.Unmarshal([]byte(farm1Data), &farm1CollectionData))
 
-	apiRequester.On("GetFarmCollectionsFromHasura", mock.Anything, "farm_1").Return(farm1CollectionData, nil).Once()
+	apiRequester.On("GetFarmCollectionsFromHasura", mock.Anything, "1").Return(farm1CollectionData, nil).Once()
 
 	apiRequester.On("GetFarmTotalHashPowerFromPoolToday", mock.Anything, "farm_1", mock.Anything).Return(5000.0, nil).Once()
 
@@ -188,14 +188,14 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 					"id": "1",
 					"data_json": {
 						"expiration_date": 1919101878,
-						"hash_rate_owned": 1000
+						"hash_rate_owned": "1000"
 					}
 				},
 				{
 					"id": "2",
 					"data_json": {
 						"expiration_date": 1643089013,
-						"hash_rate_owned": 1000
+						"hash_rate_owned": "1000"
 					}
 				}
 			]
@@ -321,7 +321,7 @@ func setupMockStorage() *mockStorage {
 				DenomId:                  "farm_1_denom_1",
 				PayoutPeriodStart:        1664999478,
 				PayoutPeriodEnd:          1666641078,
-				Reward:                   99988144,
+				Reward:                   0.99988144,
 				MaintenanceFee:           5928,
 				CUDOPartOfMaintenanceFee: 5928,
 				NFTOwnersForPeriod: []types.NFTOwnerInformation{

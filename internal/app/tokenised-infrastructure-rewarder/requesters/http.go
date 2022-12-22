@@ -35,7 +35,9 @@ func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, 
 	}
 
 	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
-	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId)
+	//requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId) // TODO: Use this once this is fixed in the aura platform
+
+	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/aurapool/aurapool", cudosAddress)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
@@ -359,7 +361,7 @@ func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []s
 	return okStruct.Result.Collections, nil
 }
 
-// Issues a curl request to the btc node to send funds to many addresses:
+// SendMany Issues a curl request to the btc node to send funds to many addresses:
 // curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "sendmany", "params": ["", {"bc1q09vm5lfy0j5reeulh4x5752q25uqqvz34hufdl":0.01,"bc1q02ad21edsxd23d32dfgqqsz4vv4nmtfzuklhy3":0.02}, 6, "testing"]}' -H 'content-type: text/plain;' http://127.0.0.1:8332/
 func (r *Requester) SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64) (string, error) {
 

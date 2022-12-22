@@ -22,14 +22,14 @@ func (tx *DbTx) saveDestinationAddressesWithAmountHistory(ctx context.Context, a
 
 // add to this table
 func (tx *DbTx) saveNFTInformationHistory(ctx context.Context, collectionDenomId, tokenId string,
-	payoutPeriodStart, payoutPeriodEnd int64, reward btcutil.Amount, txHash string,
+	payoutPeriodStart, payoutPeriodEnd int64, reward float64, txHash string,
 	maintenanceFee, CudoPartOfMaintenanceFee btcutil.Amount) (int, error) {
 
 	var id int
 	now := time.Now()
 
 	if err := tx.QueryRowContext(ctx, insertNFTInformationHistory, collectionDenomId, tokenId, payoutPeriodStart,
-		payoutPeriodEnd, reward.ToBTC(), txHash, maintenanceFee.ToBTC(), CudoPartOfMaintenanceFee.ToBTC(), now.UTC(), now.UTC()).Scan(&id); err != nil {
+		payoutPeriodEnd, reward, txHash, maintenanceFee.ToBTC(), CudoPartOfMaintenanceFee.ToBTC(), now.UTC(), now.UTC()).Scan(&id); err != nil {
 		return -1, err
 	}
 
