@@ -11,7 +11,7 @@ type NFTStatistics struct {
 	DenomId                  string `db:"denom_id"`
 	PayoutPeriodStart        int64  `db:"payout_period_start"`
 	PayoutPeriodEnd          int64  `db:"payout_period_end"`
-	Reward                   btcutil.Amount
+	Reward                   float64
 	MaintenanceFee           btcutil.Amount `db:"maintenance_fee"`
 	CUDOPartOfMaintenanceFee btcutil.Amount `db:"cudo_part_of_maintenance_fee"`
 	NFTOwnersForPeriod       []NFTOwnerInformation

@@ -188,7 +188,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 				collection.Denom.Id, nft.Id, maintenanceFee)
 			log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
 				s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
-			nftStatistics.Reward = rewardForNftAfterFee
+			nftStatistics.Reward = rewardForNftAfterFee.ToBTC()
 			nftStatistics.MaintenanceFee = maintenanceFee
 			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
 
