@@ -321,7 +321,7 @@ func setupMockStorage() *mockStorage {
 				DenomId:                  "farm_1_denom_1",
 				PayoutPeriodStart:        1664999478,
 				PayoutPeriodEnd:          1666641078,
-				Reward:                   99988144,
+				Reward:                   0.99988144,
 				MaintenanceFee:           5928,
 				CUDOPartOfMaintenanceFee: 5928,
 				NFTOwnersForPeriod: []types.NFTOwnerInformation{
