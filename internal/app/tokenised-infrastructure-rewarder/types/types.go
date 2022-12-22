@@ -6,14 +6,14 @@ import (
 )
 
 type Farm struct {
-	Id                                 int    `json:"id"`
+	Id                                 string `json:"id"`
 	Name                               string `json:"name"`
 	Description                        string `json:"description"`
-	SubAccountName                     string `json:"sub_account_name"`
-	AddressForReceivingRewardsFromPool string `json:"address_for_receiving_rewards_from_pool"`
-	LeftoverRewardPayoutAddress        string `json:"leftover_reward_payout_address"`
-	MaintenanceFeePayoutAddress        string `json:"maintenance_fee_payout_address"`
-	MaintenanceFeeInBtc                string `json:"maintenance_fee_in_btc"`
+	SubAccountName                     string `json:"legalName"`
+	AddressForReceivingRewardsFromPool string `json:"rewardsFromPoolBtcAddress"`
+	LeftoverRewardPayoutAddress        string `json:"leftoverRewardsBtcAddress"`
+	MaintenanceFeePayoutAddress        string `json:"maintenanceFeePayoutBtcAddress"`
+	MaintenanceFeeInBtc                string `json:"maintenanceFeeInBtc"`
 }
 type Collection struct {
 	Denom Denom `json:"denom"`
@@ -42,8 +42,8 @@ type NFT struct {
 }
 
 type NFTDataJson struct {
-	ExpirationDate int64   `json:"expiration_date"`
-	HashRateOwned  float64 `json:"hash_rate_owned"`
+	ExpirationDate int64  `json:"expiration_date"`
+	HashRateOwned  string `json:"hash_rate_owned"`
 }
 
 type BtcNetworkParams struct {

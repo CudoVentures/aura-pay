@@ -138,7 +138,7 @@ func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	return nftMaintenanceFeeForPayoutPeriod, partOfMaintenanceFeeForCudo, rewardForNft
 }
 
-func sumMintedHashPowerForAllCollections(collections []types.Collection) float64 {
+func sumMintedHashPowerForAllCollections(collections []types.Collection) (float64, error) {
 	var totalMintedHashPowerForAllCollections float64
 
 	for _, collection := range collections {
@@ -147,11 +147,15 @@ func sumMintedHashPowerForAllCollections(collections []types.Collection) float64
 				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
 				continue
 			}
-			totalMintedHashPowerForAllCollections += nft.DataJson.HashRateOwned
+			hashRateOwnedConverted, err := strconv.ParseFloat(nft.DataJson.HashRateOwned, 32)
+			if err != nil {
+				return 0, err
+			}
+			totalMintedHashPowerForAllCollections += hashRateOwnedConverted
 		}
 	}
 
-	return totalMintedHashPowerForAllCollections
+	return totalMintedHashPowerForAllCollections, nil
 }
 
 func roundToPrecision(value float64) (result float64) {

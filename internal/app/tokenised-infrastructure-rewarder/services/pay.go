@@ -78,7 +78,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 	log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
 
-	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.SubAccountName)
+	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,10 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	fmt.Printf("farmCollectionsWithNFTs: %+v", farmCollectionsWithNFTs)
 
-	mintedHashPowerForFarm := sumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
+	mintedHashPowerForFarm, err := sumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
+	if err != nil {
+		return err
+	}
 	log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
 
 	rewardForNftOwners := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
@@ -171,8 +174,9 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			nftStatistics.PayoutPeriodStart = periodStart
 			nftStatistics.PayoutPeriodEnd = periodEnd
+			hashRateOwnedConverted, err := strconv.ParseFloat(nft.DataJson.HashRateOwned, 32)
 
-			rewardForNft := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
+			rewardForNft := calculatePercent(mintedHashPowerForFarm, hashRateOwnedConverted, rewardForNftOwners)
 
 			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart,
 				periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft)
@@ -205,7 +209,11 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	removeAddressesWithZeroReward(destinationAddressesWithAmount)
-	addressesWithThresholdToUpdate, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
+	farmIdInt, err := strconv.Atoi(farm.Id)
+	if err != nil {
+		return err
+	}
+	addressesWithThresholdToUpdate, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farmIdInt)
 	if err != nil {
 		return err
 	}
@@ -230,11 +238,6 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} locked", farm.SubAccountName)
 	}()
 
-	err = storage.UpdateThresholdStatuses(ctx, transactionIdsToMarkProcessed, addressesWithThresholdToUpdate, farm.Id)
-	if err != nil {
-		return err
-	}
-
 	txHash := ""
 	if len(addressesToSend) > 0 {
 		txHash, err = s.apiRequester.SendMany(ctx, addressesToSend)
@@ -244,8 +247,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 	}
 
-	if err := storage.SaveStatistics(ctx, addressesWithAmountInfo, statistics, txHash, strconv.Itoa(farm.Id), farm.SubAccountName); err != nil {
+	err = storage.UpdateThresholdStatuses(ctx, transactionIdsToMarkProcessed, addressesWithThresholdToUpdate, farmIdInt)
+	if err != nil {
+		log.Error().Msgf("Failed to update threshold for tx hash {%s}: %s", txHash, err)
+		return err
+	}
+
+	if err := storage.SaveStatistics(ctx, addressesWithAmountInfo, statistics, txHash, farm.Id, farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
+		return err
 	}
 
 	return nil
@@ -253,25 +263,25 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 func validateFarm(farm types.Farm) error {
 	if farm.SubAccountName == "" {
-		return fmt.Errorf("farm has empty Sub Account Name. Farm Id: {%d}", farm.Id)
+		return fmt.Errorf("farm has empty Sub Account Name. Farm Id: {%s}", farm.Id)
 	}
 
 	i, err := strconv.ParseFloat(farm.MaintenanceFeeInBtc, 32)
 	if err != nil {
-		return fmt.Errorf("farm has no maintenance fee set. Farm Id: {%d}", farm.Id)
+		return fmt.Errorf("farm has no maintenance fee set. Farm Id: {%s}", farm.Id)
 	}
 	if i <= 0 {
-		return fmt.Errorf("farm has maintenance fee set below 0. Farm Id: {%d}", farm.Id)
+		return fmt.Errorf("farm has maintenance fee set below 0. Farm Id: {%s}", farm.Id)
 	}
 
 	if farm.AddressForReceivingRewardsFromPool == "" {
-		return fmt.Errorf("farm has no AddressForReceivingRewardsFromPool, farm Id: {%d}", farm.Id)
+		return fmt.Errorf("farm has no AddressForReceivingRewardsFromPool, farm Id: {%s}", farm.Id)
 	}
 	if farm.MaintenanceFeePayoutAddress == "" {
-		return fmt.Errorf("farm has no MaintenanceFeePayoutAddress, farm Id: {%d}", farm.Id)
+		return fmt.Errorf("farm has no MaintenanceFeePayoutAddress, farm Id: {%s}", farm.Id)
 	}
 	if farm.LeftoverRewardPayoutAddress == "" {
-		return fmt.Errorf("farm has no LeftoverRewardPayoutAddress, farm Id: {%d}", farm.Id)
+		return fmt.Errorf("farm has no LeftoverRewardPayoutAddress, farm Id: {%s}", farm.Id)
 	}
 
 	return nil

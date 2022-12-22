@@ -9,7 +9,7 @@ import (
 )
 
 func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error) {
-	payoutTimes := []types.NFTStatistics{}
+	var payoutTimes []types.NFTStatistics
 	if err := sdb.SelectContext(ctx, &payoutTimes, selectNFTPayoutHistory, collectionDenomId, nftId); err != nil {
 		return nil, err
 	}
