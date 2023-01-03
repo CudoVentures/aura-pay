@@ -222,7 +222,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	addressesToSend := convertAmountToBTC(addressesWithAmountInfo)
 
-	log.Debug().Msgf("Addresses { above threshold that will be sent for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(addressesToSend))
+	log.Debug().Msgf("Addresses above threshold that will be sent for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(addressesToSend))
 
 	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
 	if err != nil {

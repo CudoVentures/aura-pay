@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"sync"
+
 	worker "github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/requesters"
@@ -10,7 +12,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
-	"sync"
 )
 
 func main() {
@@ -20,6 +21,7 @@ func main() {
 func runService(ctx context.Context) {
 	if err := godotenv.Load(".env"); err != nil {
 		log.Error().Msgf("No .env file found: %s", err)
+		return
 	}
 
 	config := infrastructure.NewConfig()
