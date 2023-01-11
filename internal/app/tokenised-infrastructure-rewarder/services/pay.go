@@ -183,6 +183,9 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			nftStatistics.PayoutPeriodStart = periodStart
 			nftStatistics.PayoutPeriodEnd = periodEnd
 			hashRateOwnedConverted, err := strconv.ParseFloat(nft.DataJson.HashRateOwned, 32)
+			if err != nil {
+				return err
+			}
 
 			rewardForNft := calculatePercent(mintedHashPowerForFarm, hashRateOwnedConverted, rewardForNftOwners)
 
@@ -225,7 +228,6 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	// check that all of the amount is distributed and no more than it
 	if totalAmountToPayToAddresses != totalRewardForFarm {
-		fmt.Println("erorrrrrrrrrrrrrrrrrrrrr")
 		return fmt.Errorf("distributed amount doesn't equal total farm rewards. Distributed amount: {%s}, TotalFarmReward: {%s}", totalAmountToPayToAddresses, totalRewardForFarm)
 	}
 
