@@ -26,6 +26,7 @@ func TestProcessPayment(t *testing.T) {
 	config := &infrastructure.Config{
 		Network:                    "BTC",
 		CUDOMaintenanceFeePercent:  50,
+		CUDOFeeOnAllBTC:            2,
 		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
 		GlobalPayoutThresholdInBTC: 0.01,
 	}
@@ -39,12 +40,35 @@ func TestProcessPayment(t *testing.T) {
 	require.NoError(t, s.Execute(context.Background(), setupMockBtcClient(), setupMockStorage()))
 }
 
+func TestProcessFarm(t *testing.T) {
+	config := &infrastructure.Config{
+		Network:                    "BTC",
+		CUDOMaintenanceFeePercent:  50,
+		CUDOFeeOnAllBTC:            2,
+		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC: 0.01,
+	}
+
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	s := NewPayService(config, setupMockApiRequester(t), &mockHelper{}, btcNetworkParams)
+
+	farms, err := s.apiRequester.GetFarms(context.Background())
+	require.Equal(t, err, nil, "Get farms returned error")
+
+	require.NoError(t, s.processFarm(context.Background(), setupMockBtcClient(), setupMockStorage(), farms[0]))
+}
+
 func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 	skipDBTests(t)
 
 	config := &infrastructure.Config{
 		Network:                    "BTC",
 		CUDOMaintenanceFeePercent:  50,
+		CUDOFeeOnAllBTC:            2,
 		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
 		GlobalPayoutThresholdInBTC: 0.01,
 		DbDriverName:               "postgres",
@@ -91,7 +115,7 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 	amountAccumulatedBTC, err := dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "maintenance_fee_payout_address_1", 1)
 	require.Equal(t, float64(5928), amountAccumulatedBTC)
 	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "cudo_maintenance_fee_payout_address_1", 1)
-	require.Equal(t, float64(5928), amountAccumulatedBTC)
+	require.Equal(t, float64(10210010), amountAccumulatedBTC)
 	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_minter_payout_addr", 1)
 	require.Equal(t, float64(0), amountAccumulatedBTC)
 	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_owner_2_payout_addr", 1)
@@ -238,11 +262,12 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	// TODO: Verify that values are correct
 
-	// cudo_maintenance_fee_payout_addr and maintenance_fee_payout_address_1 are below threshold of 0.01 with values 5.928e-05
+	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
 	apiRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1": 4,
-		"nft_minter_payout_addr":           0.2631688,
-		"nft_owner_2_payout_addr":          0.73671264,
+		"leftover_reward_payout_address_1":      4,
+		"cudo_maintenance_fee_payout_address_1": 0.10210010,
+		"nft_minter_payout_addr":                0.2631688,
+		"nft_owner_2_payout_addr":               0.73671264,
 	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	return apiRequester
@@ -252,10 +277,10 @@ func setupMockBtcClient() *mockBtcClient {
 	btcClient := &mockBtcClient{}
 
 	btcClient.On("ListUnspent").Return([]btcjson.ListUnspentResult{
-		{TxID: "1", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
-		{TxID: "2", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
-		{TxID: "3", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
-		{TxID: "4", Amount: 1.25, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "1", Amount: 1.277040816, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "2", Amount: 1.275, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "3", Amount: 1.275, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "4", Amount: 1.275, Address: "address_for_receiving_reward_from_pool_1"},
 	}, nil).Once()
 
 	btcClient.On("LoadWallet", "farm_1").Return(&btcjson.LoadWalletResult{}, nil).Once()
@@ -305,14 +330,21 @@ func (mbc *mockBtcClient) ListUnspent() ([]btcjson.ListUnspentResult, error) {
 func setupMockStorage() *mockStorage {
 	storage := &mockStorage{}
 
+	leftoverAmount := btcutil.Amount(400000000)
+	nftMinterAmount := btcutil.Amount(26316880)
+	nftOwner2Amount := btcutil.Amount(73671264)
+	cudoPartOfReward := btcutil.Amount(10204082)
+	cudoPartOfMaintenanceFee := btcutil.Amount(5928)
+	maintenanceFeeAddress1Amount := btcutil.Amount(5928)
+
 	storage.On("GetPayoutTimesForNFT", mock.Anything, mock.Anything, mock.Anything).Return([]types.NFTStatistics{}, nil)
 	storage.On("SaveStatistics", mock.Anything,
 		map[string]types.AmountInfo{
-			"leftover_reward_payout_address_1":      {Amount: 400000000, ThresholdReached: true},
-			"nft_minter_payout_addr":                {Amount: 26316880, ThresholdReached: true},
-			"nft_owner_2_payout_addr":               {Amount: 73671264, ThresholdReached: true},
-			"cudo_maintenance_fee_payout_address_1": {Amount: 5928, ThresholdReached: false},
-			"maintenance_fee_payout_address_1":      {Amount: 5928, ThresholdReached: false},
+			"leftover_reward_payout_address_1":      {Amount: leftoverAmount, ThresholdReached: true},
+			"nft_minter_payout_addr":                {Amount: nftMinterAmount, ThresholdReached: true},
+			"nft_owner_2_payout_addr":               {Amount: nftOwner2Amount, ThresholdReached: true},
+			"cudo_maintenance_fee_payout_address_1": {Amount: cudoPartOfMaintenanceFee + cudoPartOfReward, ThresholdReached: true},
+			"maintenance_fee_payout_address_1":      {Amount: maintenanceFeeAddress1Amount, ThresholdReached: false},
 		},
 
 		[]types.NFTStatistics{
@@ -322,8 +354,9 @@ func setupMockStorage() *mockStorage {
 				PayoutPeriodStart:        1664999478,
 				PayoutPeriodEnd:          1666641078,
 				Reward:                   0.99988144,
-				MaintenanceFee:           5928,
-				CUDOPartOfMaintenanceFee: 5928,
+				MaintenanceFee:           maintenanceFeeAddress1Amount,
+				CUDOPartOfMaintenanceFee: cudoPartOfMaintenanceFee,
+				CUDOPartOfReward:         cudoPartOfReward,
 				NFTOwnersForPeriod: []types.NFTOwnerInformation{
 					{
 						TimeOwnedFrom:      1664999478,
@@ -332,7 +365,7 @@ func setupMockStorage() *mockStorage {
 						PercentOfTimeOwned: 26.32,
 						PayoutAddress:      "nft_minter_payout_addr",
 						Owner:              "nft_minter",
-						Reward:             26316880,
+						Reward:             nftMinterAmount,
 					},
 					{
 						TimeOwnedFrom:      1665431478,
@@ -341,7 +374,7 @@ func setupMockStorage() *mockStorage {
 						PercentOfTimeOwned: 73.68,
 						PayoutAddress:      "nft_owner_2_payout_addr",
 						Owner:              "nft_owner_2",
-						Reward:             73671264,
+						Reward:             nftOwner2Amount,
 					},
 				},
 			},

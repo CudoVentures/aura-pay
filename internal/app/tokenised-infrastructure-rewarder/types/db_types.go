@@ -1,8 +1,9 @@
 package types
 
 import (
-	"github.com/btcsuite/btcd/btcutil"
 	"time"
+
+	"github.com/btcsuite/btcd/btcutil"
 )
 
 type NFTStatistics struct {
@@ -14,6 +15,7 @@ type NFTStatistics struct {
 	Reward                   float64
 	MaintenanceFee           btcutil.Amount `db:"maintenance_fee"`
 	CUDOPartOfMaintenanceFee btcutil.Amount `db:"cudo_part_of_maintenance_fee"`
+	CUDOPartOfReward         btcutil.Amount `db:"cudo_part_of_reward"`
 	NFTOwnersForPeriod       []NFTOwnerInformation
 	TxHash                   string    `db:"tx_hash"`
 	CreatedAt                time.Time `db:"createdAt"`

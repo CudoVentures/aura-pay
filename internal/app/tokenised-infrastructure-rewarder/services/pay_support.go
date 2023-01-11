@@ -3,11 +3,12 @@ package services
 import (
 	"context"
 	"database/sql"
+	"sort"
+
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/rs/zerolog/log"
-	"sort"
 )
 
 func (s *PayService) getTotalRewardForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) (btcutil.Amount, []string, error) {
@@ -193,7 +194,7 @@ func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountIn
 	return result
 }
 
-func payMaintenanceFeeForNFT(destinationAddressesWithAmount map[string]btcutil.Amount, maintenanceFeeAmount btcutil.Amount, farmMaintenanceFeePayoutAddress string) {
+func addPaymentAmountToAddress(destinationAddressesWithAmount map[string]btcutil.Amount, maintenanceFeeAmount btcutil.Amount, farmMaintenanceFeePayoutAddress string) {
 	destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress] += maintenanceFeeAmount
 }
 

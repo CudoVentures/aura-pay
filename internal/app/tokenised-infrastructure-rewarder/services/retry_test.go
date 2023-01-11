@@ -20,6 +20,7 @@ func TestRetryService_Execute(t *testing.T) {
 	config := &infrastructure.Config{
 		Network:                           "BTC",
 		CUDOMaintenanceFeePercent:         50,
+		CUDOFeeOnAllBTC:                   2,
 		CUDOFeePayoutAddress:              "cudo_maintenance_fee_payout_addr",
 		RBFTransactionRetryDelayInSeconds: 10,
 		RBFTransactionRetryMaxCount:       2,
@@ -65,6 +66,7 @@ func TestRetryService_Execute_With_Database(t *testing.T) {
 	config := &infrastructure.Config{
 		Network:                     "BTC",
 		CUDOMaintenanceFeePercent:   50,
+		CUDOFeeOnAllBTC:             2,
 		CUDOFeePayoutAddress:        "cudo_maintenance_fee_payout_address_1",
 		GlobalPayoutThresholdInBTC:  0.01,
 		DbDriverName:                "postgres",
