@@ -138,6 +138,14 @@ func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	return nftMaintenanceFeeForPayoutPeriod, partOfMaintenanceFeeForCudo, rewardForNft
 }
 
+func (s *PayService) calculateCudosFeeOfTotalFarmIncome(totalFarmIncome btcutil.Amount) (btcutil.Amount, btcutil.Amount) {
+
+	farmIncomeCudosFee := totalFarmIncome.MulF64(s.config.CUDOFeeOnAllBTC / 100) // ex 10% = 0.1 * total
+	farmIncomeAfterCudosFee := totalFarmIncome - farmIncomeCudosFee
+
+	return farmIncomeAfterCudosFee, farmIncomeCudosFee
+}
+
 func sumMintedHashPowerForAllCollections(collections []types.Collection) (float64, error) {
 	var totalMintedHashPowerForAllCollections float64
 

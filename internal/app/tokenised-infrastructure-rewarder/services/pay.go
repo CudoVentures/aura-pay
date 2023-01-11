@@ -76,7 +76,12 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Info().Msgf("reward for farm {{%s}} is 0....skipping this farm", farm.SubAccountName)
 		return nil
 	}
-	log.Debug().Msgf("Total reward for farm %s: %s", farm.SubAccountName, totalRewardForFarm)
+
+	totalRewardForFarmAfterCudosFee, cudosFeeOfTotalReward := s.calculateCudosFeeOfTotalFarmIncome(totalRewardForFarm)
+
+	log.Debug().Msgf("Total reward for farm \"%s\": %s", farm.SubAccountName, totalRewardForFarm)
+	log.Debug().Msgf("Cudos part of total farm reward: %s", cudosFeeOfTotalReward)
+	log.Debug().Msgf("Total reward for farm \"%s\" after cudos fee: %s", farm.SubAccountName, totalRewardForFarmAfterCudosFee)
 
 	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
 	if err != nil {
@@ -137,15 +142,18 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 	log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
 
-	rewardForNftOwners := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarm)
+	rewardForNftOwners := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarmAfterCudosFee)
 	leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
 	var rewardToReturn btcutil.Amount
 
 	destinationAddressesWithAmount := make(map[string]btcutil.Amount)
 
+	// add cudos fee on total farm income
+	addPaymentAmountToAddress(destinationAddressesWithAmount, cudosFeeOfTotalReward, s.config.CUDOFeePayoutAddress)
+
 	// return to the farm owner whatever is left
 	if leftoverHashPower > 0 {
-		rewardToReturn = calculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarm)
+		rewardToReturn = calculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarmAfterCudosFee)
 		addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
 	}
 	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
@@ -180,8 +188,8 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart,
 				periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft)
-			payMaintenanceFeeForNFT(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutAddress)
-			payMaintenanceFeeForNFT(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOFeePayoutAddress)
+			addPaymentAmountToAddress(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutAddress)
+			addPaymentAmountToAddress(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOFeePayoutAddress)
 			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s",
 				collection.Denom.Id, nft.Id, rewardForNftAfterFee)
 			log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
@@ -191,6 +199,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			nftStatistics.Reward = rewardForNftAfterFee.ToBTC()
 			nftStatistics.MaintenanceFee = maintenanceFee
 			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
+			nftStatistics.CUDOPartOfReward = cudosFeeOfTotalReward
 
 			allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
 				ctx, nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, &nftStatistics, nft.Owner, s.config.Network, rewardForNftAfterFee)
@@ -206,6 +215,18 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	if len(destinationAddressesWithAmount) == 0 {
 		return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
+	}
+
+	var totalAmountToPayToAddresses btcutil.Amount
+
+	for _, amount := range destinationAddressesWithAmount {
+		totalAmountToPayToAddresses += amount
+	}
+
+	// check that all of the amount is distributed and no more than it
+	if totalAmountToPayToAddresses != totalRewardForFarm {
+		fmt.Println("erorrrrrrrrrrrrrrrrrrrrr")
+		return fmt.Errorf("distributed amount doesn't equal total farm rewards. Distributed amount: {%s}, TotalFarmReward: {%s}", totalAmountToPayToAddresses, totalRewardForFarm)
 	}
 
 	removeAddressesWithZeroReward(destinationAddressesWithAmount)
