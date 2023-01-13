@@ -12,6 +12,8 @@ FROM amd64/golang:1.18-buster
 USER root
 
 WORKDIR /aura-pay
+COPY ./.env ./.env
+
 COPY --from=builder /go/src/github.com/CudoVentures/aura-pay/build/aura-pay /usr/bin/aura-pay
 
 CMD ["/bin/bash", "-c", "aura-pay"]
