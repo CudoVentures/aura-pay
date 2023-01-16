@@ -128,13 +128,12 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	nonExpiredNFTsCount := s.filterExpiredNFTs(farmCollectionsWithNFTs)
-	fmt.Printf("nonExpiredNFTsCount: %d", nonExpiredNFTsCount)
+	log.Debug().Msgf("Non expired NFTs count: %d", nonExpiredNFTsCount)
+
 	if nonExpiredNFTsCount == 0 {
 		log.Error().Msgf("all nfts for farm {%s} are expired", farm.SubAccountName)
 		return nil
 	}
-
-	fmt.Printf("farmCollectionsWithNFTs: %+v", farmCollectionsWithNFTs)
 
 	mintedHashPowerForFarm, err := sumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
 	if err != nil {
@@ -153,7 +152,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	// return to the farm owner whatever is left
 	if leftoverHashPower > 0 {
-		rewardToReturn = calculatePercent(currentHashPowerForFarm, leftoverHashPower, totalRewardForFarmAfterCudosFee)
+		rewardToReturn = totalRewardForFarmAfterCudosFee - rewardForNftOwners
 		addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
 	}
 	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
@@ -182,12 +181,8 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			nftStatistics.PayoutPeriodStart = periodStart
 			nftStatistics.PayoutPeriodEnd = periodEnd
-			hashRateOwnedConverted, err := strconv.ParseFloat(nft.DataJson.HashRateOwned, 32)
-			if err != nil {
-				return err
-			}
 
-			rewardForNft := calculatePercent(mintedHashPowerForFarm, hashRateOwnedConverted, rewardForNftOwners)
+			rewardForNft := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
 
 			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart,
 				periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft)
@@ -199,7 +194,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 				collection.Denom.Id, nft.Id, maintenanceFee)
 			log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
 				s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
-			nftStatistics.Reward = rewardForNftAfterFee.ToBTC()
+			nftStatistics.Reward = rewardForNftAfterFee
 			nftStatistics.MaintenanceFee = maintenanceFee
 			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
 			nftStatistics.CUDOPartOfReward = cudosFeeOfTotalReward

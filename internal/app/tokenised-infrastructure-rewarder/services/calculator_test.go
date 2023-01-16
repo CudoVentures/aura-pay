@@ -26,18 +26,18 @@ func TestSumMintedHashPowerForAllCollections(t *testing.T) {
 				{
 					DataJson: types.NFTDataJson{
 						ExpirationDate: expirationDate,
-						HashRateOwned:  "0.01",
+						HashRateOwned:  0.01,
 					},
 				},
 				{
 					DataJson: types.NFTDataJson{
 						ExpirationDate: expirationDate,
-						HashRateOwned:  "1001",
+						HashRateOwned:  1001,
 					},
 				},
 				{
 					DataJson: types.NFTDataJson{
-						HashRateOwned: "5",
+						HashRateOwned: 5,
 					},
 				},
 			},
@@ -47,20 +47,20 @@ func TestSumMintedHashPowerForAllCollections(t *testing.T) {
 				{
 					DataJson: types.NFTDataJson{
 						ExpirationDate: expirationDate,
-						HashRateOwned:  "2",
+						HashRateOwned:  2,
 					},
 				},
 				{
 					DataJson: types.NFTDataJson{
 						ExpirationDate: expirationDate,
-						HashRateOwned:  "666",
+						HashRateOwned:  666,
 					},
 				},
 			},
 		},
 	}
 	result, _ := sumMintedHashPowerForAllCollections(collections)
-	require.Equal(t, 1669.0099999997765, result)
+	require.Equal(t, 1669.01, result)
 }
 
 func TestCalculatePercentShouldReturnZeroIfInvalidHashingPowerProvided(t *testing.T) {

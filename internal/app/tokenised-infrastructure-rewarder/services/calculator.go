@@ -155,11 +155,7 @@ func sumMintedHashPowerForAllCollections(collections []types.Collection) (float6
 				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
 				continue
 			}
-			hashRateOwnedConverted, err := strconv.ParseFloat(nft.DataJson.HashRateOwned, 32)
-			if err != nil {
-				return 0, err
-			}
-			totalMintedHashPowerForAllCollections += hashRateOwnedConverted
+			totalMintedHashPowerForAllCollections += nft.DataJson.HashRateOwned
 		}
 	}
 
@@ -176,9 +172,9 @@ func calculatePercent(available float64, actual float64, reward btcutil.Amount) 
 		return btcutil.Amount(0)
 	}
 
-	payoutRewardPercent := float64(actual) / float64(available) * 100 // ex 100 from 1000 = 10%
-	calculatedReward := float64(reward) * payoutRewardPercent / 100   // ex 10% from 1000 = 100
+	payoutRewardPercent := actual / available
+	calculatedReward := reward.MulF64(payoutRewardPercent)
 
 	// btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
-	return btcutil.Amount(calculatedReward)
+	return calculatedReward
 }

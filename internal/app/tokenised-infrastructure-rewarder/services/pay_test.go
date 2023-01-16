@@ -212,14 +212,14 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 					"id": "1",
 					"data_json": {
 						"expiration_date": 1919101878,
-						"hash_rate_owned": "1000"
+						"hash_rate_owned": 1000
 					}
 				},
 				{
 					"id": "2",
 					"data_json": {
 						"expiration_date": 1643089013,
-						"hash_rate_owned": "1000"
+						"hash_rate_owned": 1000
 					}
 				}
 			]
@@ -337,6 +337,8 @@ func setupMockStorage() *mockStorage {
 	cudoPartOfMaintenanceFee := btcutil.Amount(5928)
 	maintenanceFeeAddress1Amount := btcutil.Amount(5928)
 
+	amount, _ := btcutil.NewAmount(0.99988144)
+
 	storage.On("GetPayoutTimesForNFT", mock.Anything, mock.Anything, mock.Anything).Return([]types.NFTStatistics{}, nil)
 	storage.On("SaveStatistics", mock.Anything,
 		map[string]types.AmountInfo{
@@ -353,7 +355,7 @@ func setupMockStorage() *mockStorage {
 				DenomId:                  "farm_1_denom_1",
 				PayoutPeriodStart:        1664999478,
 				PayoutPeriodEnd:          1666641078,
-				Reward:                   0.99988144,
+				Reward:                   amount,
 				MaintenanceFee:           maintenanceFeeAddress1Amount,
 				CUDOPartOfMaintenanceFee: cudoPartOfMaintenanceFee,
 				CUDOPartOfReward:         cudoPartOfReward,

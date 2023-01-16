@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-
 	"github.com/btcsuite/btcd/btcutil"
 )
 
@@ -21,15 +20,21 @@ func (tx *DbTx) saveDestinationAddressesWithAmountHistory(ctx context.Context, a
 }
 
 // add to this table
-func (tx *DbTx) saveNFTInformationHistory(ctx context.Context, collectionDenomId, tokenId string,
-	payoutPeriodStart, payoutPeriodEnd int64, reward float64, txHash string,
-	maintenanceFee, CudoPartOfMaintenanceFee btcutil.Amount) (int, error) {
+func (tx *DbTx) saveNFTInformationHistory(
+	ctx context.Context,
+	collectionDenomId,
+	tokenId string,
+	payoutPeriodStart,
+	payoutPeriodEnd int64,
+	reward btcutil.Amount,
+	txHash string,
+	maintenanceFee, CudoPartOfMaintenanceFee, CudoPartOfReward btcutil.Amount) (int, error) {
 
 	var id int
 	now := time.Now()
 
 	if err := tx.QueryRowContext(ctx, insertNFTInformationHistory, collectionDenomId, tokenId, payoutPeriodStart,
-		payoutPeriodEnd, reward, txHash, maintenanceFee.ToBTC(), CudoPartOfMaintenanceFee.ToBTC(), now.UTC(), now.UTC()).Scan(&id); err != nil {
+		payoutPeriodEnd, reward.ToBTC(), txHash, maintenanceFee.ToBTC(), CudoPartOfMaintenanceFee.ToBTC(), CudoPartOfReward.ToBTC(), now.UTC(), now.UTC()).Scan(&id); err != nil {
 		return -1, err
 	}
 
@@ -114,8 +119,8 @@ const (
 		(address, amount_btc, tx_hash, farm_id, payout_time, threshold_reached, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	insertNFTInformationHistory = `INSERT INTO statistics_nft_payout_history (denom_id, token_id, payout_period_start,
-		payout_period_end, reward, tx_hash, maintenance_fee, cudo_part_of_maintenance_fee, "createdAt", "updatedAt")
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`
+		payout_period_end, reward, tx_hash, maintenance_fee, cudo_part_of_maintenance_fee, cudo_part_of_reward, "createdAt", "updatedAt")
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`
 
 	insertNFTOnwersForPeriodHistory = `INSERT INTO statistics_nft_owners_payout_history (time_owned_from, time_owned_to,
 		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, nft_payout_history_id, sent, "createdAt", "updatedAt")

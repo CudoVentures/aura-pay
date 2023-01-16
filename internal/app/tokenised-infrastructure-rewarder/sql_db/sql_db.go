@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcutil"
-
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
@@ -30,7 +29,7 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 			var err error
 			if nftPayoutHistoryId, err = tx.saveNFTInformationHistory(ctx, nftStatistic.DenomId, nftStatistic.TokenId,
 				nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash,
-				nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee); err != nil {
+				nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee, nftStatistic.CUDOPartOfReward); err != nil {
 				return err
 			}
 

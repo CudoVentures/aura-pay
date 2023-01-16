@@ -42,8 +42,8 @@ type NFT struct {
 }
 
 type NFTDataJson struct {
-	ExpirationDate int64  `json:"expiration_date"`
-	HashRateOwned  string `json:"hash_rate_owned"`
+	ExpirationDate int64   `json:"expiration_date"`
+	HashRateOwned  float64 `json:"hash_rate_owned"`
 }
 
 type BtcNetworkParams struct {

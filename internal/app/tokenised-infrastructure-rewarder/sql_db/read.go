@@ -6,14 +6,56 @@ import (
 	"fmt"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
+	"github.com/btcsuite/btcd/btcutil"
 )
 
 func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error) {
-	var payoutTimes []types.NFTStatistics
+	var payoutTimes []types.NFTStatisticsRepo
 	if err := sdb.SelectContext(ctx, &payoutTimes, selectNFTPayoutHistory, collectionDenomId, nftId); err != nil {
 		return nil, err
 	}
-	return payoutTimes, nil
+
+	var payoutTimesParsed []types.NFTStatistics
+
+	for _, payoutTimeRepo := range payoutTimes {
+		var ownerInfos []types.NFTOwnerInformation
+
+		for _, ownerInfoRepo := range payoutTimeRepo.NFTOwnersForPeriod {
+			parsedInfo := types.NFTOwnerInformation{
+				TimeOwnedFrom:      ownerInfoRepo.TimeOwnedFrom,
+				TimeOwnedTo:        ownerInfoRepo.TimeOwnedTo,
+				TotalTimeOwned:     ownerInfoRepo.TotalTimeOwned,
+				PercentOfTimeOwned: ownerInfoRepo.PercentOfTimeOwned,
+				Owner:              ownerInfoRepo.Owner,
+				PayoutAddress:      ownerInfoRepo.PayoutAddress,
+				Reward:             btcutil.Amount(ownerInfoRepo.Reward),
+				CreatedAt:          ownerInfoRepo.CreatedAt,
+				UpdatedAt:          ownerInfoRepo.UpdatedAt,
+			}
+
+			ownerInfos = append(ownerInfos, parsedInfo)
+		}
+
+		payoutTimeParsed := types.NFTStatistics{
+			Id:                       payoutTimeRepo.Id,
+			TokenId:                  payoutTimeRepo.TokenId,
+			DenomId:                  payoutTimeRepo.DenomId,
+			PayoutPeriodStart:        payoutTimeRepo.PayoutPeriodStart,
+			PayoutPeriodEnd:          payoutTimeRepo.PayoutPeriodEnd,
+			Reward:                   btcutil.Amount(payoutTimeRepo.Reward),
+			MaintenanceFee:           btcutil.Amount(payoutTimeRepo.MaintenanceFee),
+			CUDOPartOfMaintenanceFee: btcutil.Amount(payoutTimeRepo.CUDOPartOfMaintenanceFee),
+			CUDOPartOfReward:         btcutil.Amount(payoutTimeRepo.CUDOPartOfReward),
+			NFTOwnersForPeriod:       ownerInfos,
+			TxHash:                   payoutTimeRepo.TxHash,
+			CreatedAt:                payoutTimeRepo.CreatedAt,
+			UpdatedAt:                payoutTimeRepo.UpdatedAt,
+		}
+
+		payoutTimesParsed = append(payoutTimesParsed, payoutTimeParsed)
+	}
+
+	return payoutTimesParsed, nil
 }
 
 func (sdb *SqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error) {
