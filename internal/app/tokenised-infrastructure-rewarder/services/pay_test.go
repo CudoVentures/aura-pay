@@ -162,7 +162,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
 			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
-			MaintenanceFeeInBtc:                "1",
+			MaintenanceFeeInBtc:                1,
 		},
 		{
 			Id:                                 "2",
@@ -170,7 +170,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
 			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_2",
-			MaintenanceFeeInBtc:                "0.01",
+			MaintenanceFeeInBtc:                0.01,
 		},
 	}
 
@@ -445,12 +445,12 @@ func (ms *mockStorage) GetUTXOTransaction(ctx context.Context, txId string) (typ
 	return args.Get(0).(types.UTXOTransaction), args.Error(1)
 }
 
-func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (float64, error) {
+func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int64) (float64, error) {
 	args := ms.Called(ctx, key, farmId)
 	return args.Get(0).(float64), args.Error(1)
 }
 
-func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) error {
+func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int64) error {
 	args := ms.Called(ctx, processedTransactions, addressesWithThresholdToUpdate)
 	return args.Error(0)
 }

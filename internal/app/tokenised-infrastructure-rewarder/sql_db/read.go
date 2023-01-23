@@ -45,7 +45,6 @@ func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId st
 			Reward:                   btcutil.Amount(payoutTimeRepo.Reward),
 			MaintenanceFee:           btcutil.Amount(payoutTimeRepo.MaintenanceFee),
 			CUDOPartOfMaintenanceFee: btcutil.Amount(payoutTimeRepo.CUDOPartOfMaintenanceFee),
-			CUDOPartOfReward:         btcutil.Amount(payoutTimeRepo.CUDOPartOfReward),
 			NFTOwnersForPeriod:       ownerInfos,
 			TxHash:                   payoutTimeRepo.TxHash,
 			CreatedAt:                payoutTimeRepo.CreatedAt,
@@ -58,6 +57,14 @@ func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId st
 	return payoutTimesParsed, nil
 }
 
+func (sdb *SqlDB) GetApprovedFarms(ctx context.Context) ([]types.Farm, error) {
+	farms := []types.Farm{}
+	if err := sdb.SelectContext(ctx, &farms, selectApprovedFarms); err != nil {
+		return nil, err
+	}
+	return farms, nil
+}
+
 func (sdb *SqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error) {
 	txHashesWithStatus := []types.TransactionHashWithStatus{}
 	if err := sdb.SelectContext(ctx, &txHashesWithStatus, selectTxHashStatus, status); err != nil {
@@ -66,7 +73,7 @@ func (sdb *SqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]typ
 	return txHashesWithStatus, nil
 }
 
-func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int) (float64, error) {
+func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int64) (float64, error) {
 	var result []types.AddressThresholdAmountByFarm
 	if err := sdb.SelectContext(ctx, &result, selectThresholdByAddress, address, farmId); err != nil {
 		return 0, err
@@ -96,7 +103,17 @@ func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txHash string) (types.
 	return result[0], nil
 }
 
+func (sdb *SqlDB) GetFarmAuraPoolCollections(ctx context.Context, farmId int64) ([]types.AuraPoolCollection, error) {
+	collections := []types.AuraPoolCollection{}
+	if err := sdb.SelectContext(ctx, &collections, selectFarmCollections, farmId); err != nil {
+		return nil, err
+	}
+	return collections, nil
+}
+
 const selectNFTPayoutHistory = `SELECT * FROM statistics_nft_payout_history WHERE denom_id=$1 and token_id=$2 ORDER BY payout_period_end ASC`
 const selectTxHashStatus = `SELECT * FROM statistics_tx_hash_status WHERE status=$1 ORDER BY time_sent ASC`
+const selectApprovedFarms = `SELECT id, name, description, sub_account_name, total_farm_hashrate, address_for_receiving_rewards_from_pool, leftover_reward_payout_address, maintenance_fee_payout_address, maintenance_fee_in_btc FROM farms WHERE status='approved'`
 const selectThresholdByAddress = `SELECT * FROM threshold_amounts WHERE btc_address=$1 AND farm_id=$2`
 const selectUTXOById = `SELECT * FROM utxo_transactions WHERE tx_hash=$1`
+const selectFarmCollections = `SELECT id, denom_id, hashing_power FROM collections WHERE farm_id=$1`

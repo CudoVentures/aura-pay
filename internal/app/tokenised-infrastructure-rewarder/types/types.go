@@ -5,16 +5,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 )
 
-type Farm struct {
-	Id                                 string `json:"id"`
-	Name                               string `json:"name"`
-	Description                        string `json:"description"`
-	SubAccountName                     string `json:"legalName"`
-	AddressForReceivingRewardsFromPool string `json:"rewardsFromPoolBtcAddress"`
-	LeftoverRewardPayoutAddress        string `json:"leftoverRewardsBtcAddress"`
-	MaintenanceFeePayoutAddress        string `json:"maintenanceFeePayoutBtcAddress"`
-	MaintenanceFeeInBtc                string `json:"maintenanceFeeInBtc"`
-}
 type Collection struct {
 	Denom Denom `json:"denom"`
 	Nfts  []NFT `json:"nfts"`

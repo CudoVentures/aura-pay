@@ -155,11 +155,11 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farm
 	return okStruct[0].HashrateAccepted, nil
 }
 
-func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId string) (types.CollectionData, error) {
+func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId int64) (types.CollectionData, error) {
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
             {
-                denoms_by_data_property(args: {property_name: "farm_id", property_value: "%s"}) {
+                denoms_by_data_property(args: {property_name: "farm_id", property_value: "%d"}) {
                     id,
                     data_json
                 }
@@ -195,68 +195,6 @@ func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId str
 	}
 
 	return res, nil
-}
-
-func (r *Requester) GetFarms(ctx context.Context) ([]types.Farm, error) {
-
-	//if r.config.IsTesting { // TODO: Remove once backend is up
-	//	Collection := types.Collection{
-	//		Denom: types.Denom{Id: "test"},
-	//		Nfts:  []types.NFT{},
-	//	}
-	//	testFarm := types.Farm{
-	//		Id:                                 1,
-	//		SubAccountName:                     "testwallet2",
-	//		AddressForReceivingRewardsFromPool: "tb1qeymwaxsx73edkrqyg436khmcwlavw8zjc57wnw",
-	//		LeftoverRewardPayoutAddress:        "tb1qmktqv4psg7ucw6ct578ev4y9pl9k8m6eh7g0vd",
-	//		MaintenanceFeePayoutdAddress:       "tb1quljswl4xgmmqrmuyvqqxzg77zyd7z8na54ps7a",
-	//		MonthlyMaintenanceFeeInBTC:         "0.0001",
-	//		Collections:                        []types.Collection{Collection}}
-	//	return []types.Farm{testFarm}, nil
-	//}
-
-	jsonData := map[string]interface{}{
-		"miningFarmIds":  "null",
-		"status":         "approved",
-		"searchString":   "",
-		"sessionAccount": 0,
-		"orderBy":        -1,
-		"from":           0,
-		"count":          2147483647,
-	}
-	jsonValue, _ := json.Marshal(jsonData)
-	request, err := http.NewRequestWithContext(ctx, "POST", r.config.AuraPoolBackEndUrl+"/farm", bytes.NewBuffer(jsonValue))
-	if err != nil {
-		return []types.Farm{}, err
-	}
-	client := &http.Client{Timeout: time.Second * 10}
-	response, err := client.Do(request)
-	if err != nil {
-		log.Error().Msgf("The HTTP request failed with error %s\n", err)
-		return []types.Farm{}, nil
-	}
-	defer response.Body.Close()
-
-	data, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
-		return []types.Farm{}, err
-	}
-	if response.StatusCode != StatusCodeOK {
-		return []types.Farm{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
-	}
-
-	okStruct := struct {
-		Farms []types.Farm `json:"miningFarmEntities"`
-	}{}
-
-	if err := json.Unmarshal(data, &okStruct); err != nil {
-		log.Error().Msgf("Could not unmarshall farm data [%s] from platform backend to the specific type, error is: [%s]", data, err)
-		return nil, err
-	}
-
-	return okStruct.Farms, nil
-
 }
 
 func (r *Requester) VerifyCollection(ctx context.Context, denomId string) (bool, error) {

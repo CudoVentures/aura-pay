@@ -14,12 +14,41 @@ func NewSqlDB(db *sqlx.DB) *SqlDB {
 	return &SqlDB{db}
 }
 
-func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId, farmSubAccountName string) (retErr error) {
+func (sdb *SqlDB) SaveStatistics(
+	ctx context.Context,
+	farmPaymentStatistics types.FarmPayment,
+	collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation,
+	destinationAddressesWithAmount map[string]types.AmountInfo,
+	statistics []types.NFTStatistics,
+	txHash string,
+	farmId int64,
+	farmSubAccountName string,
+) (retErr error) {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
+		farmPaymentId, err := tx.saveFarmPaymentStatistics(ctx, farmId, farmPaymentStatistics.AmountBTC.ToBTC())
+		if err != nil {
+			return err
+		}
+
+		for _, collectionPaymentAllocation := range collectionPaymentAllocationsStatistics {
+			if err := tx.saveCollectionPaymentAllocation(
+				ctx,
+				farmId,
+				farmPaymentId,
+				collectionPaymentAllocation.CollectionId,
+				collectionPaymentAllocation.CollectionAllocationAmount.ToBTC(),
+				collectionPaymentAllocation.CUDOGeneralFee.ToBTC(),
+				collectionPaymentAllocation.CUDOMaintenanceFee.ToBTC(),
+				collectionPaymentAllocation.FarmUnsoldLeftovers.ToBTC(),
+				collectionPaymentAllocation.FarmMaintenanceFee.ToBTC(),
+			); err != nil {
+				return err
+			}
+		}
 
 		for address, amountInfo := range destinationAddressesWithAmount {
-			if err := tx.saveDestinationAddressesWithAmountHistory(ctx, address, amountInfo, txHash, farmId); err != nil {
+			if err := tx.saveDestinationAddressesWithAmountHistory(ctx, address, amountInfo, txHash, farmId, farmPaymentId); err != nil {
 				return err
 			}
 		}
@@ -27,9 +56,9 @@ func (sdb *SqlDB) SaveStatistics(ctx context.Context, destinationAddressesWithAm
 		for _, nftStatistic := range statistics {
 			var nftPayoutHistoryId int
 			var err error
-			if nftPayoutHistoryId, err = tx.saveNFTInformationHistory(ctx, nftStatistic.DenomId, nftStatistic.TokenId,
+			if nftPayoutHistoryId, err = tx.saveNFTInformationHistory(ctx, nftStatistic.DenomId, nftStatistic.TokenId, farmPaymentId,
 				nftStatistic.PayoutPeriodStart, nftStatistic.PayoutPeriodEnd, nftStatistic.Reward, txHash,
-				nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee, nftStatistic.CUDOPartOfReward); err != nil {
+				nftStatistic.MaintenanceFee, nftStatistic.CUDOPartOfMaintenanceFee); err != nil {
 				return err
 			}
 
@@ -86,7 +115,7 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, 
 	})
 }
 
-func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) (retErr error) {
+func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int64) (retErr error) {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
 		if retErr = tx.markUTXOsAsProcessed(ctx, processedTransactions); retErr != nil {

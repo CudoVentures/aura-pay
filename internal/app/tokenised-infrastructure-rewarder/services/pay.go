@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
@@ -26,7 +25,7 @@ func NewPayService(config *infrastructure.Config, apiRequester ApiRequester, hel
 }
 
 func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage Storage) error {
-	farms, err := s.apiRequester.GetFarms(ctx)
+	farms, err := storage.GetApprovedFarms(ctx)
 	if err != nil {
 		return err
 	}
@@ -77,6 +76,10 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		return nil
 	}
 
+	var farmPaymentStatistics types.FarmPayment
+	farmPaymentStatistics.FarmId = farm.Id
+	farmPaymentStatistics.AmountBTC = totalRewardForFarm
+
 	totalRewardForFarmAfterCudosFee, cudosFeeOfTotalReward := s.calculateCudosFeeOfTotalFarmIncome(totalRewardForFarm)
 
 	log.Debug().Msgf("Total reward for farm \"%s\": %s", farm.SubAccountName, totalRewardForFarm)
@@ -92,15 +95,17 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	if s.config.IsTesting {
 		currentHashPowerForFarm = 1200 // hardcoded for testing & QA
 	} else {
-		currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName,
-			time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
-		if err != nil {
-			return err
-		}
+		// // used to get current hash from FOUNDRY //
+		// currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName,
+		// 	time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+		// if err != nil {
+		// 	return err
+		// }
 
-		if currentHashPowerForFarm <= 0 {
-			return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
-		}
+		// if currentHashPowerForFarm <= 0 {
+		// 	return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
+		// }
+		currentHashPowerForFarm = farm.TotalHashPower
 	}
 
 	log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
@@ -127,6 +132,17 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		return err
 	}
 
+	farmAuraPoolCollections, err := storage.GetFarmAuraPoolCollections(ctx, farm.Id)
+	if err != nil {
+		return err
+	}
+
+	// make a map for faster getting
+	farmAuraPoolCollectionsMap := map[string]types.AuraPoolCollection{}
+	for _, farmAuraPoolCollection := range farmAuraPoolCollections {
+		farmAuraPoolCollectionsMap[farmAuraPoolCollection.DenomId] = farmAuraPoolCollection
+	}
+
 	nonExpiredNFTsCount := s.filterExpiredNFTs(farmCollectionsWithNFTs)
 	log.Debug().Msgf("Non expired NFTs count: %d", nonExpiredNFTsCount)
 
@@ -135,10 +151,8 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		return nil
 	}
 
-	mintedHashPowerForFarm, err := sumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
-	if err != nil {
-		return err
-	}
+	mintedHashPowerForFarm := sumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
+
 	log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
 
 	rewardForNftOwners := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarmAfterCudosFee)
@@ -158,9 +172,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
 
 	var statistics []types.NFTStatistics
+	var collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation
 
 	for _, collection := range farmCollectionsWithNFTs {
 		log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
+
+		var CUDOMaintenanceFee btcutil.Amount
+		var farmMaintenanceFee btcutil.Amount
+		var nftRewardsAfterFees btcutil.Amount
+
 		for _, nft := range collection.Nfts {
 			var nftStatistics types.NFTStatistics
 			nftStatistics.TokenId = nft.Id
@@ -170,10 +190,12 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			if err != nil {
 				return err
 			}
+
 			payoutTimes, err := storage.GetPayoutTimesForNFT(ctx, collection.Denom.Id, nft.Id)
 			if err != nil {
 				return err
 			}
+
 			periodStart, periodEnd, err := s.findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
 			if err != nil {
 				return err
@@ -197,7 +219,10 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			nftStatistics.Reward = rewardForNftAfterFee
 			nftStatistics.MaintenanceFee = maintenanceFee
 			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
-			nftStatistics.CUDOPartOfReward = cudosFeeOfTotalReward
+
+			CUDOMaintenanceFee += cudoPartOfMaintenanceFee
+			farmMaintenanceFee += maintenanceFee
+			nftRewardsAfterFees += rewardForNftAfterFee
 
 			allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
 				ctx, nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, &nftStatistics, nft.Owner, s.config.Network, rewardForNftAfterFee)
@@ -209,6 +234,30 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFee, destinationAddressesWithAmount)
 		}
+
+		// calculate collection's percent of rewards based on hash power
+		_, ok := farmAuraPoolCollectionsMap[collection.Denom.Id]
+		if !ok {
+			return fmt.Errorf("aura pool collection not found by denom id {%s}", collection.Denom.Id)
+		}
+		auraPoolCollection := farmAuraPoolCollectionsMap[collection.Denom.Id]
+
+		collectionPartOfFarm := auraPoolCollection.HashingPower / currentHashPowerForFarm
+
+		collectionAwardAllocation := totalRewardForFarm.MulF64(collectionPartOfFarm)
+		cudoGeneralFeeForCollection := cudosFeeOfTotalReward.MulF64(collectionPartOfFarm)
+		farmLeftoverForCOllection := collectionAwardAllocation - cudoGeneralFeeForCollection - farmMaintenanceFee - nftRewardsAfterFees
+
+		var collectionPaymentAllocation types.CollectionPaymentAllocation
+		collectionPaymentAllocation.FarmId = farm.Id
+		collectionPaymentAllocation.CollectionId = auraPoolCollection.Id
+		collectionPaymentAllocation.CollectionAllocationAmount = collectionAwardAllocation
+		collectionPaymentAllocation.CUDOGeneralFee = cudoGeneralFeeForCollection
+		collectionPaymentAllocation.CUDOMaintenanceFee = CUDOMaintenanceFee
+		collectionPaymentAllocation.FarmUnsoldLeftovers = farmLeftoverForCOllection
+		collectionPaymentAllocation.FarmMaintenanceFee = farmMaintenanceFee
+
+		collectionPaymentAllocationsStatistics = append(collectionPaymentAllocationsStatistics, collectionPaymentAllocation)
 	}
 
 	if len(destinationAddressesWithAmount) == 0 {
@@ -227,11 +276,8 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	removeAddressesWithZeroReward(destinationAddressesWithAmount)
-	farmIdInt, err := strconv.Atoi(farm.Id)
-	if err != nil {
-		return err
-	}
-	addressesWithThresholdToUpdate, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farmIdInt)
+
+	addressesWithThresholdToUpdate, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
 	if err != nil {
 		return err
 	}
@@ -265,13 +311,13 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 	}
 
-	err = storage.UpdateThresholdStatuses(ctx, transactionIdsToMarkProcessed, addressesWithThresholdToUpdate, farmIdInt)
+	err = storage.UpdateThresholdStatuses(ctx, transactionIdsToMarkProcessed, addressesWithThresholdToUpdate, farm.Id)
 	if err != nil {
 		log.Error().Msgf("Failed to update threshold for tx hash {%s}: %s", txHash, err)
 		return err
 	}
 
-	if err := storage.SaveStatistics(ctx, addressesWithAmountInfo, statistics, txHash, farm.Id, farm.SubAccountName); err != nil {
+	if err := storage.SaveStatistics(ctx, farmPaymentStatistics, collectionPaymentAllocationsStatistics, addressesWithAmountInfo, statistics, txHash, farm.Id, farm.SubAccountName); err != nil {
 		log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
 		return err
 	}
@@ -281,25 +327,22 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 func validateFarm(farm types.Farm) error {
 	if farm.SubAccountName == "" {
-		return fmt.Errorf("farm has empty Sub Account Name. Farm Id: {%s}", farm.Id)
+		return fmt.Errorf("farm has empty Sub Account Name. Farm Id: {%d}", farm.Id)
 	}
 
-	i, err := strconv.ParseFloat(farm.MaintenanceFeeInBtc, 32)
-	if err != nil {
-		return fmt.Errorf("farm has no maintenance fee set. Farm Id: {%s}", farm.Id)
-	}
+	i := farm.MaintenanceFeeInBtc
 	if i <= 0 {
-		return fmt.Errorf("farm has maintenance fee set below 0. Farm Id: {%s}", farm.Id)
+		return fmt.Errorf("farm has maintenance fee set below 0. Farm Id: {%d}", farm.Id)
 	}
 
 	if farm.AddressForReceivingRewardsFromPool == "" {
-		return fmt.Errorf("farm has no AddressForReceivingRewardsFromPool, farm Id: {%s}", farm.Id)
+		return fmt.Errorf("farm has no AddressForReceivingRewardsFromPool, farm Id: {%d}", farm.Id)
 	}
 	if farm.MaintenanceFeePayoutAddress == "" {
-		return fmt.Errorf("farm has no MaintenanceFeePayoutAddress, farm Id: {%s}", farm.Id)
+		return fmt.Errorf("farm has no MaintenanceFeePayoutAddress, farm Id: {%d}", farm.Id)
 	}
 	if farm.LeftoverRewardPayoutAddress == "" {
-		return fmt.Errorf("farm has no LeftoverRewardPayoutAddress, farm Id: {%s}", farm.Id)
+		return fmt.Errorf("farm has no LeftoverRewardPayoutAddress, farm Id: {%d}", farm.Id)
 	}
 
 	return nil
@@ -319,9 +362,7 @@ type ApiRequester interface {
 
 	GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farmName, sinceTimestamp string) (float64, error)
 
-	GetFarmCollectionsFromHasura(ctx context.Context, farmId string) (types.CollectionData, error)
-
-	GetFarms(ctx context.Context) ([]types.Farm, error)
+	GetFarmCollectionsFromHasura(ctx context.Context, farmId int64) (types.CollectionData, error)
 
 	VerifyCollection(ctx context.Context, denomId string) (bool, error)
 
@@ -352,9 +393,11 @@ type BtcClient interface {
 }
 
 type Storage interface {
+	GetApprovedFarms(ctx context.Context) ([]types.Farm, error)
+
 	GetPayoutTimesForNFT(ctx context.Context, collectionDenomId, nftId string) ([]types.NFTStatistics, error)
 
-	SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId, farmSubAccountName string) error
+	SaveStatistics(ctx context.Context, farmPaymentStatistics types.FarmPayment, collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash string, farmId int64, farmSubAccountName string) error
 
 	GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error)
 
@@ -366,11 +409,13 @@ type Storage interface {
 
 	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
 
-	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int) (float64, error)
+	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int64) (float64, error)
 
-	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int) error
+	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int64) error
 
-	SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId, amount int) error
+	SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId int64, amount int) error
+
+	GetFarmAuraPoolCollections(ctx context.Context, farmId int64) ([]types.AuraPoolCollection, error)
 }
 
 type Helper interface {

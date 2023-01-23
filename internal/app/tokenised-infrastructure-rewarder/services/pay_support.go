@@ -97,7 +97,7 @@ func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, 
 	return payoutTimes[l-1].PayoutPeriodEnd, s.helper.Unix(), nil // last time we paid until now
 }
 
-func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int) (map[string]btcutil.Amount, map[string]types.AmountInfo, error) {
+func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int64) (map[string]btcutil.Amount, map[string]types.AmountInfo, error) {
 	thresholdInSatoshis, err := btcutil.NewAmount(s.config.GlobalPayoutThresholdInBTC)
 	if err != nil {
 		return nil, nil, err

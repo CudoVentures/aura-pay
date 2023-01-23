@@ -76,7 +76,7 @@ var farms = []types.Farm{
 		AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
 		LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
 		MaintenanceFeePayoutAddress:        "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
-		MaintenanceFeeInBtc:                "0.0001",
+		MaintenanceFeeInBtc:                0.0001,
 	},
 	{
 		Id:                                 2,
@@ -84,7 +84,7 @@ var farms = []types.Farm{
 		AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
 		LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
 		MaintenanceFeePayoutAddress:        "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
-		MaintenanceFeeInBtc:                "0.0001",
+		MaintenanceFeeInBtc:                0.0001,
 	},
 	{
 		Id:                                 3,
@@ -92,7 +92,7 @@ var farms = []types.Farm{
 		AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
 		LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
 		MaintenanceFeePayoutAddress:        "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
-		MaintenanceFeeInBtc:                "0.0001",
+		MaintenanceFeeInBtc:                0.0001,
 	},
 }
 

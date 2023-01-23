@@ -156,14 +156,9 @@ func (mar *mockAPIRequester) GetFarmTotalHashPowerFromPoolToday(ctx context.Cont
 	return args.Get(0).(float64), args.Error(1)
 }
 
-func (mar *mockAPIRequester) GetFarmCollectionsFromHasura(ctx context.Context, farmId string) (types.CollectionData, error) {
+func (mar *mockAPIRequester) GetFarmCollectionsFromHasura(ctx context.Context, farmId int64) (types.CollectionData, error) {
 	args := mar.Called(ctx, farmId)
 	return args.Get(0).(types.CollectionData), args.Error(1)
-}
-
-func (mar *mockAPIRequester) GetFarms(ctx context.Context) ([]types.Farm, error) {
-	args := mar.Called(ctx)
-	return args.Get(0).([]types.Farm), args.Error(1)
 }
 
 func (mar *mockAPIRequester) VerifyCollection(ctx context.Context, denomId string) (bool, error) {

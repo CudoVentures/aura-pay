@@ -104,11 +104,8 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) (btcutil.Amount, error) {
 	currentYear, currentMonth, _ := s.helper.Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
-	mtFeeInBTC, err := strconv.ParseFloat(farm.MaintenanceFeeInBtc, 64)
-	if err != nil {
-		return -1, err
-	}
-	mtFeeInSatoshis, err := btcutil.NewAmount(mtFeeInBTC)
+
+	mtFeeInSatoshis, err := btcutil.NewAmount(farm.MaintenanceFeeInBtc)
 	if err != nil {
 		return -1, err
 	}
@@ -146,20 +143,28 @@ func (s *PayService) calculateCudosFeeOfTotalFarmIncome(totalFarmIncome btcutil.
 	return farmIncomeAfterCudosFee, farmIncomeCudosFee
 }
 
-func sumMintedHashPowerForAllCollections(collections []types.Collection) (float64, error) {
+func sumMintedHashPowerForAllCollections(collections []types.Collection) float64 {
 	var totalMintedHashPowerForAllCollections float64
 
 	for _, collection := range collections {
-		for _, nft := range collection.Nfts {
-			if time.Now().Unix() > nft.DataJson.ExpirationDate {
-				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
-				continue
-			}
-			totalMintedHashPowerForAllCollections += nft.DataJson.HashRateOwned
-		}
+		totalMintedHashPowerForAllCollections += sumMintedHashPowerForCollection(collection)
 	}
 
-	return totalMintedHashPowerForAllCollections, nil
+	return totalMintedHashPowerForAllCollections
+}
+
+func sumMintedHashPowerForCollection(collection types.Collection) float64 {
+	var totalMintedHashPowerForCollection float64
+
+	for _, nft := range collection.Nfts {
+		if time.Now().Unix() > nft.DataJson.ExpirationDate {
+			log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
+			continue
+		}
+		totalMintedHashPowerForCollection += nft.DataJson.HashRateOwned
+	}
+
+	return totalMintedHashPowerForCollection
 }
 
 func roundToPrecision(value float64) (result float64) {
