@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/jmoiron/sqlx"
@@ -62,7 +63,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 	}()
 
-	totalRewardForFarm, transactionIdsToMarkProcessed, err := s.getTotalRewardForFarm(
+	totalRewardForFarmBtcDecimal, transactionIdsToMarkProcessed, err := s.getTotalRewardForFarm(
 		ctx,
 		btcClient,
 		storage,
@@ -71,20 +72,20 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		return err
 	}
 
-	if totalRewardForFarm == 0 {
+	if totalRewardForFarmBtcDecimal.IsZero() {
 		log.Info().Msgf("reward for farm {{%s}} is 0....skipping this farm", farm.SubAccountName)
 		return nil
 	}
 
 	var farmPaymentStatistics types.FarmPayment
 	farmPaymentStatistics.FarmId = farm.Id
-	farmPaymentStatistics.AmountBTC = totalRewardForFarm
+	farmPaymentStatistics.AmountBTC = totalRewardForFarmBtcDecimal
 
-	totalRewardForFarmAfterCudosFee, cudosFeeOfTotalReward := s.calculateCudosFeeOfTotalFarmIncome(totalRewardForFarm)
+	totalRewardForFarmAfterCudosFeeBtcDecimal, cudosFeeOfTotalRewardBtcDecimal := s.calculateCudosFeeOfTotalFarmIncome(totalRewardForFarmBtcDecimal)
 
-	log.Debug().Msgf("Total reward for farm \"%s\": %s", farm.SubAccountName, totalRewardForFarm)
-	log.Debug().Msgf("Cudos part of total farm reward: %s", cudosFeeOfTotalReward)
-	log.Debug().Msgf("Total reward for farm \"%s\" after cudos fee: %s", farm.SubAccountName, totalRewardForFarmAfterCudosFee)
+	log.Debug().Msgf("Total reward for farm \"%s\": %s", farm.SubAccountName, totalRewardForFarmBtcDecimal)
+	log.Debug().Msgf("Cudos part of total farm reward: %s", cudosFeeOfTotalRewardBtcDecimal)
+	log.Debug().Msgf("Total reward for farm \"%s\" after cudos fee: %s", farm.SubAccountName, totalRewardForFarmAfterCudosFeeBtcDecimal)
 
 	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
 	if err != nil {
@@ -93,27 +94,23 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	var currentHashPowerForFarm float64
 	if s.config.IsTesting {
-		currentHashPowerForFarm = 1200 // hardcoded for testing & QA
+		currentHashPowerForFarm = farm.TotalHashPower // for testing & QA
 	} else {
-		// // used to get current hash from FOUNDRY //
-		// currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName,
-		// 	time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
-		// if err != nil {
-		// 	return err
-		// }
+		// used to get current hash from FOUNDRY //
+		currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName,
+			time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+		if err != nil {
+			return err
+		}
 
-		// if currentHashPowerForFarm <= 0 {
-		// 	return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
-		// }
-		currentHashPowerForFarm = farm.TotalHashPower
+		if currentHashPowerForFarm <= 0 {
+			return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
+		}
 	}
 
 	log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
 
-	hourlyMaintenanceFeeInSatoshis, err := s.calculateHourlyMaintenanceFee(farm, currentHashPowerForFarm)
-	if err != nil {
-		return err
-	}
+	hourlyMaintenanceFeeInBtcDecimal := s.calculateHourlyMaintenanceFee(farm, currentHashPowerForFarm)
 
 	verifiedDenomIds, err := s.verifyCollectionIds(ctx, collections)
 	if err != nil {
@@ -155,21 +152,21 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
 
-	rewardForNftOwners := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarmAfterCudosFee)
+	rewardForNftOwnersBtcDecimal := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarmAfterCudosFeeBtcDecimal)
 	leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
-	var rewardToReturn btcutil.Amount
+	var rewardToReturnBtcDecimal decimal.Decimal
 
-	destinationAddressesWithAmount := make(map[string]btcutil.Amount)
+	destinationAddressesWithAmountBtcDecimal := make(map[string]decimal.Decimal)
 
 	// add cudos fee on total farm income
-	addPaymentAmountToAddress(destinationAddressesWithAmount, cudosFeeOfTotalReward, s.config.CUDOFeePayoutAddress)
+	addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, cudosFeeOfTotalRewardBtcDecimal, s.config.CUDOFeePayoutAddress)
 
 	// return to the farm owner whatever is left
 	if leftoverHashPower > 0 {
-		rewardToReturn = totalRewardForFarmAfterCudosFee - rewardForNftOwners
-		addLeftoverRewardToFarmOwner(destinationAddressesWithAmount, rewardToReturn, farm.LeftoverRewardPayoutAddress)
+		rewardToReturnBtcDecimal = totalRewardForFarmAfterCudosFeeBtcDecimal.Sub(rewardForNftOwnersBtcDecimal)
+		addLeftoverRewardToFarmOwner(destinationAddressesWithAmountBtcDecimal, rewardToReturnBtcDecimal, farm.LeftoverRewardPayoutAddress)
 	}
-	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwners, rewardToReturn, farm.SubAccountName)
+	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwnersBtcDecimal, rewardToReturnBtcDecimal, farm.SubAccountName)
 
 	var statistics []types.NFTStatistics
 	var collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation
@@ -177,9 +174,9 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	for _, collection := range farmCollectionsWithNFTs {
 		log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
 
-		var CUDOMaintenanceFee btcutil.Amount
-		var farmMaintenanceFee btcutil.Amount
-		var nftRewardsAfterFees btcutil.Amount
+		var CUDOMaintenanceFeeBtcDecimal decimal.Decimal
+		var farmMaintenanceFeeBtcDecimal decimal.Decimal
+		var nftRewardsAfterFeesBtcDecimal decimal.Decimal
 
 		for _, nft := range collection.Nfts {
 			var nftStatistics types.NFTStatistics
@@ -204,36 +201,38 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			nftStatistics.PayoutPeriodStart = periodStart
 			nftStatistics.PayoutPeriodEnd = periodEnd
 
-			rewardForNft := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwners)
+			rewardForNftBtcDecimal := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwnersBtcDecimal)
 
-			maintenanceFee, cudoPartOfMaintenanceFee, rewardForNftAfterFee := s.calculateMaintenanceFeeForNFT(periodStart,
-				periodEnd, hourlyMaintenanceFeeInSatoshis, rewardForNft)
-			addPaymentAmountToAddress(destinationAddressesWithAmount, maintenanceFee, farm.MaintenanceFeePayoutAddress)
-			addPaymentAmountToAddress(destinationAddressesWithAmount, cudoPartOfMaintenanceFee, s.config.CUDOFeePayoutAddress)
+			maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal := s.calculateMaintenanceFeeForNFT(periodStart,
+				periodEnd, hourlyMaintenanceFeeInBtcDecimal, rewardForNftBtcDecimal)
+			addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, maintenanceFeeBtcDecimal, farm.MaintenanceFeePayoutAddress)
+			addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, s.config.CUDOFeePayoutAddress)
 			log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s",
-				collection.Denom.Id, nft.Id, rewardForNftAfterFee)
+				collection.Denom.Id, nft.Id, rewardForNftAfterFeeBtcDecimal)
 			log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
-				collection.Denom.Id, nft.Id, maintenanceFee)
+				collection.Denom.Id, nft.Id, maintenanceFeeBtcDecimal)
 			log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
-				s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFee)
-			nftStatistics.Reward = rewardForNftAfterFee
-			nftStatistics.MaintenanceFee = maintenanceFee
-			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFee
+				s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFeeBtcDecimal)
+			nftStatistics.Reward = rewardForNftAfterFeeBtcDecimal
+			nftStatistics.MaintenanceFee = maintenanceFeeBtcDecimal
+			nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFeeBtcDecimal
 
-			CUDOMaintenanceFee += cudoPartOfMaintenanceFee
-			farmMaintenanceFee += maintenanceFee
-			nftRewardsAfterFees += rewardForNftAfterFee
+			CUDOMaintenanceFeeBtcDecimal = CUDOMaintenanceFeeBtcDecimal.Add(cudoPartOfMaintenanceFeeBtcDecimal)
+			farmMaintenanceFeeBtcDecimal = farmMaintenanceFeeBtcDecimal.Add(maintenanceFeeBtcDecimal)
+			nftRewardsAfterFeesBtcDecimal = nftRewardsAfterFeesBtcDecimal.Add(rewardForNftAfterFeeBtcDecimal)
 
 			allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
-				ctx, nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, &nftStatistics, nft.Owner, s.config.Network, rewardForNftAfterFee)
+				ctx, nftTransferHistory, collection.Denom.Id, nft.Id, periodStart, periodEnd, &nftStatistics, nft.Owner, s.config.Network, rewardForNftAfterFeeBtcDecimal)
 			if err != nil {
 				return err
 			}
 
 			statistics = append(statistics, nftStatistics)
 
-			distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFee, destinationAddressesWithAmount)
+			distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFeeBtcDecimal, destinationAddressesWithAmountBtcDecimal)
 		}
+
+		log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwnersBtcDecimal, rewardToReturnBtcDecimal, farm.SubAccountName)
 
 		// calculate collection's percent of rewards based on hash power
 		_, ok := farmAuraPoolCollectionsMap[collection.Denom.Id]
@@ -242,51 +241,72 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		}
 		auraPoolCollection := farmAuraPoolCollectionsMap[collection.Denom.Id]
 
-		collectionPartOfFarm := auraPoolCollection.HashingPower / currentHashPowerForFarm
+		collectionPartOfFarmDecimal := decimal.NewFromFloat(auraPoolCollection.HashingPower / currentHashPowerForFarm)
 
-		collectionAwardAllocation := totalRewardForFarm.MulF64(collectionPartOfFarm)
-		cudoGeneralFeeForCollection := cudosFeeOfTotalReward.MulF64(collectionPartOfFarm)
-		farmLeftoverForCOllection := collectionAwardAllocation - cudoGeneralFeeForCollection - farmMaintenanceFee - nftRewardsAfterFees
+		collectionAwardAllocation := totalRewardForFarmAfterCudosFeeBtcDecimal.Mul(collectionPartOfFarmDecimal)
+		cudoGeneralFeeForCollection := cudosFeeOfTotalRewardBtcDecimal.Mul(collectionPartOfFarmDecimal)
+		CUDOMaintenanceFeeBtcDecimalForCollection := CUDOMaintenanceFeeBtcDecimal.Mul(collectionPartOfFarmDecimal)
+		farmLeftoverForCollection := rewardToReturnBtcDecimal.Mul(collectionPartOfFarmDecimal)
+		farmMaintenanceFeeBtcDecimalForCollection := farmMaintenanceFeeBtcDecimal.Mul(collectionPartOfFarmDecimal)
 
 		var collectionPaymentAllocation types.CollectionPaymentAllocation
 		collectionPaymentAllocation.FarmId = farm.Id
 		collectionPaymentAllocation.CollectionId = auraPoolCollection.Id
 		collectionPaymentAllocation.CollectionAllocationAmount = collectionAwardAllocation
 		collectionPaymentAllocation.CUDOGeneralFee = cudoGeneralFeeForCollection
-		collectionPaymentAllocation.CUDOMaintenanceFee = CUDOMaintenanceFee
-		collectionPaymentAllocation.FarmUnsoldLeftovers = farmLeftoverForCOllection
-		collectionPaymentAllocation.FarmMaintenanceFee = farmMaintenanceFee
+		collectionPaymentAllocation.CUDOMaintenanceFee = CUDOMaintenanceFeeBtcDecimalForCollection
+		collectionPaymentAllocation.FarmUnsoldLeftovers = farmLeftoverForCollection
+		collectionPaymentAllocation.FarmMaintenanceFee = farmMaintenanceFeeBtcDecimalForCollection
 
 		collectionPaymentAllocationsStatistics = append(collectionPaymentAllocationsStatistics, collectionPaymentAllocation)
 	}
 
-	if len(destinationAddressesWithAmount) == 0 {
+	// return to the farm owner whatever is left
+	var distributedNftRewards decimal.Decimal
+	for _, nftStat := range statistics {
+		distributedNftRewards = distributedNftRewards.Add(nftStat.Reward).Add(nftStat.MaintenanceFee).Add(nftStat.CUDOPartOfMaintenanceFee)
+	}
+
+	leftoverNftRewardDistribution := rewardForNftOwnersBtcDecimal.Sub(distributedNftRewards)
+
+	if leftoverNftRewardDistribution.LessThan(decimal.Zero) {
+		return fmt.Errorf("distributed NFT awards bigger than the farm reward after cudos fee. NftRewardDistribution: %s, TotalFarmRewardAfterCudosFee: %s", distributedNftRewards, rewardForNftOwnersBtcDecimal)
+	}
+
+	if leftoverNftRewardDistribution.GreaterThan(decimal.Zero) {
+		addLeftoverRewardToFarmOwner(destinationAddressesWithAmountBtcDecimal, leftoverNftRewardDistribution, farm.LeftoverRewardPayoutAddress)
+	}
+
+	if len(destinationAddressesWithAmountBtcDecimal) == 0 {
 		return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
 	}
 
-	var totalAmountToPayToAddresses btcutil.Amount
+	var totalAmountToPayToAddressesBtcDecimal decimal.Decimal
 
-	for _, amount := range destinationAddressesWithAmount {
-		totalAmountToPayToAddresses += amount
+	for _, amount := range destinationAddressesWithAmountBtcDecimal {
+		totalAmountToPayToAddressesBtcDecimal = totalAmountToPayToAddressesBtcDecimal.Add(amount)
 	}
 
 	// check that all of the amount is distributed and no more than it
-	if totalAmountToPayToAddresses != totalRewardForFarm {
-		return fmt.Errorf("distributed amount doesn't equal total farm rewards. Distributed amount: {%s}, TotalFarmReward: {%s}", totalAmountToPayToAddresses, totalRewardForFarm)
+	if !totalAmountToPayToAddressesBtcDecimal.Equals(totalRewardForFarmBtcDecimal) {
+		return fmt.Errorf("distributed amount doesn't equal total farm rewards. Distributed amount: {%s}, TotalFarmReward: {%s}", totalAmountToPayToAddressesBtcDecimal, totalRewardForFarmBtcDecimal)
 	}
 
-	removeAddressesWithZeroReward(destinationAddressesWithAmount)
+	removeAddressesWithZeroReward(destinationAddressesWithAmountBtcDecimal)
 
-	addressesWithThresholdToUpdate, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmount, storage, farm.Id)
+	addressesWithThresholdToUpdateBtcDecimal, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmountBtcDecimal, storage, farm.Id)
 	if err != nil {
 		return err
 	}
 
-	log.Debug().Msgf("Destination addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmount))
+	log.Debug().Msgf("Destination addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmountBtcDecimal))
 
-	addressesToSend := convertAmountToBTC(addressesWithAmountInfo)
+	addressesToSendBtc, err := convertAmountToBTC(addressesWithAmountInfo)
+	if err != nil {
+		return err
+	}
 
-	log.Debug().Msgf("Addresses above threshold that will be sent for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(addressesToSend))
+	log.Debug().Msgf("Addresses above threshold that will be sent for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(addressesToSendBtc))
 
 	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
 	if err != nil {
@@ -303,15 +323,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}()
 
 	txHash := ""
-	if len(addressesToSend) > 0 {
-		txHash, err = s.apiRequester.SendMany(ctx, addressesToSend)
+	if len(addressesToSendBtc) > 0 {
+		txHash, err = s.apiRequester.SendMany(ctx, addressesToSendBtc)
 		if err != nil {
 			return err
 		}
 		log.Debug().Msgf("Tx sucessfully sent! Tx Hash {%s}", txHash)
 	}
 
-	err = storage.UpdateThresholdStatuses(ctx, transactionIdsToMarkProcessed, addressesWithThresholdToUpdate, farm.Id)
+	err = storage.UpdateThresholdStatuses(ctx, transactionIdsToMarkProcessed, addressesWithThresholdToUpdateBtcDecimal, farm.Id)
 	if err != nil {
 		log.Error().Msgf("Failed to update threshold for tx hash {%s}: %s", txHash, err)
 		return err
@@ -409,9 +429,9 @@ type Storage interface {
 
 	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
 
-	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int64) (float64, error)
+	GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int64) (decimal.Decimal, error)
 
-	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int64) error
+	UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdateBtcDecimal map[string]decimal.Decimal, farmId int64) error
 
 	SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId int64, amount int) error
 

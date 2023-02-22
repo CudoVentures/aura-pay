@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/sql_db"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/jmoiron/sqlx"
+	"github.com/shopspring/decimal"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -26,7 +26,7 @@ func TestProcessPayment(t *testing.T) {
 	config := &infrastructure.Config{
 		Network:                    "BTC",
 		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            2,
+		CUDOFeeOnAllBTC:            20,
 		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
 		GlobalPayoutThresholdInBTC: 0.01,
 	}
@@ -44,7 +44,7 @@ func TestProcessFarm(t *testing.T) {
 	config := &infrastructure.Config{
 		Network:                    "BTC",
 		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            2,
+		CUDOFeeOnAllBTC:            20,
 		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
 		GlobalPayoutThresholdInBTC: 0.01,
 	}
@@ -56,7 +56,7 @@ func TestProcessFarm(t *testing.T) {
 
 	s := NewPayService(config, setupMockApiRequester(t), &mockHelper{}, btcNetworkParams)
 
-	farms, err := s.apiRequester.GetFarms(context.Background())
+	farms, err := setupMockStorage().GetApprovedFarms(context.Background())
 	require.Equal(t, err, nil, "Get farms returned error")
 
 	require.NoError(t, s.processFarm(context.Background(), setupMockBtcClient(), setupMockStorage(), farms[0]))
@@ -89,7 +89,7 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 		tearDownDatabase(sqlxDB)
 	}()
 
-	err := dbStorage.UpdateThresholdStatuses(context.Background(), []string{"3"}, map[string]btcutil.Amount{}, 1)
+	err := dbStorage.UpdateThresholdStatuses(context.Background(), []string{"3"}, map[string]decimal.Decimal{}, 1)
 	if err != nil {
 		panic(err)
 	}
@@ -112,15 +112,15 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 	processTx4, _ := dbStorage.GetUTXOTransaction(context.Background(), "4")
 	require.Equal(t, true, processTx4.Processed)
 
-	amountAccumulatedBTC, err := dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "maintenance_fee_payout_address_1", 1)
+	amountAccumulatedBTC, _ := dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "maintenance_fee_payout_address_1", 1)
 	require.Equal(t, float64(5928), amountAccumulatedBTC)
-	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "cudo_maintenance_fee_payout_address_1", 1)
+	amountAccumulatedBTC, _ = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "cudo_maintenance_fee_payout_address_1", 1)
 	require.Equal(t, float64(10210010), amountAccumulatedBTC)
-	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_minter_payout_addr", 1)
+	amountAccumulatedBTC, _ = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_minter_payout_addr", 1)
 	require.Equal(t, float64(0), amountAccumulatedBTC)
-	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_owner_2_payout_addr", 1)
+	amountAccumulatedBTC, _ = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_owner_2_payout_addr", 1)
 	require.Equal(t, float64(0), amountAccumulatedBTC)
-	amountAccumulatedBTC, err = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "leftover_reward_payout_address_1", 1)
+	amountAccumulatedBTC, _ = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "leftover_reward_payout_address_1", 1)
 	require.Equal(t, float64(0), amountAccumulatedBTC)
 
 }
@@ -157,7 +157,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	farms := []types.Farm{
 		{
-			Id:                                 "1",
+			Id:                                 1,
 			SubAccountName:                     "farm_1",
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
@@ -165,7 +165,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 			MaintenanceFeeInBtc:                1,
 		},
 		{
-			Id:                                 "2",
+			Id:                                 2,
 			SubAccountName:                     "farm_2",
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
@@ -195,7 +195,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 	var farm1CollectionData types.CollectionData
 	require.NoError(t, json.Unmarshal([]byte(farm1Data), &farm1CollectionData))
 
-	apiRequester.On("GetFarmCollectionsFromHasura", mock.Anything, "1").Return(farm1CollectionData, nil).Once()
+	apiRequester.On("GetFarmCollectionsFromHasura", mock.Anything, int64(1)).Return(farm1CollectionData, nil).Once()
 
 	apiRequester.On("GetFarmTotalHashPowerFromPoolToday", mock.Anything, "farm_1", mock.Anything).Return(5000.0, nil).Once()
 
@@ -212,7 +212,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 					"id": "1",
 					"data_json": {
 						"expiration_date": 1919101878,
-						"hash_rate_owned": 1000
+						"hash_rate_owned": 960
 					}
 				},
 				{
@@ -260,14 +260,12 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_minter", "BTC", "1", "farm_1_denom_1").Return("nft_minter_payout_addr", nil)
 	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
 
-	// TODO: Verify that values are correct
-
 	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
 	apiRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1":      4,
-		"cudo_maintenance_fee_payout_address_1": 0.10210010,
-		"nft_minter_payout_addr":                0.2631688,
-		"nft_owner_2_payout_addr":               0.73671264,
+		"leftover_reward_payout_address_1":      1,
+		"cudo_maintenance_fee_payout_address_1": 1.25025537,
+		"nft_minter_payout_addr":                1.05249717,
+		"nft_owner_2_payout_addr":               2.94699207,
 	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	return apiRequester
@@ -277,7 +275,7 @@ func setupMockBtcClient() *mockBtcClient {
 	btcClient := &mockBtcClient{}
 
 	btcClient.On("ListUnspent").Return([]btcjson.ListUnspentResult{
-		{TxID: "1", Amount: 1.277040816, Address: "address_for_receiving_reward_from_pool_1"},
+		{TxID: "1", Amount: 2.425, Address: "address_for_receiving_reward_from_pool_1"},
 		{TxID: "2", Amount: 1.275, Address: "address_for_receiving_reward_from_pool_1"},
 		{TxID: "3", Amount: 1.275, Address: "address_for_receiving_reward_from_pool_1"},
 		{TxID: "4", Amount: 1.275, Address: "address_for_receiving_reward_from_pool_1"},
@@ -330,66 +328,118 @@ func (mbc *mockBtcClient) ListUnspent() ([]btcjson.ListUnspentResult, error) {
 func setupMockStorage() *mockStorage {
 	storage := &mockStorage{}
 
-	leftoverAmount := btcutil.Amount(400000000)
-	nftMinterAmount := btcutil.Amount(26316880)
-	nftOwner2Amount := btcutil.Amount(73671264)
-	cudoPartOfReward := btcutil.Amount(10204082)
-	cudoPartOfMaintenanceFee := btcutil.Amount(5928)
-	maintenanceFeeAddress1Amount := btcutil.Amount(5928)
+	leftoverAmount := decimal.NewFromFloat(1)
+	nftMinterAmount, _ := decimal.NewFromString("1.05249717034521640000268817204304")
+	nftOwner2Amount, _ := decimal.NewFromString("2.94699207696660599999731182795696")
+	cudoPartOfReward, _ := decimal.NewFromString("1.25")
+	cudoPartOfMaintenanceFee, _ := decimal.NewFromString("0.0002553763440888")
+	maintenanceFeeAddress1Amount, _ := decimal.NewFromString("0.0002553763440888")
 
-	amount, _ := btcutil.NewAmount(0.99988144)
+	amount, _ := decimal.NewFromString("3.9994892473118224")
 
 	storage.On("GetPayoutTimesForNFT", mock.Anything, mock.Anything, mock.Anything).Return([]types.NFTStatistics{}, nil)
 	storage.On("SaveStatistics", mock.Anything,
-		map[string]types.AmountInfo{
-			"leftover_reward_payout_address_1":      {Amount: leftoverAmount, ThresholdReached: true},
-			"nft_minter_payout_addr":                {Amount: nftMinterAmount, ThresholdReached: true},
-			"nft_owner_2_payout_addr":               {Amount: nftOwner2Amount, ThresholdReached: true},
-			"cudo_maintenance_fee_payout_address_1": {Amount: cudoPartOfMaintenanceFee + cudoPartOfReward, ThresholdReached: true},
-			"maintenance_fee_payout_address_1":      {Amount: maintenanceFeeAddress1Amount, ThresholdReached: false},
-		},
+		mock.MatchedBy(func(farmPayment types.FarmPayment) bool {
+			return farmPayment.AmountBTC.Equal(decimal.NewFromFloat(6.25))
+		}),
+		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 
-		[]types.NFTStatistics{
-			{
-				TokenId:                  "1",
-				DenomId:                  "farm_1_denom_1",
-				PayoutPeriodStart:        1664999478,
-				PayoutPeriodEnd:          1666641078,
-				Reward:                   amount,
-				MaintenanceFee:           maintenanceFeeAddress1Amount,
-				CUDOPartOfMaintenanceFee: cudoPartOfMaintenanceFee,
-				CUDOPartOfReward:         cudoPartOfReward,
-				NFTOwnersForPeriod: []types.NFTOwnerInformation{
-					{
-						TimeOwnedFrom:      1664999478,
-						TimeOwnedTo:        1665431478,
-						TotalTimeOwned:     432000,
-						PercentOfTimeOwned: 26.32,
-						PayoutAddress:      "nft_minter_payout_addr",
-						Owner:              "nft_minter",
-						Reward:             nftMinterAmount,
-					},
-					{
-						TimeOwnedFrom:      1665431478,
-						TimeOwnedTo:        1666641078,
-						TotalTimeOwned:     1209600,
-						PercentOfTimeOwned: 73.68,
-						PayoutAddress:      "nft_owner_2_payout_addr",
-						Owner:              "nft_owner_2",
-						Reward:             nftOwner2Amount,
-					},
-				},
-			},
-		},
-		"farm_1_denom_1_nft_owner_2_tx_hash", "1", "farm_1").Return(nil)
+			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
+				amountInfoMap["nft_minter_payout_addr"].ThresholdReached == true &&
+				amountInfoMap["nft_owner_2_payout_addr"].ThresholdReached == true &&
+				amountInfoMap["cudo_maintenance_fee_payout_address_1"].ThresholdReached == true &&
+				amountInfoMap["maintenance_fee_payout_address_1"].ThresholdReached == false &&
+
+				amountInfoMap["leftover_reward_payout_address_1"].Amount.Equals(leftoverAmount.RoundFloor(8)) &&
+				amountInfoMap["nft_minter_payout_addr"].Amount.Equals(nftMinterAmount.RoundFloor(8)) &&
+				amountInfoMap["nft_owner_2_payout_addr"].Amount.Equals(nftOwner2Amount.RoundFloor(8)) &&
+				amountInfoMap["cudo_maintenance_fee_payout_address_1"].Amount.Equals(cudoPartOfMaintenanceFee.Add(cudoPartOfReward).RoundFloor(8)) &&
+				amountInfoMap["maintenance_fee_payout_address_1"].Amount.Equals(maintenanceFeeAddress1Amount.RoundFloor(8))
+		}),
+		mock.MatchedBy(func(collectionAllocations []types.CollectionPaymentAllocation) bool {
+			collectionPartOfFarm := decimal.NewFromFloat(0.8)
+
+			return collectionAllocations[0].FarmId == 1 &&
+				collectionAllocations[0].CollectionId == 1 &&
+				collectionAllocations[0].CollectionAllocationAmount.Equals(decimal.NewFromFloat(4)) &&
+				collectionAllocations[0].CUDOGeneralFee.Equals(cudoPartOfReward.Mul(collectionPartOfFarm)) &&
+				collectionAllocations[0].CUDOMaintenanceFee.Equals(cudoPartOfMaintenanceFee.Mul(collectionPartOfFarm)) &&
+				collectionAllocations[0].FarmUnsoldLeftovers.Equals(leftoverAmount.Mul(collectionPartOfFarm)) &&
+				collectionAllocations[0].FarmMaintenanceFee.Equals(maintenanceFeeAddress1Amount.Mul(collectionPartOfFarm))
+		}),
+		mock.MatchedBy(func(nftStatistics []types.NFTStatistics) bool {
+			nftStatistic := nftStatistics[0]
+			nftOwnerStat1 := nftStatistic.NFTOwnersForPeriod[0]
+			nftOwnerStat2 := nftStatistic.NFTOwnersForPeriod[1]
+
+			nftStatisticCorrect := nftStatistic.TokenId == "1" &&
+				nftStatistic.DenomId == "farm_1_denom_1" &&
+				nftStatistic.PayoutPeriodStart == 1664999478 &&
+				nftStatistic.PayoutPeriodEnd == 1666641078 &&
+				nftStatistic.Reward.Equals(amount) &&
+				nftStatistic.MaintenanceFee.Equals(maintenanceFeeAddress1Amount) &&
+				nftStatistic.CUDOPartOfMaintenanceFee.Equals(cudoPartOfMaintenanceFee)
+
+			nftOwnerStat1Correct := nftOwnerStat1.TimeOwnedFrom == 1664999478 &&
+				nftOwnerStat1.TimeOwnedTo == 1665431478 &&
+				nftOwnerStat1.TotalTimeOwned == 432000 &&
+				nftOwnerStat1.PercentOfTimeOwned == 26.31578947368421 &&
+				nftOwnerStat1.PayoutAddress == "nft_minter_payout_addr" &&
+				nftOwnerStat1.Owner == "nft_minter" &&
+				nftOwnerStat1.Reward.Equals(nftMinterAmount)
+
+			nftOwnerStat2Correct := nftOwnerStat2.TimeOwnedFrom == 1665431478 &&
+				nftOwnerStat2.TimeOwnedTo == 1666641078 &&
+				nftOwnerStat2.TotalTimeOwned == 1209600 &&
+				nftOwnerStat2.PercentOfTimeOwned == 73.68421052631578 &&
+				nftOwnerStat2.PayoutAddress == "nft_owner_2_payout_addr" &&
+				nftOwnerStat2.Owner == "nft_owner_2" &&
+				nftOwnerStat2.Reward.Equals(nftOwner2Amount)
+
+			return nftStatisticCorrect && nftOwnerStat1Correct && nftOwnerStat2Correct
+		}),
+		"farm_1_denom_1_nft_owner_2_tx_hash",
+		int64(1),
+		"farm_1",
+	).Return(nil)
 	storage.On("GetUTXOTransaction", mock.Anything, "1").Return(types.UTXOTransaction{TxHash: "1", Processed: false}, nil)
 	storage.On("GetUTXOTransaction", mock.Anything, "2").Return(types.UTXOTransaction{TxHash: "2", Processed: false}, nil)
 	storage.On("GetUTXOTransaction", mock.Anything, "3").Return(types.UTXOTransaction{TxHash: "3", Processed: false}, nil)
 	storage.On("GetUTXOTransaction", mock.Anything, "4").Return(types.UTXOTransaction{TxHash: "4", Processed: false}, nil)
 
-	storage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, mock.Anything, mock.Anything).Return(float64(0), nil)
+	storage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, mock.Anything, mock.Anything).Return(decimal.Zero, nil)
 
 	storage.On("UpdateThresholdStatuses", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	storage.On("GetApprovedFarms", mock.Anything).Return([]types.Farm{
+		{
+			Id:                                 1,
+			SubAccountName:                     "farm_1",
+			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
+			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
+			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
+			MaintenanceFeeInBtc:                1,
+			TotalHashPower:                     1200,
+		},
+		{
+			Id:                                 2,
+			SubAccountName:                     "farm_2",
+			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
+			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
+			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_2",
+			MaintenanceFeeInBtc:                0.01,
+			TotalHashPower:                     1200,
+		},
+	}, nil)
+
+	storage.On("GetFarmAuraPoolCollections", mock.Anything, int64(1)).Return(
+		[]types.AuraPoolCollection{
+			{
+				Id:           1,
+				DenomId:      "farm_1_denom_1",
+				HashingPower: 960,
+			},
+		}, nil)
 	return storage
 }
 
@@ -411,8 +461,8 @@ func (ms *mockStorage) GetPayoutTimesForNFT(ctx context.Context, collectionDenom
 	return args.Get(0).([]types.NFTStatistics), args.Error(1)
 }
 
-func (ms *mockStorage) SaveStatistics(ctx context.Context, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash, farmId string, farmSubAccountName string) error {
-	args := ms.Called(ctx, destinationAddressesWithAmount, statistics, txHash, farmId, farmSubAccountName)
+func (ms *mockStorage) SaveStatistics(ctx context.Context, farmPaymentStatistics types.FarmPayment, collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash string, farmId int64, farmSubAccountName string) error {
+	args := ms.Called(ctx, farmPaymentStatistics, destinationAddressesWithAmount, collectionPaymentAllocationsStatistics, statistics, txHash, farmId, farmSubAccountName)
 	return args.Error(0)
 }
 
@@ -440,22 +490,32 @@ type mockStorage struct {
 	mock.Mock
 }
 
+func (ms *mockStorage) GetFarmAuraPoolCollections(ctx context.Context, farmId int64) ([]types.AuraPoolCollection, error) {
+	args := ms.Called(ctx, farmId)
+	return args.Get(0).([]types.AuraPoolCollection), args.Error(1)
+}
+
+func (ms *mockStorage) GetApprovedFarms(ctx context.Context) ([]types.Farm, error) {
+	args := ms.Called(ctx)
+	return args.Get(0).([]types.Farm), args.Error(1)
+}
+
 func (ms *mockStorage) GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error) {
 	args := ms.Called(ctx, txId)
 	return args.Get(0).(types.UTXOTransaction), args.Error(1)
 }
 
-func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int64) (float64, error) {
+func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context, key string, farmId int64) (decimal.Decimal, error) {
 	args := ms.Called(ctx, key, farmId)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
-func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int64) error {
+func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]decimal.Decimal, farmId int64) error {
 	args := ms.Called(ctx, processedTransactions, addressesWithThresholdToUpdate)
 	return args.Error(0)
 }
 
-func (ms *mockStorage) SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId, amount int) error {
+func (ms *mockStorage) SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId int64, amount int) error {
 	args := ms.Called(ctx, address, farmId, amount)
 	return args.Error(0)
 }

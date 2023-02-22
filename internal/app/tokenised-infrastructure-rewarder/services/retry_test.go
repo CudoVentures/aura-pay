@@ -260,6 +260,7 @@ func setupMockStorageRetryService() *mockStorage {
 	storage.On("UpdateTransactionsStatus", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	storage.On("SaveTxHashWithStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	storage.On("SaveRBFTransactionInformation", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("GetApprovedFarms", mock.Anything).Return(nil, nil)
 
 	return storage
 }

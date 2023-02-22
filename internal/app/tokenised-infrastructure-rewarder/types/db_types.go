@@ -3,7 +3,7 @@ package types
 import (
 	"time"
 
-	"github.com/btcsuite/btcd/btcutil"
+	"github.com/shopspring/decimal"
 )
 
 type Farm struct {
@@ -36,15 +36,15 @@ type Farm struct {
 }
 
 type NFTStatistics struct {
-	Id                       string         `db:"id"`
-	TokenId                  string         `db:"token_id"`
-	DenomId                  string         `db:"denom_id"`
-	FarmPaymentId            int64          `db:"farm_payment_id"`
-	PayoutPeriodStart        int64          `db:"payout_period_start"`
-	PayoutPeriodEnd          int64          `db:"payout_period_end"`
-	Reward                   btcutil.Amount `db:"reward"`
-	MaintenanceFee           btcutil.Amount `db:"maintenance_fee"`
-	CUDOPartOfMaintenanceFee btcutil.Amount `db:"cudo_part_of_maintenance_fee"`
+	Id                       string          `db:"id"`
+	TokenId                  string          `db:"token_id"`
+	DenomId                  string          `db:"denom_id"`
+	FarmPaymentId            int64           `db:"farm_payment_id"`
+	PayoutPeriodStart        int64           `db:"payout_period_start"`
+	PayoutPeriodEnd          int64           `db:"payout_period_end"`
+	Reward                   decimal.Decimal `db:"reward"`
+	MaintenanceFee           decimal.Decimal `db:"maintenance_fee"`
+	CUDOPartOfMaintenanceFee decimal.Decimal `db:"cudo_part_of_maintenance_fee"`
 	NFTOwnersForPeriod       []NFTOwnerInformation
 	TxHash                   string    `db:"tx_hash"`
 	CreatedAt                time.Time `db:"createdAt"`
@@ -52,15 +52,15 @@ type NFTStatistics struct {
 }
 
 type NFTStatisticsRepo struct {
-	Id                       string  `db:"id"`
-	TokenId                  string  `db:"token_id"`
-	DenomId                  string  `db:"denom_id"`
-	FarmPaymentId            int64   `db:"farm_payment_id"`
-	PayoutPeriodStart        int64   `db:"payout_period_start"`
-	PayoutPeriodEnd          int64   `db:"payout_period_end"`
-	Reward                   float64 `db:"reward"`
-	MaintenanceFee           float64 `db:"maintenance_fee"`
-	CUDOPartOfMaintenanceFee float64 `db:"cudo_part_of_maintenance_fee"`
+	Id                       string `db:"id"`
+	TokenId                  string `db:"token_id"`
+	DenomId                  string `db:"denom_id"`
+	FarmPaymentId            int64  `db:"farm_payment_id"`
+	PayoutPeriodStart        int64  `db:"payout_period_start"`
+	PayoutPeriodEnd          int64  `db:"payout_period_end"`
+	Reward                   string `db:"reward"`
+	MaintenanceFee           string `db:"maintenance_fee"`
+	CUDOPartOfMaintenanceFee string `db:"cudo_part_of_maintenance_fee"`
 	NFTOwnersForPeriod       []NFTOwnerInformationRepo
 	TxHash                   string    `db:"tx_hash"`
 	CreatedAt                time.Time `db:"createdAt"`
@@ -68,15 +68,15 @@ type NFTStatisticsRepo struct {
 }
 
 type NFTOwnerInformation struct {
-	TimeOwnedFrom      int64          `db:"time_owned_from"`
-	TimeOwnedTo        int64          `db:"time_owned_to"`
-	TotalTimeOwned     int64          `db:"total_time_owned"`
-	PercentOfTimeOwned float64        `db:"percent_of_time_owned"`
-	Owner              string         `db:"owner"`
-	PayoutAddress      string         `db:"payout_address"`
-	Reward             btcutil.Amount `db:"reward"`
-	CreatedAt          time.Time      `db:"createdAt"`
-	UpdatedAt          time.Time      `db:"updatedAt"`
+	TimeOwnedFrom      int64           `db:"time_owned_from"`
+	TimeOwnedTo        int64           `db:"time_owned_to"`
+	TotalTimeOwned     int64           `db:"total_time_owned"`
+	PercentOfTimeOwned float64         `db:"percent_of_time_owned"`
+	Owner              string          `db:"owner"`
+	PayoutAddress      string          `db:"payout_address"`
+	Reward             decimal.Decimal `db:"reward"`
+	CreatedAt          time.Time       `db:"createdAt"`
+	UpdatedAt          time.Time       `db:"updatedAt"`
 }
 
 type NFTOwnerInformationRepo struct {
@@ -86,7 +86,7 @@ type NFTOwnerInformationRepo struct {
 	PercentOfTimeOwned float64   `db:"percent_of_time_owned"`
 	Owner              string    `db:"owner"`
 	PayoutAddress      string    `db:"payout_address"`
-	Reward             float64   `db:"reward"`
+	Reward             string    `db:"reward"`
 	CreatedAt          time.Time `db:"createdAt"`
 	UpdatedAt          time.Time `db:"updatedAt"`
 }
@@ -126,31 +126,31 @@ type AddressThresholdAmountByFarm struct {
 	Id         string    `db:"id"`
 	BTCAddress string    `db:"btc_address"`
 	FarmId     string    `db:"farm_id"`
-	AmountBTC  float64   `db:"amount_btc"`
+	AmountBTC  string    `db:"amount_btc"`
 	CreatedAt  time.Time `db:"createdAt"`
 	UpdatedAt  time.Time `db:"updatedAt"`
 }
 
 type FarmPayment struct {
-	Id        string         `db:"id"`
-	FarmId    int64          `db:"farm_id"`
-	AmountBTC btcutil.Amount `db:"amount_btc"`
-	CreatedAt time.Time      `db:"createdAt"`
-	UpdatedAt time.Time      `db:"updatedAt"`
+	Id        string          `db:"id"`
+	FarmId    int64           `db:"farm_id"`
+	AmountBTC decimal.Decimal `db:"amount_btc"`
+	CreatedAt time.Time       `db:"createdAt"`
+	UpdatedAt time.Time       `db:"updatedAt"`
 }
 
 type CollectionPaymentAllocation struct {
-	Id                         int64          `db:"id"`
-	FarmId                     int64          `db:"farm_id"`
-	FarmPaymentId              int64          `db:"farm_payment_id"`
-	CollectionId               int64          `db:"collection_id"`
-	CollectionAllocationAmount btcutil.Amount `db:"collection_allocation_amount_btc"`
-	CUDOGeneralFee             btcutil.Amount `db:"cudo_general_fee_btc"`
-	CUDOMaintenanceFee         btcutil.Amount `db:"cudo_maintenance_fee_btc"`
-	FarmUnsoldLeftovers        btcutil.Amount `db:"farm_unsold_leftover_btc"`
-	FarmMaintenanceFee         btcutil.Amount `db:"farm_maintenance_fee_btc"`
-	CreatedAt                  time.Time      `db:"createdAt"`
-	UpdatedAt                  time.Time      `db:"updatedAt"`
+	Id                         int64           `db:"id"`
+	FarmId                     int64           `db:"farm_id"`
+	FarmPaymentId              int64           `db:"farm_payment_id"`
+	CollectionId               int64           `db:"collection_id"`
+	CollectionAllocationAmount decimal.Decimal `db:"collection_allocation_amount_btc"`
+	CUDOGeneralFee             decimal.Decimal `db:"cudo_general_fee_btc"`
+	CUDOMaintenanceFee         decimal.Decimal `db:"cudo_maintenance_fee_btc"`
+	FarmUnsoldLeftovers        decimal.Decimal `db:"farm_unsold_leftover_btc"`
+	FarmMaintenanceFee         decimal.Decimal `db:"farm_maintenance_fee_btc"`
+	CreatedAt                  time.Time       `db:"createdAt"`
+	UpdatedAt                  time.Time       `db:"updatedAt"`
 }
 
 type AuraPoolCollection struct {

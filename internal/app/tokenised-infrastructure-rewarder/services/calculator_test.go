@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/btcsuite/btcd/btcutil"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -64,25 +64,25 @@ func TestSumMintedHashPowerForAllCollections(t *testing.T) {
 }
 
 func TestCalculatePercentShouldReturnZeroIfInvalidHashingPowerProvided(t *testing.T) {
-	require.Equal(t, btcutil.Amount(0), calculatePercent(-1, -1, btcutil.Amount(10000000)))
-	require.Equal(t, btcutil.Amount(0), calculatePercent(10000, -1, btcutil.Amount(10000000)))
-	require.Equal(t, btcutil.Amount(0), calculatePercent(-1, 10000, btcutil.Amount(10000000)))
-	require.Equal(t, btcutil.Amount(0), calculatePercent(0, 0, btcutil.Amount(10000000)))
-	require.Equal(t, btcutil.Amount(0), calculatePercent(10000, 0, btcutil.Amount(10000000)))
-	require.Equal(t, btcutil.Amount(0), calculatePercent(0, 10000, btcutil.Amount(10000000)))
+	require.Equal(t, decimal.Zero, calculatePercent(-1, -1, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculatePercent(10000, -1, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculatePercent(-1, 10000, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculatePercent(0, 0, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculatePercent(10000, 0, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculatePercent(0, 10000, decimal.NewFromInt(10000000)))
 }
 
 func TestCalculatePercentShouldReturnZeroIfRewardIsZero(t *testing.T) {
-	require.Equal(t, btcutil.Amount(0), calculatePercent(10000, 10000, btcutil.Amount(0)))
+	require.Equal(t, decimal.Zero, calculatePercent(10000, 10000, decimal.Zero))
 }
 
 func TestCalculatePercent(t *testing.T) {
-	require.Equal(t, btcutil.Amount(10), calculatePercent(10000, 1000, 100))
+	require.Equal(t, decimal.NewFromInt(10).String(), calculatePercent(10000, 1000, decimal.NewFromInt(100)).String())
 }
 
 func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnErrorIfInvalidPeriod(t *testing.T) {
 	s := NewPayService(nil, nil, nil, nil)
-	_, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "", "", 1000, 100, nil, "", "", 0)
+	_, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "", "", 1000, 100, nil, "", "", decimal.Zero)
 	require.Equal(t, errors.New("invalid period, start (1000) end (100)"), err)
 }
 
@@ -96,7 +96,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnHundredPerc
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", 0)
+	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
 	require.NoError(t, err)
 	require.Equal(t, map[string]float64{payoutAddr: float64(100)}, percents)
 
@@ -109,6 +109,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnHundredPerc
 				PayoutAddress:      payoutAddr,
 				PercentOfTimeOwned: 100,
 				Owner:              "addr1",
+				Reward:             decimal.Zero,
 			},
 		},
 	}
@@ -144,12 +145,12 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", 0)
+	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
 	require.NoError(t, err)
 
 	expectedPercents := map[string]float64{
-		"nft_owner_1_payout_addr": float64(63.64),
-		"nft_owner_2_payout_addr": float64(36.36),
+		"nft_owner_1_payout_addr": float64(63.63636363636363),
+		"nft_owner_2_payout_addr": float64(36.36363636363637),
 	}
 
 	require.Equal(t, expectedPercents, percents)
@@ -159,18 +160,27 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 			TimeOwnedFrom:      periodStart,
 			TimeOwnedTo:        64,
 			TotalTimeOwned:     63,
-			PercentOfTimeOwned: 63.64,
+			PercentOfTimeOwned: 63.63636363636363,
 			PayoutAddress:      "nft_owner_1_payout_addr",
 			Owner:              "nft_owner_1",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      64,
 			TimeOwnedTo:        periodEnd,
 			TotalTimeOwned:     36,
-			PercentOfTimeOwned: 36.36,
+			PercentOfTimeOwned: 36.36363636363637,
 			PayoutAddress:      "nft_owner_2_payout_addr",
 			Owner:              "nft_owner_2",
+			Reward:             decimal.Zero,
 		},
+	}
+
+	// needed because values of decimal.Decimal are not exactly equal
+	require.Equal(t, len(expectedNFTOwnersForPeriod), len(statistics.NFTOwnersForPeriod))
+	for i := range expectedNFTOwnersForPeriod {
+		require.Equal(t, expectedNFTOwnersForPeriod[i].Reward.String(), statistics.NFTOwnersForPeriod[i].Reward.String())
+		expectedNFTOwnersForPeriod[i].Reward = statistics.NFTOwnersForPeriod[i].Reward
 	}
 
 	require.Equal(t, expectedNFTOwnersForPeriod, statistics.NFTOwnersForPeriod)
@@ -234,16 +244,16 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", 0)
+	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
 	require.NoError(t, err)
 
 	expectedPercents := map[string]float64{
-		"nft_minter_payout_addr":  float64(9.09),
-		"nft_owner_1_payout_addr": float64(3.03),
-		"nft_owner_2_payout_addr": float64(37.37),
-		"nft_owner_3_payout_addr": float64(30.30),
-		"nft_owner_4_payout_addr": float64(15.15),
-		"nft_owner_5_payout_addr": float64(5.05),
+		"nft_minter_payout_addr":  float64(9.090909090909092),
+		"nft_owner_1_payout_addr": float64(3.0303030303030303),
+		"nft_owner_2_payout_addr": float64(37.37373737373738),
+		"nft_owner_3_payout_addr": float64(30.303030303030305),
+		"nft_owner_4_payout_addr": float64(15.151515151515152),
+		"nft_owner_5_payout_addr": float64(5.05050505050505),
 	}
 
 	require.Equal(t, expectedPercents, percents)
@@ -253,50 +263,63 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      1,
 			TimeOwnedTo:        10,
 			TotalTimeOwned:     9,
-			PercentOfTimeOwned: 9.09,
+			PercentOfTimeOwned: 9.090909090909092,
 			PayoutAddress:      "nft_minter_payout_addr",
 			Owner:              "nft_minter",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      10,
 			TimeOwnedTo:        13,
 			TotalTimeOwned:     3,
-			PercentOfTimeOwned: 3.03,
+			PercentOfTimeOwned: 3.0303030303030303,
 			PayoutAddress:      "nft_owner_1_payout_addr",
 			Owner:              "nft_owner_1",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      13,
 			TimeOwnedTo:        50,
 			TotalTimeOwned:     37,
-			PercentOfTimeOwned: 37.37,
+			PercentOfTimeOwned: 37.37373737373738,
 			PayoutAddress:      "nft_owner_2_payout_addr",
 			Owner:              "nft_owner_2",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      50,
 			TimeOwnedTo:        80,
 			TotalTimeOwned:     30,
-			PercentOfTimeOwned: 30.30,
+			PercentOfTimeOwned: 30.303030303030305,
 			PayoutAddress:      "nft_owner_3_payout_addr",
 			Owner:              "nft_owner_3",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      80,
 			TimeOwnedTo:        95,
 			TotalTimeOwned:     15,
-			PercentOfTimeOwned: 15.15,
+			PercentOfTimeOwned: 15.151515151515152,
 			PayoutAddress:      "nft_owner_4_payout_addr",
 			Owner:              "nft_owner_4",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      95,
 			TimeOwnedTo:        100,
 			TotalTimeOwned:     5,
-			PercentOfTimeOwned: 5.05,
+			PercentOfTimeOwned: 5.05050505050505,
 			PayoutAddress:      "nft_owner_5_payout_addr",
 			Owner:              "nft_owner_5",
+			Reward:             decimal.Zero,
 		},
+	}
+
+	// needed because values of decimal.Decimal are not exactly equal
+	require.Equal(t, len(expectedNFTOwnersForPeriod), len(statistics.NFTOwnersForPeriod))
+	for i := range expectedNFTOwnersForPeriod {
+		require.Equal(t, expectedNFTOwnersForPeriod[i].Reward.String(), statistics.NFTOwnersForPeriod[i].Reward.String())
+		expectedNFTOwnersForPeriod[i].Reward = statistics.NFTOwnersForPeriod[i].Reward
 	}
 
 	require.Equal(t, expectedNFTOwnersForPeriod, statistics.NFTOwnersForPeriod)
@@ -355,16 +378,16 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", 0)
+	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
 	require.NoError(t, err)
 
 	expectedPercents := map[string]float64{
-		"nft_minter_payout_addr":  float64(9.09),
-		"nft_owner_1_payout_addr": float64(3.03),
-		"nft_owner_2_payout_addr": float64(37.37),
-		"nft_owner_3_payout_addr": float64(30.30),
-		"nft_owner_4_payout_addr": float64(15.15),
-		"nft_owner_5_payout_addr": float64(5.05),
+		"nft_minter_payout_addr":  float64(9.090909090909092),
+		"nft_owner_1_payout_addr": float64(3.0303030303030303),
+		"nft_owner_2_payout_addr": float64(37.37373737373738),
+		"nft_owner_3_payout_addr": float64(30.303030303030305),
+		"nft_owner_4_payout_addr": float64(15.151515151515152),
+		"nft_owner_5_payout_addr": float64(5.05050505050505),
 	}
 
 	require.Equal(t, expectedPercents, percents)
@@ -374,52 +397,63 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      1,
 			TimeOwnedTo:        10,
 			TotalTimeOwned:     9,
-			PercentOfTimeOwned: 9.09,
+			PercentOfTimeOwned: 9.090909090909092,
 			PayoutAddress:      "nft_minter_payout_addr",
 			Owner:              "nft_minter",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      10,
 			TimeOwnedTo:        13,
 			TotalTimeOwned:     3,
-			PercentOfTimeOwned: 3.03,
+			PercentOfTimeOwned: 3.0303030303030303,
 			PayoutAddress:      "nft_owner_1_payout_addr",
 			Owner:              "nft_owner_1",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      13,
 			TimeOwnedTo:        50,
 			TotalTimeOwned:     37,
-			PercentOfTimeOwned: 37.37,
+			PercentOfTimeOwned: 37.37373737373738,
 			PayoutAddress:      "nft_owner_2_payout_addr",
 			Owner:              "nft_owner_2",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      50,
 			TimeOwnedTo:        80,
 			TotalTimeOwned:     30,
-			PercentOfTimeOwned: 30.30,
+			PercentOfTimeOwned: 30.303030303030305,
 			PayoutAddress:      "nft_owner_3_payout_addr",
 			Owner:              "nft_owner_3",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      80,
 			TimeOwnedTo:        95,
 			TotalTimeOwned:     15,
-			PercentOfTimeOwned: 15.15,
+			PercentOfTimeOwned: 15.151515151515152,
 			PayoutAddress:      "nft_owner_4_payout_addr",
 			Owner:              "nft_owner_4",
+			Reward:             decimal.Zero,
 		},
 		{
 			TimeOwnedFrom:      95,
 			TimeOwnedTo:        100,
 			TotalTimeOwned:     5,
-			PercentOfTimeOwned: 5.05,
+			PercentOfTimeOwned: 5.05050505050505,
 			PayoutAddress:      "nft_owner_5_payout_addr",
 			Owner:              "nft_owner_5",
+			Reward:             decimal.Zero,
 		},
 	}
-
+	// needed because values of decimal.Decimal are not exactly equal
+	require.Equal(t, len(expectedNFTOwnersForPeriod), len(statistics.NFTOwnersForPeriod))
+	for i := range expectedNFTOwnersForPeriod {
+		require.Equal(t, expectedNFTOwnersForPeriod[i].Reward.String(), statistics.NFTOwnersForPeriod[i].Reward.String())
+		expectedNFTOwnersForPeriod[i].Reward = statistics.NFTOwnersForPeriod[i].Reward
+	}
 	require.Equal(t, expectedNFTOwnersForPeriod, statistics.NFTOwnersForPeriod)
 }
 
@@ -433,7 +467,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldFailIfGetPayoutAd
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	_, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", 0)
+	_, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
 	require.Equal(t, failErr, err)
 
 	history := `
@@ -455,7 +489,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldFailIfGetPayoutAd
 	var nftTransferHistory types.NftTransferHistory
 	require.NoError(t, json.Unmarshal([]byte(history), &nftTransferHistory))
 
-	_, err = s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", 0)
+	_, err = s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
 	require.Equal(t, failErr, err)
 }
 

@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/btcsuite/btcd/btcutil"
+	"github.com/shopspring/decimal"
 )
 
-func (tx *DbTx) saveFarmPaymentStatistics(ctx context.Context, farmId int64, amountBtc float64) (int64, error) {
+func (tx *DbTx) saveFarmPaymentStatistics(ctx context.Context, farmId int64, amountBtc decimal.Decimal) (int64, error) {
 	now := time.Now()
 
-	_, err := tx.ExecContext(ctx, insertFarmPaymentStatistics, farmId, amountBtc, now.UTC(), now.UTC())
+	_, err := tx.ExecContext(ctx, insertFarmPaymentStatistics, farmId, amountBtc.String(), now.UTC(), now.UTC())
 	if err != nil {
 		return 0, err
 	}
@@ -29,11 +29,11 @@ func (tx *DbTx) saveCollectionPaymentAllocation(
 	farmId int64,
 	farmPaymentId int64,
 	collectionId int64,
-	collectionAllocationAmount float64,
-	cudoGeneralFee float64,
-	cudoMaintenanceFee float64,
-	farmUnsoldLeftovers float64,
-	farmMaintenanceFee float64,
+	collectionAllocationAmount decimal.Decimal,
+	cudoGeneralFee decimal.Decimal,
+	cudoMaintenanceFee decimal.Decimal,
+	farmUnsoldLeftovers decimal.Decimal,
+	farmMaintenanceFee decimal.Decimal,
 ) error {
 	now := time.Now()
 
@@ -44,10 +44,10 @@ func (tx *DbTx) saveCollectionPaymentAllocation(
 		farmPaymentId,
 		collectionId,
 		collectionAllocationAmount,
-		cudoGeneralFee,
-		cudoMaintenanceFee,
-		farmUnsoldLeftovers,
-		farmMaintenanceFee,
+		cudoGeneralFee.String(),
+		cudoMaintenanceFee.String(),
+		farmUnsoldLeftovers.String(),
+		farmMaintenanceFee.String(),
 		now.UTC(),
 		now.UTC(),
 	)
@@ -60,7 +60,7 @@ func (tx *DbTx) saveDestinationAddressesWithAmountHistory(ctx context.Context, a
 	if !amountInfo.ThresholdReached {
 		txHash = "" // the funds were not sent but accumulated, we keep this record as statistic that they were spread but with empty tx hash
 	}
-	_, err := tx.ExecContext(ctx, insertDestinationAddressesWithAmountHistory, address, amountInfo.Amount.ToBTC(), txHash, farmId, farmPaymentId, now.Unix(), amountInfo.ThresholdReached, now.UTC(), now.UTC())
+	_, err := tx.ExecContext(ctx, insertDestinationAddressesWithAmountHistory, address, amountInfo.Amount.String(), txHash, farmId, farmPaymentId, now.Unix(), amountInfo.ThresholdReached, now.UTC(), now.UTC())
 	return err
 
 }
@@ -73,25 +73,25 @@ func (tx *DbTx) saveNFTInformationHistory(
 	farmPaymentId int64,
 	payoutPeriodStart,
 	payoutPeriodEnd int64,
-	reward btcutil.Amount,
+	reward decimal.Decimal,
 	txHash string,
-	maintenanceFee, CudoPartOfMaintenanceFee btcutil.Amount) (int, error) {
+	maintenanceFee, CudoPartOfMaintenanceFee decimal.Decimal) (int, error) {
 
 	var id int
 	now := time.Now()
 
 	if err := tx.QueryRowContext(ctx, insertNFTInformationHistory, collectionDenomId, tokenId, farmPaymentId, payoutPeriodStart,
-		payoutPeriodEnd, reward.ToBTC(), txHash, maintenanceFee.ToBTC(), CudoPartOfMaintenanceFee.ToBTC(), now.UTC(), now.UTC()).Scan(&id); err != nil {
+		payoutPeriodEnd, reward.String(), txHash, maintenanceFee.String(), CudoPartOfMaintenanceFee.String(), now.UTC(), now.UTC()).Scan(&id); err != nil {
 		return -1, err
 	}
 
 	return id, nil
 }
 
-func (tx *DbTx) saveNFTOwnersForPeriodHistory(ctx context.Context, timedOwnedFrom int64, timedOwnedTo int64, totalTimeOwned int64, percentOfTimeOwned float64, owner string, payoutAddress string, reward btcutil.Amount, nftPayoutHistoryId int, sent bool) error {
+func (tx *DbTx) saveNFTOwnersForPeriodHistory(ctx context.Context, timedOwnedFrom int64, timedOwnedTo int64, totalTimeOwned int64, percentOfTimeOwned float64, owner string, payoutAddress string, reward decimal.Decimal, nftPayoutHistoryId int, sent bool) error {
 	now := time.Now()
 	_, err := tx.ExecContext(ctx, insertNFTOnwersForPeriodHistory,
-		timedOwnedFrom, timedOwnedTo, totalTimeOwned, percentOfTimeOwned, owner, payoutAddress, reward.ToBTC(), nftPayoutHistoryId, sent, now.UTC(), now.UTC())
+		timedOwnedFrom, timedOwnedTo, totalTimeOwned, percentOfTimeOwned, owner, payoutAddress, reward.String(), nftPayoutHistoryId, sent, now.UTC(), now.UTC())
 	return err
 }
 
@@ -125,8 +125,8 @@ func updateTransactionsStatus(ctx context.Context, sqlExec SqlExecutor, txHashes
 	return nil
 }
 
-func (tx *DbTx) updateCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int64, amount btcutil.Amount) error {
-	_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount.ToBTC(), address, farmId)
+func (tx *DbTx) updateCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int64, amount decimal.Decimal) error {
+	_, err := tx.ExecContext(ctx, updateThresholdAmounts, amount.String(), address, farmId)
 	return err
 }
 

@@ -4,35 +4,33 @@ import (
 	"context"
 	"database/sql"
 	"sort"
+	"strconv"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/rs/zerolog/log"
+	"github.com/shopspring/decimal"
 )
 
-func (s *PayService) getTotalRewardForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) (btcutil.Amount, []string, error) {
-	var totalAmountBTC float64
+func (s *PayService) getTotalRewardForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) (decimal.Decimal, []string, error) {
+	var totalAmountBTC decimal.Decimal
 	var transactionIdsToMarkAsProcessed []string // to be marked as processed at the end of the loop
 	unspentTransactions, err := btcClient.ListUnspent()
 	if err != nil {
-		return 0, nil, err
+		return decimal.Zero, nil, err
 	}
 
 	validUnspentTransactions, err := filterUnspentTransactions(ctx, unspentTransactions, storage, farmAddresses)
 	if err != nil {
-		return 0, nil, err
+		return decimal.Zero, nil, err
 	}
 
 	for _, elem := range validUnspentTransactions {
-		totalAmountBTC += elem.Amount
+		totalAmountBTC = totalAmountBTC.Add(decimal.NewFromFloat(elem.Amount))
 		transactionIdsToMarkAsProcessed = append(transactionIdsToMarkAsProcessed, elem.TxID)
 	}
-	totalAmountSatoshish, err := btcutil.NewAmount(totalAmountBTC)
-	if err != nil {
-		return 0, nil, err
-	}
-	return totalAmountSatoshish, transactionIdsToMarkAsProcessed, nil
+
+	return totalAmountBTC, transactionIdsToMarkAsProcessed, nil
 }
 
 func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.CollectionData) ([]string, error) {
@@ -97,18 +95,15 @@ func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, 
 	return payoutTimes[l-1].PayoutPeriodEnd, s.helper.Unix(), nil // last time we paid until now
 }
 
-func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmounts map[string]btcutil.Amount, storage Storage, farmId int64) (map[string]btcutil.Amount, map[string]types.AmountInfo, error) {
-	thresholdInSatoshis, err := btcutil.NewAmount(s.config.GlobalPayoutThresholdInBTC)
-	if err != nil {
-		return nil, nil, err
-	}
+func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmountsBtcDecimal map[string]decimal.Decimal, storage Storage, farmId int64) (map[string]decimal.Decimal, map[string]types.AmountInfo, error) {
+	thresholdInBtcDecimal := decimal.NewFromFloat(s.config.GlobalPayoutThresholdInBTC)
 
-	addressesWithThresholdToUpdate := make(map[string]btcutil.Amount)
+	addressesWithThresholdToUpdateBtcDecimal := make(map[string]decimal.Decimal)
 
 	addressesToSend := make(map[string]types.AmountInfo)
 
-	for key := range destinationAddressesWithAmounts {
-		amountAccumulatedBTC, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
+	for key := range destinationAddressesWithAmountsBtcDecimal {
+		amountAccumulatedBtcDecimal, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
 		if err != nil {
 			switch err {
 			case sql.ErrNoRows:
@@ -121,18 +116,22 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 				return nil, nil, err
 			}
 		}
-		amountAccumulatedSatoshis := btcutil.Amount(amountAccumulatedBTC)
-		if destinationAddressesWithAmounts[key]+amountAccumulatedSatoshis >= thresholdInSatoshis {
-			addressesWithThresholdToUpdate[key] = 0 // threshold reached, reset it to 0 and update it later in DB
-			amountToSend := destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis
-			addressesToSend[key] = types.AmountInfo{Amount: amountToSend, ThresholdReached: true}
+
+		totalAmountAccumulatedForAddressBtcDecimal := destinationAddressesWithAmountsBtcDecimal[key].Add(amountAccumulatedBtcDecimal)
+		amountToSendBtcDecimal := totalAmountAccumulatedForAddressBtcDecimal.RoundFloor(8) // up to 1 satoshi
+
+		if totalAmountAccumulatedForAddressBtcDecimal.GreaterThanOrEqual(thresholdInBtcDecimal) {
+			// threshold reached, get amount to send up to 1 satoshi accuracy
+			// subtract it from the total amount to reset the threshold with w/e is left
+			addressesWithThresholdToUpdateBtcDecimal[key] = totalAmountAccumulatedForAddressBtcDecimal.Sub(amountToSendBtcDecimal)
+			addressesToSend[key] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: true}
 		} else {
-			addressesWithThresholdToUpdate[key] += destinationAddressesWithAmounts[key] + amountAccumulatedSatoshis
-			addressesToSend[key] = types.AmountInfo{Amount: destinationAddressesWithAmounts[key], ThresholdReached: false}
+			addressesWithThresholdToUpdateBtcDecimal[key] = totalAmountAccumulatedForAddressBtcDecimal
+			addressesToSend[key] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: false}
 		}
 	}
 
-	return addressesWithThresholdToUpdate, addressesToSend, nil
+	return addressesWithThresholdToUpdateBtcDecimal, addressesToSend, nil
 }
 
 func filterUnspentTransactions(ctx context.Context, transactions []btcjson.ListUnspentResult, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
@@ -174,42 +173,48 @@ func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentRe
 // removeAddressesWithZeroReward utilised in case we had a maintenance fee greater than the nft reward.
 // keys with 0 value were added in order to have statistics even for 0 reward
 // and in order to avoid sending them as 0 - just remove them but still keep statistic
-func removeAddressesWithZeroReward(destinationAddressesWithAmount map[string]btcutil.Amount) {
+func removeAddressesWithZeroReward(destinationAddressesWithAmount map[string]decimal.Decimal) {
 	for key := range destinationAddressesWithAmount {
-		if destinationAddressesWithAmount[key] == 0 {
+		if destinationAddressesWithAmount[key].IsZero() {
 			delete(destinationAddressesWithAmount, key)
 		}
 
 	}
 }
 
-// Converts Satoshi to BTC so it can accepted by the RPC interface
-func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountInfo) map[string]float64 {
+// Converts decimals to BTC so it can accepted by the RPC interface
+func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountInfo) (map[string]float64, error) {
 	result := make(map[string]float64)
 	for k, v := range destinationAddressesWithAmount {
 		if v.ThresholdReached {
-			result[k] = v.Amount.ToBTC()
+			amountString := v.Amount.StringFixedBank(8)
+			amountFloat, err := strconv.ParseFloat(amountString, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			result[k] = amountFloat
 		}
 	}
-	return result
+	return result, nil
 }
 
-func addPaymentAmountToAddress(destinationAddressesWithAmount map[string]btcutil.Amount, maintenanceFeeAmount btcutil.Amount, farmMaintenanceFeePayoutAddress string) {
-	destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress] += maintenanceFeeAmount
+func addPaymentAmountToAddress(destinationAddressesWithAmount map[string]decimal.Decimal, maintenanceFeeAmountbtcDecimal decimal.Decimal, farmMaintenanceFeePayoutAddress string) {
+	destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress] = destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress].Add(maintenanceFeeAmountbtcDecimal)
 }
 
-func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]btcutil.Amount, leftoverReward btcutil.Amount, farmDefaultPayoutAddress string) {
+func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]decimal.Decimal, leftoverReward decimal.Decimal, farmDefaultPayoutAddress string) {
 	if _, ok := destinationAddressesWithAmount[farmDefaultPayoutAddress]; ok {
 		// log to statistics here if we are doing accumulation send for an nft
-		destinationAddressesWithAmount[farmDefaultPayoutAddress] += leftoverReward
+		destinationAddressesWithAmount[farmDefaultPayoutAddress] = destinationAddressesWithAmount[farmDefaultPayoutAddress].Add(leftoverReward)
 	} else {
 		destinationAddressesWithAmount[farmDefaultPayoutAddress] = leftoverReward
 	}
 }
 
-func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount btcutil.Amount, destinationAddressesWithAmount map[string]btcutil.Amount) {
+func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount decimal.Decimal, destinationAddressesWithAmount map[string]decimal.Decimal) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
-		payoutAmount := nftPayoutAmount.MulF64(percentFromReward / 100)
-		destinationAddressesWithAmount[nftPayoutAddress] += payoutAmount
+		payoutAmount := nftPayoutAmount.Mul(decimal.NewFromFloat(percentFromReward / 100))
+		destinationAddressesWithAmount[nftPayoutAddress] = destinationAddressesWithAmount[nftPayoutAddress].Add(payoutAmount)
 	}
 }

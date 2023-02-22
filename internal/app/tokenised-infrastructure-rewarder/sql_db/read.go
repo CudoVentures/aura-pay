@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/btcsuite/btcd/btcutil"
+	"github.com/shopspring/decimal"
 )
 
 func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId string, nftId string) ([]types.NFTStatistics, error) {
@@ -21,6 +21,10 @@ func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId st
 		var ownerInfos []types.NFTOwnerInformation
 
 		for _, ownerInfoRepo := range payoutTimeRepo.NFTOwnersForPeriod {
+			rewardBtcDecimal, err := decimal.NewFromString(ownerInfoRepo.Reward)
+			if err != nil {
+				return nil, err
+			}
 			parsedInfo := types.NFTOwnerInformation{
 				TimeOwnedFrom:      ownerInfoRepo.TimeOwnedFrom,
 				TimeOwnedTo:        ownerInfoRepo.TimeOwnedTo,
@@ -28,7 +32,7 @@ func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId st
 				PercentOfTimeOwned: ownerInfoRepo.PercentOfTimeOwned,
 				Owner:              ownerInfoRepo.Owner,
 				PayoutAddress:      ownerInfoRepo.PayoutAddress,
-				Reward:             btcutil.Amount(ownerInfoRepo.Reward),
+				Reward:             rewardBtcDecimal,
 				CreatedAt:          ownerInfoRepo.CreatedAt,
 				UpdatedAt:          ownerInfoRepo.UpdatedAt,
 			}
@@ -36,15 +40,29 @@ func (sdb *SqlDB) GetPayoutTimesForNFT(ctx context.Context, collectionDenomId st
 			ownerInfos = append(ownerInfos, parsedInfo)
 		}
 
+		rewardBtcDecimal, err := decimal.NewFromString(payoutTimeRepo.Reward)
+		if err != nil {
+			return nil, err
+		}
+
+		maintenanceFeeBtcDecimal, err := decimal.NewFromString(payoutTimeRepo.MaintenanceFee)
+		if err != nil {
+			return nil, err
+		}
+
+		cudoPartOfFeeBtcDecimal, err := decimal.NewFromString(payoutTimeRepo.CUDOPartOfMaintenanceFee)
+		if err != nil {
+			return nil, err
+		}
 		payoutTimeParsed := types.NFTStatistics{
 			Id:                       payoutTimeRepo.Id,
 			TokenId:                  payoutTimeRepo.TokenId,
 			DenomId:                  payoutTimeRepo.DenomId,
 			PayoutPeriodStart:        payoutTimeRepo.PayoutPeriodStart,
 			PayoutPeriodEnd:          payoutTimeRepo.PayoutPeriodEnd,
-			Reward:                   btcutil.Amount(payoutTimeRepo.Reward),
-			MaintenanceFee:           btcutil.Amount(payoutTimeRepo.MaintenanceFee),
-			CUDOPartOfMaintenanceFee: btcutil.Amount(payoutTimeRepo.CUDOPartOfMaintenanceFee),
+			Reward:                   rewardBtcDecimal,
+			MaintenanceFee:           maintenanceFeeBtcDecimal,
+			CUDOPartOfMaintenanceFee: cudoPartOfFeeBtcDecimal,
 			NFTOwnersForPeriod:       ownerInfos,
 			TxHash:                   payoutTimeRepo.TxHash,
 			CreatedAt:                payoutTimeRepo.CreatedAt,
@@ -73,19 +91,19 @@ func (sdb *SqlDB) GetTxHashesByStatus(ctx context.Context, status string) ([]typ
 	return txHashesWithStatus, nil
 }
 
-func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int64) (float64, error) {
+func (sdb *SqlDB) GetCurrentAcummulatedAmountForAddress(ctx context.Context, address string, farmId int64) (decimal.Decimal, error) {
 	var result []types.AddressThresholdAmountByFarm
 	if err := sdb.SelectContext(ctx, &result, selectThresholdByAddress, address, farmId); err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 
 	if len(result) > 1 {
-		return 0, fmt.Errorf("more then one threshold address for farm! Address: %s, FarmId: %d", address, farmId)
+		return decimal.Zero, fmt.Errorf("more then one threshold address for farm! Address: %s, FarmId: %d", address, farmId)
 	} else if len(result) == 0 {
-		return 0, sql.ErrNoRows
+		return decimal.Zero, sql.ErrNoRows
 	}
 
-	return result[0].AmountBTC, nil
+	return decimal.NewFromString(result[0].AmountBTC)
 }
 
 func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txHash string) (types.UTXOTransaction, error) {

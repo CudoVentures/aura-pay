@@ -7,15 +7,15 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/rs/zerolog/log"
+	"github.com/shopspring/decimal"
 )
 
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
 func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory,
-	collectionDenomId, nftId string, periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, payoutAddrNetwork string, rewardForNftAfterFee btcutil.Amount) (map[string]float64, error) {
+	collectionDenomId, nftId string, periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, payoutAddrNetwork string, rewardForNftAfterFeeBtcDecimal decimal.Decimal) (map[string]float64, error) {
 
 	totalPeriodTimeInSeconds := periodEnd - periodStart
 	if totalPeriodTimeInSeconds <= 0 {
@@ -48,7 +48,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
 		statisticsAdditionalData.PercentOfTimeOwned = 100
 		statisticsAdditionalData.Owner = currentNftOwner
-		statisticsAdditionalData.Reward = rewardForNftAfterFee
+		statisticsAdditionalData.Reward = rewardForNftAfterFeeBtcDecimal
 
 		statistics.NFTOwnersForPeriod = []types.NFTOwnerInformation{statisticsAdditionalData}
 
@@ -73,6 +73,8 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		Timestamp: periodEnd,
 	})
 
+	var totalCalculatedReward decimal.Decimal
+
 	for i := 0; i < len(transferHistoryForTimePeriod)-1; i++ {
 
 		timeOwned := transferHistoryForTimePeriod[i+1].Timestamp - transferHistoryForTimePeriod[i].Timestamp
@@ -81,7 +83,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 
 		statisticsAdditionalData.TotalTimeOwned = timeOwned
 
-		percentOfTimeOwned := roundToPrecision(float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100)
+		percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
 		statisticsAdditionalData.PercentOfTimeOwned = percentOfTimeOwned
 
 		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, transferHistoryForTimePeriod[i].To, payoutAddrNetwork, nftId, collectionDenomId)
@@ -91,56 +93,68 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 
 		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
 		statisticsAdditionalData.Owner = transferHistoryForTimePeriod[i].To
-		statisticsAdditionalData.Reward = rewardForNftAfterFee.MulF64(percentOfTimeOwned / 100)
+
+		calculatedReward := rewardForNftAfterFeeBtcDecimal.Mul(decimal.NewFromFloat(percentOfTimeOwned / 100))
+		statisticsAdditionalData.Reward = calculatedReward
+		totalCalculatedReward = totalCalculatedReward.Add(calculatedReward)
 
 		ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
 
 		statistics.NFTOwnersForPeriod = append(statistics.NFTOwnersForPeriod, statisticsAdditionalData)
 	}
 
+	nftRewardDistributionleftovers := rewardForNftAfterFeeBtcDecimal.Sub(totalCalculatedReward)
+
+	if nftRewardDistributionleftovers.LessThan(decimal.Zero) {
+		return nil, fmt.Errorf("calculated NFT reward distribution is greater than the total given. CalculatedForOwnerDistribution: %s, TotalGiventoDistribute: %s", totalCalculatedReward, rewardForNftAfterFeeBtcDecimal)
+	}
+
+	lastOwnerIndex := len(statistics.NFTOwnersForPeriod) - 1
+	statistics.NFTOwnersForPeriod[lastOwnerIndex].Reward = statistics.NFTOwnersForPeriod[lastOwnerIndex].Reward.Add(nftRewardDistributionleftovers)
+
 	return ownersWithPercentOwnedTime, nil
 }
 
-func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) (btcutil.Amount, error) {
+func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) decimal.Decimal {
 	currentYear, currentMonth, _ := s.helper.Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
 
-	mtFeeInSatoshis, err := btcutil.NewAmount(farm.MaintenanceFeeInBtc)
-	if err != nil {
-		return -1, err
-	}
-	feePerOneHashPower := btcutil.Amount(float64(mtFeeInSatoshis) / currentHashPowerForFarm)
-	dailyFeeInSatoshis := int(feePerOneHashPower) / periodLength
-	hourlyFeeInSatoshis := dailyFeeInSatoshis / 24
-	return btcutil.Amount(hourlyFeeInSatoshis), nil
+	mtFeeInBtc := decimal.NewFromFloat(farm.MaintenanceFeeInBtc)
+
+	btcFeePerOneHashPowerBtcDecimal := mtFeeInBtc.Div(decimal.NewFromFloat(currentHashPowerForFarm))
+	dailyFeeInBtcDecimal := btcFeePerOneHashPowerBtcDecimal.Div(decimal.NewFromInt(int64(periodLength)))
+	hourlyFeeInBtcDecimal := dailyFeeInBtcDecimal.Div(decimal.NewFromInt(24))
+
+	return hourlyFeeInBtcDecimal
 }
 
 func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	periodEnd int64,
-	hourlyFeeInSatoshis btcutil.Amount,
-	rewardForNft btcutil.Amount) (btcutil.Amount, btcutil.Amount, btcutil.Amount) {
+	hourlyFeeInBtcDecimal decimal.Decimal,
+	rewardForNftBtcDecimal decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal) {
 
-	periodInHoursToPayFor := (periodEnd - periodStart) / 3600                                              // period for which we are paying the MT fee
-	nftMaintenanceFeeForPayoutPeriod := btcutil.Amount(periodInHoursToPayFor * int64(hourlyFeeInSatoshis)) // the fee for the period
-	if nftMaintenanceFeeForPayoutPeriod > rewardForNft {                                                   // if the fee is greater - it has higher priority then the users reward
-		nftMaintenanceFeeForPayoutPeriod = rewardForNft
-		rewardForNft = 0
+	periodInHoursToPayFor := float64(periodEnd-periodStart) / float64(3600) // period for which we are paying the MT fee
+
+	nftMaintenanceFeeForPayoutPeriodBtcDecimal := hourlyFeeInBtcDecimal.Mul(decimal.NewFromFloat(periodInHoursToPayFor)) // the fee for the period
+	if nftMaintenanceFeeForPayoutPeriodBtcDecimal.GreaterThan(rewardForNftBtcDecimal) {                                  // if the fee is greater - it has higher priority then the users reward
+		nftMaintenanceFeeForPayoutPeriodBtcDecimal = rewardForNftBtcDecimal
+		rewardForNftBtcDecimal = decimal.Zero
 	} else {
-		rewardForNft -= nftMaintenanceFeeForPayoutPeriod
+		rewardForNftBtcDecimal = rewardForNftBtcDecimal.Sub(nftMaintenanceFeeForPayoutPeriodBtcDecimal)
 	}
 
-	partOfMaintenanceFeeForCudo := btcutil.Amount(float64(nftMaintenanceFeeForPayoutPeriod) * s.config.CUDOMaintenanceFeePercent / 100) // ex 10% from 1000 = 100
-	nftMaintenanceFeeForPayoutPeriod -= partOfMaintenanceFeeForCudo
+	partOfMaintenanceFeeForCudoBtcDecimal := nftMaintenanceFeeForPayoutPeriodBtcDecimal.Mul(decimal.NewFromFloat(s.config.CUDOMaintenanceFeePercent / 100)) // ex 10% from 1000 = 100
+	nftMaintenanceFeeForPayoutPeriodBtcDecimal = nftMaintenanceFeeForPayoutPeriodBtcDecimal.Sub(partOfMaintenanceFeeForCudoBtcDecimal)
 
-	return nftMaintenanceFeeForPayoutPeriod, partOfMaintenanceFeeForCudo, rewardForNft
+	return nftMaintenanceFeeForPayoutPeriodBtcDecimal, partOfMaintenanceFeeForCudoBtcDecimal, rewardForNftBtcDecimal
 }
 
-func (s *PayService) calculateCudosFeeOfTotalFarmIncome(totalFarmIncome btcutil.Amount) (btcutil.Amount, btcutil.Amount) {
+func (s *PayService) calculateCudosFeeOfTotalFarmIncome(totalFarmIncomeBtcDecimal decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
 
-	farmIncomeCudosFee := totalFarmIncome.MulF64(s.config.CUDOFeeOnAllBTC / 100) // ex 10% = 0.1 * total
-	farmIncomeAfterCudosFee := totalFarmIncome - farmIncomeCudosFee
+	farmIncomeCudosFeeBtcDecimal := totalFarmIncomeBtcDecimal.Mul(decimal.NewFromFloat(s.config.CUDOFeeOnAllBTC / 100)) // ex 10% = 0.1 * total
+	farmIncomeAfterCudosFeeBtcDecimal := totalFarmIncomeBtcDecimal.Sub(farmIncomeCudosFeeBtcDecimal)
 
-	return farmIncomeAfterCudosFee, farmIncomeCudosFee
+	return farmIncomeAfterCudosFeeBtcDecimal, farmIncomeCudosFeeBtcDecimal
 }
 
 func sumMintedHashPowerForAllCollections(collections []types.Collection) float64 {
@@ -172,13 +186,13 @@ func roundToPrecision(value float64) (result float64) {
 	return
 }
 
-func calculatePercent(available float64, actual float64, reward btcutil.Amount) btcutil.Amount {
-	if available <= 0 || actual <= 0 || reward.ToBTC() <= 0 {
-		return btcutil.Amount(0)
+func calculatePercent(available float64, actual float64, reward decimal.Decimal) decimal.Decimal {
+	if available <= 0 || actual <= 0 || reward.LessThanOrEqual(decimal.Zero) {
+		return decimal.Zero
 	}
 
 	payoutRewardPercent := actual / available
-	calculatedReward := reward.MulF64(payoutRewardPercent)
+	calculatedReward := reward.Mul(decimal.NewFromFloat(payoutRewardPercent))
 
 	// btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
 	return calculatedReward

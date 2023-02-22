@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"github.com/shopspring/decimal"
 )
 
 func NewSqlDB(db *sqlx.DB) *SqlDB {
@@ -26,7 +26,7 @@ func (sdb *SqlDB) SaveStatistics(
 ) (retErr error) {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
-		farmPaymentId, err := tx.saveFarmPaymentStatistics(ctx, farmId, farmPaymentStatistics.AmountBTC.ToBTC())
+		farmPaymentId, err := tx.saveFarmPaymentStatistics(ctx, farmId, farmPaymentStatistics.AmountBTC)
 		if err != nil {
 			return err
 		}
@@ -37,11 +37,11 @@ func (sdb *SqlDB) SaveStatistics(
 				farmId,
 				farmPaymentId,
 				collectionPaymentAllocation.CollectionId,
-				collectionPaymentAllocation.CollectionAllocationAmount.ToBTC(),
-				collectionPaymentAllocation.CUDOGeneralFee.ToBTC(),
-				collectionPaymentAllocation.CUDOMaintenanceFee.ToBTC(),
-				collectionPaymentAllocation.FarmUnsoldLeftovers.ToBTC(),
-				collectionPaymentAllocation.FarmMaintenanceFee.ToBTC(),
+				collectionPaymentAllocation.CollectionAllocationAmount,
+				collectionPaymentAllocation.CUDOGeneralFee,
+				collectionPaymentAllocation.CUDOMaintenanceFee,
+				collectionPaymentAllocation.FarmUnsoldLeftovers,
+				collectionPaymentAllocation.FarmMaintenanceFee,
 			); err != nil {
 				return err
 			}
@@ -115,7 +115,7 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, 
 	})
 }
 
-func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]btcutil.Amount, farmId int64) (retErr error) {
+func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]decimal.Decimal, farmId int64) (retErr error) {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
 		if retErr = tx.markUTXOsAsProcessed(ctx, processedTransactions); retErr != nil {

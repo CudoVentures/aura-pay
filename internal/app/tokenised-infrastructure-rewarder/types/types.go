@@ -1,8 +1,8 @@
 package types
 
 import (
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/shopspring/decimal"
 )
 
 type Collection struct {
@@ -42,6 +42,6 @@ type BtcNetworkParams struct {
 }
 
 type AmountInfo struct {
-	Amount           btcutil.Amount
+	Amount           decimal.Decimal
 	ThresholdReached bool
 }
