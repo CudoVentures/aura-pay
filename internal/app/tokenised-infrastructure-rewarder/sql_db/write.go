@@ -130,14 +130,15 @@ func (tx *DbTx) updateCurrentAcummulatedAmountForAddress(ctx context.Context, ad
 	return err
 }
 
-func (tx *DbTx) markUTXOsAsProcessed(ctx context.Context, tx_hashes []string) error {
+func (tx *DbTx) markUTXOAsProcessed(ctx context.Context, tx_hashes string, paymentTimestamp int64) error {
 	var UTXOMaps []map[string]interface{}
 	for _, hash := range tx_hashes {
 		m := map[string]interface{}{
-			"tx_hash":   hash,
-			"processed": true,
-			"createdAt": time.Now().UTC(),
-			"updatedAt": time.Now().UTC(),
+			"tx_hash":           hash,
+			"processed":         true,
+			"payment_timestamp": paymentTimestamp,
+			"createdAt":         time.Now().UTC(),
+			"updatedAt":         time.Now().UTC(),
 		}
 		UTXOMaps = append(UTXOMaps, m)
 	}

@@ -121,6 +121,21 @@ func (sdb *SqlDB) GetUTXOTransaction(ctx context.Context, txHash string) (types.
 	return result[0], nil
 }
 
+func (sdb *SqlDB) GetLastUTXOTransactionByFarmId(ctx context.Context, farmId int64) (types.UTXOTransaction, error) {
+	var result []types.UTXOTransaction
+	if err := sdb.SelectContext(ctx, &result, selectUTXOByFarmId, farmId); err != nil {
+		return types.UTXOTransaction{}, err
+	}
+
+	if len(result) > 1 {
+		return types.UTXOTransaction{}, fmt.Errorf("tx with farm_id %d has duplicate time in table utxo_transactions", farmId)
+	} else if len(result) == 0 {
+		return types.UTXOTransaction{}, nil
+	}
+
+	return result[0], nil
+}
+
 func (sdb *SqlDB) GetFarmAuraPoolCollections(ctx context.Context, farmId int64) ([]types.AuraPoolCollection, error) {
 	collections := []types.AuraPoolCollection{}
 	if err := sdb.SelectContext(ctx, &collections, selectFarmCollections, farmId); err != nil {
@@ -134,4 +149,5 @@ const selectTxHashStatus = `SELECT * FROM statistics_tx_hash_status WHERE status
 const selectApprovedFarms = `SELECT id, name, description, sub_account_name, total_farm_hashrate, address_for_receiving_rewards_from_pool, leftover_reward_payout_address, maintenance_fee_payout_address, maintenance_fee_in_btc FROM farms WHERE status='approved'`
 const selectThresholdByAddress = `SELECT * FROM threshold_amounts WHERE btc_address=$1 AND farm_id=$2`
 const selectUTXOById = `SELECT * FROM utxo_transactions WHERE tx_hash=$1`
+const selectUTXOByFarmId = `SELECT id, farm_id, tx_hash, MAX(payment_timestamp), processed, createdAt, updatedAt FROM utxo_transactions WHERE farm_id=$1`
 const selectFarmCollections = `SELECT id, denom_id, hashing_power FROM collections WHERE farm_id=$1`

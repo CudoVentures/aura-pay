@@ -12,25 +12,28 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (s *PayService) getTotalRewardForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) (decimal.Decimal, []string, error) {
-	var totalAmountBTC decimal.Decimal
-	var transactionIdsToMarkAsProcessed []string // to be marked as processed at the end of the loop
+func (s *PayService) getUnspentTxDetails(ctx context.Context, btcClient BtcClient, btcjson.ListUnspentResult) (btcjson.TxRawResult, err) {
+	txRawResult, err := btcClient.GetRawTransactionVerbose(txHash *chainhash.Hash)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return txRawResult, nil
+}
+
+func (s *PayService) getUnspentTxsForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
 	unspentTransactions, err := btcClient.ListUnspent()
 	if err != nil {
-		return decimal.Zero, nil, err
+		return nil, err
 	}
 
 	validUnspentTransactions, err := filterUnspentTransactions(ctx, unspentTransactions, storage, farmAddresses)
 	if err != nil {
-		return decimal.Zero, nil, err
+		return nil, err
 	}
 
-	for _, elem := range validUnspentTransactions {
-		totalAmountBTC = totalAmountBTC.Add(decimal.NewFromFloat(elem.Amount))
-		transactionIdsToMarkAsProcessed = append(transactionIdsToMarkAsProcessed, elem.TxID)
-	}
-
-	return totalAmountBTC, transactionIdsToMarkAsProcessed, nil
+	return validUnspentTransactions, nil
 }
 
 func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.CollectionData) ([]string, error) {
@@ -87,12 +90,12 @@ func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomI
 	return nftTransferHistory, nil
 }
 
-func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, int64, error) {
+func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, error) {
 	l := len(payoutTimes)
-	if l == 0 { // first time payment - start time is time of minting, end time is now
-		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, s.helper.Unix(), nil
+	if l == 0 { // first time payment - start time is time of minting
+		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, nil
 	}
-	return payoutTimes[l-1].PayoutPeriodEnd, s.helper.Unix(), nil // last time we paid until now
+	return payoutTimes[l-1].PayoutPeriodEnd, nil // last time we paid until now
 }
 
 func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmountsBtcDecimal map[string]decimal.Decimal, storage Storage, farmId int64) (map[string]decimal.Decimal, map[string]types.AmountInfo, error) {

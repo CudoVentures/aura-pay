@@ -115,11 +115,29 @@ func (r *Requester) GetNftTransferHistory(ctx context.Context, collectionDenomId
 }
 
 func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farmName, sinceTimestamp string) (float64, error) {
+	okStruct, err := r.getFarmDailyDataFromPool(ctx, farmName, sinceTimestamp)
+	if err != nil {
+		return -1, err
+	}
+
+	return okStruct[0].HashrateAccepted, nil
+}
+
+func (r *Requester) GetFarmStartTime(ctx context.Context, farmName, sinceTimestamp string) (int64, error) {
+	okStruct, err := r.getFarmDailyDataFromPool(ctx, farmName, sinceTimestamp)
+	if err != nil {
+		return -1, err
+	}
+
+	return okStruct[len(okStruct)-1].UnixTime, nil
+}
+
+func (r *Requester) getFarmDailyDataFromPool(ctx context.Context, farmName, sinceTimestamp string) (types.FarmHashRate, error) {
 	requestString := fmt.Sprintf("/subaccount_hashrate_day/%s", farmName)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.FoundryPoolAPIBaseURL+requestString, nil)
 	if err != nil {
-		return -1, err
+		return types.FarmHashRate{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -131,7 +149,7 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farm
 	client := &http.Client{Timeout: time.Second * 10}
 	res, err := client.Do(req)
 	if err != nil {
-		return -1, err
+		return types.FarmHashRate{}, err
 	}
 
 	defer res.Body.Close()
@@ -139,20 +157,20 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farm
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Error().Msgf("Could read farm (%s) total hash power data from foundry, error is: [%s]", farmName, err)
-		return 0, err
+		return types.FarmHashRate{}, err
 	}
 
 	if res.StatusCode != StatusCodeOK {
-		return -1, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", res.Status, res.StatusCode, string(bytes))
+		return types.FarmHashRate{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", res.Status, res.StatusCode, string(bytes))
 	}
 
 	okStruct := types.FarmHashRate{}
 
 	if err := json.Unmarshal(bytes, &okStruct); err != nil {
-		return -1, err
+		return types.FarmHashRate{}, err
 	}
 
-	return okStruct[0].HashrateAccepted, nil
+	return okStruct, nil
 }
 
 func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId int64) (types.CollectionData, error) {

@@ -89,7 +89,7 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 		tearDownDatabase(sqlxDB)
 	}()
 
-	err := dbStorage.UpdateThresholdStatuses(context.Background(), []string{"3"}, map[string]decimal.Decimal{}, 1)
+	err := dbStorage.UpdateThresholdStatus(context.Background(), "3", 1, map[string]decimal.Decimal{}, 1)
 	if err != nil {
 		panic(err)
 	}
@@ -197,7 +197,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	apiRequester.On("GetFarmCollectionsFromHasura", mock.Anything, int64(1)).Return(farm1CollectionData, nil).Once()
 
-	apiRequester.On("GetFarmTotalHashPowerFromPoolToday", mock.Anything, "farm_1", mock.Anything).Return(5000.0, nil).Once()
+	apiRequester.On("GetFarmTotalHashPowerFromPoolToday", mock.Anything, "farm_1", mock.Anything).Return(1200.0, nil).Once()
 
 	apiRequester.On("VerifyCollection", mock.Anything, "farm_1_denom_1").Return(true, nil)
 
@@ -409,7 +409,7 @@ func setupMockStorage() *mockStorage {
 
 	storage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, mock.Anything, mock.Anything).Return(decimal.Zero, nil)
 
-	storage.On("UpdateThresholdStatuses", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("UpdateThresholdStatus", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	storage.On("GetApprovedFarms", mock.Anything).Return([]types.Farm{
 		{
@@ -510,7 +510,7 @@ func (ms *mockStorage) GetCurrentAcummulatedAmountForAddress(ctx context.Context
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
-func (ms *mockStorage) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]decimal.Decimal, farmId int64) error {
+func (ms *mockStorage) UpdateThresholdStatus(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]decimal.Decimal, farmId int64) error {
 	args := ms.Called(ctx, processedTransactions, addressesWithThresholdToUpdate)
 	return args.Error(0)
 }
