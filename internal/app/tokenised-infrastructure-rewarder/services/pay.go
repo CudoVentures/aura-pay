@@ -264,8 +264,6 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 				distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFeeBtcDecimal, destinationAddressesWithAmountBtcDecimal)
 			}
 
-			log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwnersBtcDecimal, rewardToReturnBtcDecimal, farm.SubAccountName)
-
 			// calculate collection's percent of rewards based on hash power
 			_, ok := farmAuraPoolCollectionsMap[collection.Denom.Id]
 			if !ok {
@@ -277,9 +275,9 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			collectionAwardAllocation := totalRewardForFarmAfterCudosFeeBtcDecimal.Mul(collectionPartOfFarmDecimal)
 			cudoGeneralFeeForCollection := cudosFeeOfTotalRewardBtcDecimal.Mul(collectionPartOfFarmDecimal)
-			CUDOMaintenanceFeeBtcDecimalForCollection := CUDOMaintenanceFeeBtcDecimal.Mul(collectionPartOfFarmDecimal)
-			farmLeftoverForCollection := rewardToReturnBtcDecimal.Mul(collectionPartOfFarmDecimal)
-			farmMaintenanceFeeBtcDecimalForCollection := farmMaintenanceFeeBtcDecimal.Mul(collectionPartOfFarmDecimal)
+			CUDOMaintenanceFeeBtcDecimalForCollection := CUDOMaintenanceFeeBtcDecimal
+			farmMaintenanceFeeBtcDecimalForCollection := farmMaintenanceFeeBtcDecimal
+			farmLeftoverForCollection := collectionAwardAllocation.Sub(nftRewardsAfterFeesBtcDecimal).Add(CUDOMaintenanceFeeBtcDecimalForCollection).Sub(farmMaintenanceFeeBtcDecimalForCollection)
 
 			var collectionPaymentAllocation types.CollectionPaymentAllocation
 			collectionPaymentAllocation.FarmId = farm.Id
@@ -291,6 +289,8 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			collectionPaymentAllocation.FarmMaintenanceFee = farmMaintenanceFeeBtcDecimalForCollection
 
 			collectionPaymentAllocationsStatistics = append(collectionPaymentAllocationsStatistics, collectionPaymentAllocation)
+
+			log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn from collection: %s, farm: {%s}, collection: {%d}", nftRewardsAfterFeesBtcDecimal, farmLeftoverForCollection, farm.SubAccountName, collectionPaymentAllocation.CollectionId)
 		}
 
 		// return to the farm owner whatever is left

@@ -497,6 +497,11 @@ type mockAPIRequester struct {
 	mock.Mock
 }
 
+func (mar *mockAPIRequester) GetFarmStartTime(ctx context.Context, farmName string) (int64, error) {
+	args := mar.Called(ctx, farmName)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (mar *mockAPIRequester) GetNftTransferHistory(ctx context.Context, collectionDenomId, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
 	args := mar.Called(ctx, collectionDenomId, nftId, fromTimestamp)
 	return args.Get(0).(types.NftTransferHistory), args.Error(1)

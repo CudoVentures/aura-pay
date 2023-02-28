@@ -6,20 +6,26 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 )
 
-func (s *PayService) getUnspentTxDetails(ctx context.Context, btcClient BtcClient, btcjson.ListUnspentResult) (btcjson.TxRawResult, err) {
-	txRawResult, err := btcClient.GetRawTransactionVerbose(txHash *chainhash.Hash)
-
+func (s *PayService) getUnspentTxDetails(ctx context.Context, btcClient BtcClient, unspentResult btcjson.ListUnspentResult) (btcjson.TxRawResult, error) {
+	txHash, err := chainhash.NewHashFromStr(unspentResult.TxID)
 	if err != nil {
-		return nil, err
+		return btcjson.TxRawResult{}, err
 	}
 
-	return txRawResult, nil
+	txRawResult, err := btcClient.GetRawTransactionVerbose(txHash)
+	if err != nil {
+		return btcjson.TxRawResult{}, err
+	}
+
+	return *txRawResult, nil
 }
 
 func (s *PayService) getUnspentTxsForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
