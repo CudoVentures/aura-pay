@@ -118,7 +118,7 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, 
 func (sdb *SqlDB) UpdateThresholdStatus(ctx context.Context, processedTransaction string, paymentTimestamp int64, addressesWithThresholdToUpdate map[string]decimal.Decimal, farmId int64) (retErr error) {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
-		if retErr = tx.markUTXOAsProcessed(ctx, processedTransaction, paymentTimestamp); retErr != nil {
+		if retErr = tx.markUTXOAsProcessed(ctx, processedTransaction, paymentTimestamp, farmId); retErr != nil {
 			return fmt.Errorf("failed to commit transaction: %s", retErr)
 		}
 

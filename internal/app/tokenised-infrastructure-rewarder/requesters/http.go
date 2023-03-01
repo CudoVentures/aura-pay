@@ -123,8 +123,8 @@ func (r *Requester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farm
 	return okStruct[0].HashrateAccepted, nil
 }
 
-func (r *Requester) GetFarmStartTime(ctx context.Context, farmName, sinceTimestamp string) (int64, error) {
-	okStruct, err := r.getFarmDailyDataFromPool(ctx, farmName, sinceTimestamp)
+func (r *Requester) GetFarmStartTime(ctx context.Context, farmName string) (int64, error) {
+	okStruct, err := r.getFarmDailyDataFromPool(ctx, farmName, "0")
 	if err != nil {
 		return -1, err
 	}
@@ -264,12 +264,9 @@ func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []s
 		Timeout: 60 * time.Second,
 	}
 
-	var idsArray []string
-	idsArray = append(idsArray, denomIds...)
-
 	reqBody := struct {
 		DenomIds []string `json:"denom_ids"`
-	}{DenomIds: idsArray}
+	}{DenomIds: denomIds}
 
 	reqBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -305,13 +302,20 @@ func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []s
 	}
 
 	for i := 0; i < len(okStruct.Result.Collections); i++ {
+		var parsedNfts []types.NFT
 		for j := 0; j < len(okStruct.Result.Collections[i].Nfts); j++ {
+			nft := okStruct.Result.Collections[i].Nfts[j]
 			var nftDataJson types.NFTDataJson
-			if err := json.Unmarshal([]byte(okStruct.Result.Collections[i].Nfts[j].Data), &nftDataJson); err != nil {
-				return nil, err
+			err := json.Unmarshal([]byte(nft.Data), &nftDataJson)
+			if err != nil || nftDataJson.ExpirationDate == 0 || nftDataJson.HashRateOwned == 0 {
+				// log.Warn().Msgf("Failed to parse NFT dataJson field. Skipping. NFT: %s", nft)
+				continue
 			}
-			okStruct.Result.Collections[i].Nfts[j].DataJson = nftDataJson
+			nft.DataJson = nftDataJson
+			parsedNfts = append(parsedNfts, nft)
 		}
+
+		okStruct.Result.Collections[i].Nfts = parsedNfts
 	}
 
 	return okStruct.Result.Collections, nil

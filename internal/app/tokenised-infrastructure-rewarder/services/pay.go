@@ -86,11 +86,15 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	// no payment found, so this is the first one. Get the one from foundry
 	if lastUTXOTransaction.PaymentTimestamp == 0 {
-		timefarmStarted, err := s.apiRequester.GetFarmStartTime(ctx, farm.SubAccountName)
-		if err != nil {
-			return nil
+		if s.config.IsTesting {
+			lastPaymentTimestamp = 0
+		} else {
+			timefarmStarted, err := s.apiRequester.GetFarmStartTime(ctx, farm.SubAccountName)
+			if err != nil {
+				return nil
+			}
+			lastPaymentTimestamp = timefarmStarted
 		}
-		lastPaymentTimestamp = timefarmStarted
 	} else {
 		lastPaymentTimestamp = lastUTXOTransaction.PaymentTimestamp
 	}
@@ -98,6 +102,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	// for each payment
 	for _, unspentTxForFarm := range unspentTxsForFarm {
 		txRawResult, err := s.getUnspentTxDetails(ctx, btcClient, unspentTxForFarm)
+
 		if err != nil {
 			return err
 		}
@@ -169,7 +174,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			farmAuraPoolCollectionsMap[farmAuraPoolCollection.DenomId] = farmAuraPoolCollection
 		}
 
-		nonExpiredNFTsCount := s.filterExpiredNFTs(farmCollectionsWithNFTs)
+		nonExpiredNFTsCount := s.filterExpiredBeforePeriodNFTs(farmCollectionsWithNFTs, lastPaymentTimestamp)
 		log.Debug().Msgf("Non expired NFTs count: %d", nonExpiredNFTsCount)
 
 		if nonExpiredNFTsCount == 0 {
@@ -201,6 +206,13 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		var collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation
 
 		for _, collection := range farmCollectionsWithNFTs {
+			_, ok := farmAuraPoolCollectionsMap[collection.Denom.Id]
+			if !ok {
+				log.Warn().Msgf("aura pool collection not found by denom id {%s}", collection.Denom.Id)
+				continue
+			}
+
+			auraPoolCollection := farmAuraPoolCollectionsMap[collection.Denom.Id]
 			log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
 
 			var CUDOMaintenanceFeeBtcDecimal decimal.Decimal
@@ -227,16 +239,31 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 					return err
 				}
 
+				// nft is minted after this payment period and hsould be skipped currently
+				if nftPeriodStart > periodEnd {
+					continue
+				}
+
 				nftStatistics.PayoutPeriodStart = nftPeriodStart
-				nftStatistics.PayoutPeriodEnd = periodEnd
+
+				// nft expired before within this period
+				if nft.DataJson.ExpirationDate < periodEnd {
+					nftStatistics.PayoutPeriodEnd = nft.DataJson.ExpirationDate
+				} else {
+					nftStatistics.PayoutPeriodEnd = periodEnd
+				}
 
 				// first calculate nft parf ot the farm as percent of hash power
 				totalRewardForNftBtcDecimal := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwnersBtcDecimal)
 
 				// if nft was minted after the last payment, part of the reward before the mint is still for the farm
-				rewardForNftBtcDecimal := calculatePercentByTime(lastPaymentTimestamp, nftPeriodStart, periodEnd, totalRewardForNftBtcDecimal)
-				maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal := s.calculateMaintenanceFeeForNFT(nftPeriodStart,
-					periodEnd, hourlyMaintenanceFeeInBtcDecimal, rewardForNftBtcDecimal)
+				rewardForNftBtcDecimal := calculatePercentByTime(lastPaymentTimestamp, periodEnd, nftStatistics.PayoutPeriodStart, nftStatistics.PayoutPeriodEnd, totalRewardForNftBtcDecimal)
+				maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal := s.calculateMaintenanceFeeForNFT(
+					nftStatistics.PayoutPeriodStart,
+					nftStatistics.PayoutPeriodEnd,
+					hourlyMaintenanceFeeInBtcDecimal,
+					rewardForNftBtcDecimal,
+				)
 				addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, maintenanceFeeBtcDecimal, farm.MaintenanceFeePayoutAddress)
 				addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, s.config.CUDOFeePayoutAddress)
 				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s",
@@ -254,7 +281,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 				nftRewardsAfterFeesBtcDecimal = nftRewardsAfterFeesBtcDecimal.Add(rewardForNftAfterFeeBtcDecimal)
 
 				allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
-					ctx, nftTransferHistory, collection.Denom.Id, nft.Id, nftPeriodStart, periodEnd, &nftStatistics, nft.Owner, s.config.Network, rewardForNftAfterFeeBtcDecimal)
+					ctx, nftTransferHistory, collection.Denom.Id, nft.Id, nftStatistics.PayoutPeriodStart, nftStatistics.PayoutPeriodEnd, &nftStatistics, nft.Owner, s.config.Network, rewardForNftAfterFeeBtcDecimal)
 				if err != nil {
 					return err
 				}
@@ -265,19 +292,13 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			}
 
 			// calculate collection's percent of rewards based on hash power
-			_, ok := farmAuraPoolCollectionsMap[collection.Denom.Id]
-			if !ok {
-				return fmt.Errorf("aura pool collection not found by denom id {%s}", collection.Denom.Id)
-			}
-			auraPoolCollection := farmAuraPoolCollectionsMap[collection.Denom.Id]
-
 			collectionPartOfFarmDecimal := decimal.NewFromFloat(auraPoolCollection.HashingPower / currentHashPowerForFarm)
 
 			collectionAwardAllocation := totalRewardForFarmAfterCudosFeeBtcDecimal.Mul(collectionPartOfFarmDecimal)
 			cudoGeneralFeeForCollection := cudosFeeOfTotalRewardBtcDecimal.Mul(collectionPartOfFarmDecimal)
 			CUDOMaintenanceFeeBtcDecimalForCollection := CUDOMaintenanceFeeBtcDecimal
 			farmMaintenanceFeeBtcDecimalForCollection := farmMaintenanceFeeBtcDecimal
-			farmLeftoverForCollection := collectionAwardAllocation.Sub(nftRewardsAfterFeesBtcDecimal).Add(CUDOMaintenanceFeeBtcDecimalForCollection).Sub(farmMaintenanceFeeBtcDecimalForCollection)
+			farmLeftoverForCollection := collectionAwardAllocation.Sub(nftRewardsAfterFeesBtcDecimal).Sub(CUDOMaintenanceFeeBtcDecimalForCollection).Sub(farmMaintenanceFeeBtcDecimalForCollection)
 
 			var collectionPaymentAllocation types.CollectionPaymentAllocation
 			collectionPaymentAllocation.FarmId = farm.Id

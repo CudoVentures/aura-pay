@@ -60,7 +60,7 @@ func TestSumMintedHashPowerForAllCollections(t *testing.T) {
 		},
 	}
 	result := sumMintedHashPowerForAllCollections(collections)
-	require.Equal(t, 1669.01, result)
+	require.Equal(t, 1674.01, result)
 }
 
 func TestCalculatePercentShouldReturnZeroIfInvalidHashingPowerProvided(t *testing.T) {

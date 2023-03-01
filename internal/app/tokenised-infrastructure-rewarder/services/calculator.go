@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 )
 
@@ -18,7 +16,10 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 	collectionDenomId, nftId string, periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, payoutAddrNetwork string, rewardForNftAfterFeeBtcDecimal decimal.Decimal) (map[string]float64, error) {
 
 	totalPeriodTimeInSeconds := periodEnd - periodStart
-	if totalPeriodTimeInSeconds <= 0 {
+	// tx time is block time
+	// many transactions can have the same timestamps
+	// so 0 time between last payment tx and current is a valid case
+	if totalPeriodTimeInSeconds < 0 {
 		return nil, fmt.Errorf("invalid period, start (%d) end (%d)", periodStart, periodEnd)
 	}
 
@@ -171,10 +172,6 @@ func sumMintedHashPowerForCollection(collection types.Collection) float64 {
 	var totalMintedHashPowerForCollection float64
 
 	for _, nft := range collection.Nfts {
-		if time.Now().Unix() > nft.DataJson.ExpirationDate {
-			log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
-			continue
-		}
 		totalMintedHashPowerForCollection += nft.DataJson.HashRateOwned
 	}
 
@@ -198,12 +195,12 @@ func calculatePercent(available float64, actual float64, reward decimal.Decimal)
 	return calculatedReward
 }
 
-func calculatePercentByTime(timestampPrevPayment, timestampMint, timestampCurrentPayment int64, totalRewardForPeriod decimal.Decimal) decimal.Decimal {
-	if timestampMint <= timestampPrevPayment {
+func calculatePercentByTime(timestampPrevPayment, timestampCurrentPayment, nftStartTime, nftEndTime int64, totalRewardForPeriod decimal.Decimal) decimal.Decimal {
+	if nftStartTime <= timestampPrevPayment && nftEndTime >= timestampCurrentPayment {
 		return totalRewardForPeriod
 	}
 
-	timeMinted := timestampCurrentPayment - timestampMint
+	timeMinted := nftEndTime - nftStartTime
 	wholePeriod := timestampCurrentPayment - timestampPrevPayment
 	percentOfPeriodMitned := decimal.NewFromInt(timeMinted).Div(decimal.NewFromInt(wholePeriod))
 

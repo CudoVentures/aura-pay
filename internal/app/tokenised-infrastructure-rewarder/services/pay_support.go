@@ -60,15 +60,15 @@ func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.
 	return verifiedCollectionIds, nil
 }
 
-func (s *PayService) filterExpiredNFTs(farmCollectionsWithNFTs []types.Collection) int {
+func (s *PayService) filterExpiredBeforePeriodNFTs(farmCollectionsWithNFTs []types.Collection, periodStart int64) int {
 	nonExpiredNFTsCount := 0
-	now := s.helper.Unix()
 	for i := 0; i < len(farmCollectionsWithNFTs); i++ {
 		var nonExpiredNFTs []types.NFT
 		for j := 0; j < len(farmCollectionsWithNFTs[i].Nfts); j++ {
 			currentNft := farmCollectionsWithNFTs[i].Nfts[j]
-			if now > currentNft.DataJson.ExpirationDate {
-				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", farmCollectionsWithNFTs[i].Denom.Id,
+			if periodStart > currentNft.DataJson.ExpirationDate {
+
+				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired before period start! Skipping....", farmCollectionsWithNFTs[i].Denom.Id,
 					currentNft.Id, currentNft.DataJson.ExpirationDate)
 				continue
 			}
@@ -96,6 +96,7 @@ func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomI
 	return nftTransferHistory, nil
 }
 
+// returns last payment time for this nft or nft mint time
 func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, error) {
 	l := len(payoutTimes)
 	if l == 0 { // first time payment - start time is time of minting
@@ -168,6 +169,7 @@ func isChangeTransaction(unspentTx btcjson.ListUnspentResult, farmAddresses []st
 }
 
 func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentResult, storage Storage) (bool, error) {
+
 	transaction, err := storage.GetUTXOTransaction(ctx, unspentTx.TxID)
 	switch err {
 	case nil:
@@ -196,7 +198,7 @@ func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountIn
 	result := make(map[string]float64)
 	for k, v := range destinationAddressesWithAmount {
 		if v.ThresholdReached {
-			amountString := v.Amount.StringFixedBank(8)
+			amountString := v.Amount.RoundFloor(8).String()
 			amountFloat, err := strconv.ParseFloat(amountString, 64)
 			if err != nil {
 				return nil, err
