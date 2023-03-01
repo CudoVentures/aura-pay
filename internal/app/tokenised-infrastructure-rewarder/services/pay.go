@@ -95,6 +95,20 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		lastPaymentTimestamp = lastUTXOTransaction.PaymentTimestamp
 	}
 
+	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := btcClient.WalletLock(); err != nil {
+			log.Error().Msgf("Failed to lock wallet %s: %s", farm.SubAccountName, err)
+			return
+		}
+
+		log.Debug().Msgf("Farm Wallet: {%s} locked", farm.SubAccountName)
+	}()
+
 	// for each payment
 	for _, unspentTxForFarm := range unspentTxsForFarm {
 		txRawResult, err := s.getUnspentTxDetails(ctx, btcClient, unspentTxForFarm)
@@ -219,21 +233,12 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			var nftRewardsAfterFeesBtcDecimal decimal.Decimal
 
 			for _, nft := range collection.Nfts {
-				var nftStatistics types.NFTStatistics
-				nftStatistics.TokenId = nft.Id
-				nftStatistics.DenomId = collection.Denom.Id
-
 				nftTransferHistory, err := s.getNftTransferHistory(ctx, collection.Denom.Id, nft.Id)
 				if err != nil {
 					return err
 				}
 
-				payoutTimes, err := storage.GetPayoutTimesForNFT(ctx, collection.Denom.Id, nft.Id)
-				if err != nil {
-					return err
-				}
-
-				nftPeriodStart, err := s.findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+				nftPeriodStart, nftPeriodEnd, err := s.getNftTimestamps(ctx, storage, nft, nftTransferHistory, collection.Denom.Id, periodEnd)
 				if err != nil {
 					return err
 				}
@@ -243,49 +248,46 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 					continue
 				}
 
-				nftStatistics.PayoutPeriodStart = nftPeriodStart
-
-				// nft expired before within this period
-				if nft.DataJson.ExpirationDate < periodEnd {
-					nftStatistics.PayoutPeriodEnd = nft.DataJson.ExpirationDate
-				} else {
-					nftStatistics.PayoutPeriodEnd = periodEnd
-				}
-
 				// first calculate nft parf ot the farm as percent of hash power
 				totalRewardForNftBtcDecimal := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwnersBtcDecimal)
 
 				// if nft was minted after the last payment, part of the reward before the mint is still for the farm
-				rewardForNftBtcDecimal := calculatePercentByTime(lastPaymentTimestamp, periodEnd, nftStatistics.PayoutPeriodStart, nftStatistics.PayoutPeriodEnd, totalRewardForNftBtcDecimal)
+				rewardForNftBtcDecimal := calculatePercentByTime(lastPaymentTimestamp, periodEnd, nftPeriodStart, nftPeriodEnd, totalRewardForNftBtcDecimal)
 				maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal := s.calculateMaintenanceFeeForNFT(
-					nftStatistics.PayoutPeriodStart,
-					nftStatistics.PayoutPeriodEnd,
+					nftPeriodStart,
+					nftPeriodEnd,
 					hourlyMaintenanceFeeInBtcDecimal,
 					rewardForNftBtcDecimal,
 				)
+
+				// distribute maintenance fees
 				addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, maintenanceFeeBtcDecimal, farm.MaintenanceFeePayoutAddress)
 				addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, s.config.CUDOFeePayoutAddress)
-				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s",
-					collection.Denom.Id, nft.Id, rewardForNftAfterFeeBtcDecimal)
-				log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
-					collection.Denom.Id, nft.Id, maintenanceFeeBtcDecimal)
-				log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s",
-					s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFeeBtcDecimal)
-				nftStatistics.Reward = rewardForNftAfterFeeBtcDecimal
-				nftStatistics.MaintenanceFee = maintenanceFeeBtcDecimal
-				nftStatistics.CUDOPartOfMaintenanceFee = cudoPartOfMaintenanceFeeBtcDecimal
 
 				CUDOMaintenanceFeeBtcDecimal = CUDOMaintenanceFeeBtcDecimal.Add(cudoPartOfMaintenanceFeeBtcDecimal)
 				farmMaintenanceFeeBtcDecimal = farmMaintenanceFeeBtcDecimal.Add(maintenanceFeeBtcDecimal)
 				nftRewardsAfterFeesBtcDecimal = nftRewardsAfterFeesBtcDecimal.Add(rewardForNftAfterFeeBtcDecimal)
 
-				allNftOwnersForTimePeriodWithRewardPercent, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
-					ctx, nftTransferHistory, collection.Denom.Id, nft.Id, nftStatistics.PayoutPeriodStart, nftStatistics.PayoutPeriodEnd, &nftStatistics, nft.Owner, s.config.Network, rewardForNftAfterFeeBtcDecimal)
+				allNftOwnersForTimePeriodWithRewardPercent, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
+					ctx, nftTransferHistory, collection.Denom.Id, nft.Id, nftPeriodStart, nftPeriodEnd, nft.Owner, s.config.Network, rewardForNftAfterFeeBtcDecimal)
 				if err != nil {
 					return err
 				}
 
-				statistics = append(statistics, nftStatistics)
+				statistics = append(statistics, types.NFTStatistics{
+					TokenId:                  nft.Id,
+					DenomId:                  collection.Denom.Id,
+					PayoutPeriodStart:        nftPeriodStart,
+					PayoutPeriodEnd:          nftPeriodEnd,
+					Reward:                   rewardForNftAfterFeeBtcDecimal,
+					MaintenanceFee:           maintenanceFeeBtcDecimal,
+					CUDOPartOfMaintenanceFee: cudoPartOfMaintenanceFeeBtcDecimal,
+					NFTOwnersForPeriod:       nftOwnersForPeriod,
+				})
+
+				log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, rewardForNftAfterFeeBtcDecimal)
+				log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, maintenanceFeeBtcDecimal)
+				log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, cudoPartOfMaintenanceFeeBtcDecimal)
 
 				distributeRewardsToOwners(allNftOwnersForTimePeriodWithRewardPercent, rewardForNftAfterFeeBtcDecimal, destinationAddressesWithAmountBtcDecimal)
 			}
@@ -359,20 +361,6 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		}
 
 		log.Debug().Msgf("Addresses above threshold that will be sent for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(addressesToSendBtc))
-
-		err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
-		if err != nil {
-			return err
-		}
-
-		defer func() {
-			if err := btcClient.WalletLock(); err != nil {
-				log.Error().Msgf("Failed to lock wallet %s: %s", farm.SubAccountName, err)
-				return
-			}
-
-			log.Debug().Msgf("Farm Wallet: {%s} locked", farm.SubAccountName)
-		}()
 
 		txHash := ""
 		if len(addressesToSendBtc) > 0 {

@@ -81,6 +81,28 @@ func (s *PayService) filterExpiredBeforePeriodNFTs(farmCollectionsWithNFTs []typ
 	return nonExpiredNFTsCount
 }
 
+func (s *PayService) getNftTimestamps(ctx context.Context, storage Storage, nft types.NFT, nftTransferHistory types.NftTransferHistory, denomId string, periodEnd int64) (int64, int64, error) {
+	payoutTimes, err := storage.GetPayoutTimesForNFT(ctx, denomId, nft.Id)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	nftPeriodStart, err := s.findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	var nftPeriodEnd int64
+	// nft expired before within this period
+	if nft.DataJson.ExpirationDate < periodEnd {
+		nftPeriodEnd = nft.DataJson.ExpirationDate
+	} else {
+		nftPeriodEnd = periodEnd
+	}
+
+	return nftPeriodStart, nftPeriodEnd, nil
+}
+
 func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomId, nftId string) (types.NftTransferHistory, error) {
 	// TODO: This oculd be optimized, why fetching all events everytime
 	nftTransferHistory, err := s.apiRequester.GetNftTransferHistory(ctx, collectionDenomId, nftId, 1) // all transfer events

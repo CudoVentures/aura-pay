@@ -82,7 +82,7 @@ func TestCalculatePercent(t *testing.T) {
 
 func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnErrorIfInvalidPeriod(t *testing.T) {
 	s := NewPayService(nil, nil, nil, nil)
-	_, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "", "", 1000, 100, nil, "", "", decimal.Zero)
+	_, _, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "", "", 1000, 100, "", "", decimal.Zero)
 	require.Equal(t, errors.New("invalid period, start (1000) end (100)"), err)
 }
 
@@ -96,7 +96,9 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnHundredPerc
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
+	percents, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
+	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
+
 	require.NoError(t, err)
 	require.Equal(t, map[string]float64{payoutAddr: float64(100)}, percents)
 
@@ -145,8 +147,9 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
+	percents, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
 	require.NoError(t, err)
+	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
 	expectedPercents := map[string]float64{
 		"nft_owner_1_payout_addr": float64(63.63636363636363),
@@ -244,8 +247,9 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
+	percents, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
 	require.NoError(t, err)
+	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
 	expectedPercents := map[string]float64{
 		"nft_minter_payout_addr":  float64(9.090909090909092),
@@ -378,8 +382,9 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
+	percents, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
 	require.NoError(t, err)
+	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
 	expectedPercents := map[string]float64{
 		"nft_minter_payout_addr":  float64(9.090909090909092),
@@ -467,8 +472,9 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldFailIfGetPayoutAd
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	_, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
+	_, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
 	require.Equal(t, failErr, err)
+	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
 	history := `
 	{
@@ -489,7 +495,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldFailIfGetPayoutAd
 	var nftTransferHistory types.NftTransferHistory
 	require.NoError(t, json.Unmarshal([]byte(history), &nftTransferHistory))
 
-	_, err = s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, &statistics, currentNftOwner, "BTC", decimal.Zero)
+	_, _, err = s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
 	require.Equal(t, failErr, err)
 }
 
