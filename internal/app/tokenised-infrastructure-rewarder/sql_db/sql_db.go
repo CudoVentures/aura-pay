@@ -16,7 +16,7 @@ func NewSqlDB(db *sqlx.DB) *SqlDB {
 
 func (sdb *SqlDB) SaveStatistics(
 	ctx context.Context,
-	farmPaymentStatistics types.FarmPayment,
+	receivedRewardForFarmBtcDecimal decimal.Decimal,
 	collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation,
 	destinationAddressesWithAmount map[string]types.AmountInfo,
 	statistics []types.NFTStatistics,
@@ -26,7 +26,7 @@ func (sdb *SqlDB) SaveStatistics(
 ) (retErr error) {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
-		farmPaymentId, err := tx.saveFarmPaymentStatistics(ctx, farmId, farmPaymentStatistics.AmountBTC)
+		farmPaymentId, err := tx.saveFarmPaymentStatistics(ctx, farmId, receivedRewardForFarmBtcDecimal)
 		if err != nil {
 			return err
 		}

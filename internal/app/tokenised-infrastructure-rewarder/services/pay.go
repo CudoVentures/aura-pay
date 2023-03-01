@@ -63,11 +63,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
 	}()
 
-	unspentTxsForFarm, err := s.getUnspentTxsForFarm(
-		ctx,
-		btcClient,
-		storage,
-		[]string{farm.AddressForReceivingRewardsFromPool})
+	unspentTxsForFarm, err := s.getUnspentTxsForFarm(ctx, btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool})
 	if err != nil {
 		return err
 	}
@@ -102,7 +98,6 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	// for each payment
 	for _, unspentTxForFarm := range unspentTxsForFarm {
 		txRawResult, err := s.getUnspentTxDetails(ctx, btcClient, unspentTxForFarm)
-
 		if err != nil {
 			return err
 		}
@@ -111,12 +106,10 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		periodEnd := txRawResult.Time
 
 		receivedRewardForFarmBtcDecimal := decimal.NewFromFloat(unspentTxForFarm.Amount)
-		var farmPaymentStatistics types.FarmPayment
-		farmPaymentStatistics.FarmId = farm.Id
-		farmPaymentStatistics.AmountBTC = receivedRewardForFarmBtcDecimal
-
 		totalRewardForFarmAfterCudosFeeBtcDecimal, cudosFeeOfTotalRewardBtcDecimal := s.calculateCudosFeeOfTotalFarmIncome(receivedRewardForFarmBtcDecimal)
 
+		log.Debug().Msgf("-------------------------------------------------")
+		log.Debug().Msgf("Processing Unspent TX: %s, Payment period: %d to %d", unspentTxForFarm.TxID, lastPaymentTimestamp, periodEnd)
 		log.Debug().Msgf("Total reward for farm \"%s\": %s", farm.SubAccountName, receivedRewardForFarmBtcDecimal)
 		log.Debug().Msgf("Cudos part of total farm reward: %s", cudosFeeOfTotalRewardBtcDecimal)
 		log.Debug().Msgf("Total reward for farm \"%s\" after cudos fee: %s", farm.SubAccountName, totalRewardForFarmAfterCudosFeeBtcDecimal)
@@ -126,21 +119,27 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			return err
 		}
 
-		var currentHashPowerForFarm float64
-		if s.config.IsTesting {
-			currentHashPowerForFarm = farm.TotalHashPower // for testing & QA
-		} else {
-			// used to get current hash from FOUNDRY //
-			currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName,
-				time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
-			if err != nil {
-				return err
-			}
+		// currently always getting the hash power as set in the farm entity in the Aura Pool Service
+		// that way the rewards will be sent proportionally, no matter the current hash power of the farm
+		// otherwise there is a case where the farm hash power falls below the registered and the calculations fail
+		// if this case is to be handled, it need more work
+		currentHashPowerForFarm := farm.TotalHashPower
+		// var currentHashPowerForFarm float64
+		// if s.config.IsTesting {
+		// 	currentHashPowerForFarm = farm.TotalHashPower // for testing & QA
+		// } else {
+		// 	// used to get current hash from FOUNDRY //
+		//  // set the date to the period begin?
+		// 	currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName,
+		// 		time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
+		// 	if err != nil {
+		// 		return err
+		// 	}
 
-			if currentHashPowerForFarm <= 0 {
-				return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
-			}
-		}
+		// 	if currentHashPowerForFarm <= 0 {
+		// 		return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
+		// 	}
+		// }
 
 		log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
 
@@ -390,11 +389,13 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			return err
 		}
 
-		if err := storage.SaveStatistics(ctx, farmPaymentStatistics, collectionPaymentAllocationsStatistics, addressesWithAmountInfo, statistics, txHash, farm.Id, farm.SubAccountName); err != nil {
+		if err := storage.SaveStatistics(ctx, receivedRewardForFarmBtcDecimal, collectionPaymentAllocationsStatistics, addressesWithAmountInfo, statistics, txHash, farm.Id, farm.SubAccountName); err != nil {
 			log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
 			return err
 		}
+		lastPaymentTimestamp = periodEnd
 	}
+
 	return nil
 }
 
@@ -472,7 +473,7 @@ type Storage interface {
 
 	GetPayoutTimesForNFT(ctx context.Context, collectionDenomId, nftId string) ([]types.NFTStatistics, error)
 
-	SaveStatistics(ctx context.Context, farmPaymentStatistics types.FarmPayment, collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash string, farmId int64, farmSubAccountName string) error
+	SaveStatistics(ctx context.Context, receivedRewardForFarmBtcDecimal decimal.Decimal, collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash string, farmId int64, farmSubAccountName string) error
 
 	GetTxHashesByStatus(ctx context.Context, status string) ([]types.TransactionHashWithStatus, error)
 

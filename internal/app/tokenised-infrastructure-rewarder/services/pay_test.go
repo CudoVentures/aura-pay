@@ -181,8 +181,8 @@ func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 	storage := setupMockStorage()
 
 	storage.On("SaveStatistics", mock.Anything,
-		mock.MatchedBy(func(farmPayment types.FarmPayment) bool {
-			return farmPayment.AmountBTC.Equal(decimal.NewFromFloat(6.25))
+		mock.MatchedBy(func(payment decimal.Decimal) bool {
+			return payment.Equal(decimal.NewFromFloat(6.25))
 		}),
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
@@ -327,8 +327,8 @@ func TestPayService_ProcessPayment_Expiration_Between_Payments(t *testing.T) {
 	storage := setupMockStorage()
 
 	storage.On("SaveStatistics", mock.Anything,
-		mock.MatchedBy(func(farmPayment types.FarmPayment) bool {
-			return farmPayment.AmountBTC.Equal(decimal.NewFromFloat(6.25))
+		mock.MatchedBy(func(payment decimal.Decimal) bool {
+			return payment.Equal(decimal.NewFromFloat(6.25))
 		}),
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
@@ -471,8 +471,8 @@ func TestPayService_ProcessPayment_NFT_Minted_After_Payment_Period(t *testing.T)
 	storage := setupMockStorage()
 
 	storage.On("SaveStatistics", mock.Anything,
-		mock.MatchedBy(func(farmPayment types.FarmPayment) bool {
-			return farmPayment.AmountBTC.Equal(decimal.NewFromFloat(6.25))
+		mock.MatchedBy(func(payment decimal.Decimal) bool {
+			return payment.Equal(decimal.NewFromFloat(6.25))
 		}),
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
@@ -722,8 +722,8 @@ func setupMockStorage() *mockStorage {
 
 	storage.On("GetPayoutTimesForNFT", mock.Anything, mock.Anything, mock.Anything).Return([]types.NFTStatistics{}, nil)
 	storage.On("SaveStatistics", mock.Anything,
-		mock.MatchedBy(func(farmPayment types.FarmPayment) bool {
-			return farmPayment.AmountBTC.Equal(decimal.NewFromFloat(6.25))
+		mock.MatchedBy(func(payment decimal.Decimal) bool {
+			return payment.Equal(decimal.NewFromFloat(6.25))
 		}),
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 
@@ -852,8 +852,8 @@ func (ms *mockStorage) GetPayoutTimesForNFT(ctx context.Context, collectionDenom
 	return args.Get(0).([]types.NFTStatistics), args.Error(1)
 }
 
-func (ms *mockStorage) SaveStatistics(ctx context.Context, farmPaymentStatistics types.FarmPayment, collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash string, farmId int64, farmSubAccountName string) error {
-	args := ms.Called(ctx, farmPaymentStatistics, destinationAddressesWithAmount, collectionPaymentAllocationsStatistics, statistics, txHash, farmId, farmSubAccountName)
+func (ms *mockStorage) SaveStatistics(ctx context.Context, payment decimal.Decimal, collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation, destinationAddressesWithAmount map[string]types.AmountInfo, statistics []types.NFTStatistics, txHash string, farmId int64, farmSubAccountName string) error {
+	args := ms.Called(ctx, payment, destinationAddressesWithAmount, collectionPaymentAllocationsStatistics, statistics, txHash, farmId, farmSubAccountName)
 	return args.Error(0)
 }
 
