@@ -114,12 +114,13 @@ type RBFTransactionHistory struct {
 }
 
 type UTXOTransaction struct {
-	Id        string    `db:"id"`
-	FarmId    string    `db:"farm_id"`
-	TxHash    string    `db:"tx_hash"`
-	Processed bool      `db:"processed"`
-	CreatedAt time.Time `db:"createdAt"`
-	UpdatedAt time.Time `db:"updatedAt"`
+	Id               string    `db:"id"`
+	FarmId           string    `db:"farm_id"`
+	TxHash           string    `db:"tx_hash"`
+	PaymentTimestamp int64     `db:"payment_timestamp"`
+	Processed        bool      `db:"processed"`
+	CreatedAt        time.Time `db:"createdAt"`
+	UpdatedAt        time.Time `db:"updatedAt"`
 }
 
 type AddressThresholdAmountByFarm struct {

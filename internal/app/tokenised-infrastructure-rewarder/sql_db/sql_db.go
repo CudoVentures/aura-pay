@@ -16,7 +16,7 @@ func NewSqlDB(db *sqlx.DB) *SqlDB {
 
 func (sdb *SqlDB) SaveStatistics(
 	ctx context.Context,
-	farmPaymentStatistics types.FarmPayment,
+	receivedRewardForFarmBtcDecimal decimal.Decimal,
 	collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation,
 	destinationAddressesWithAmount map[string]types.AmountInfo,
 	statistics []types.NFTStatistics,
@@ -26,7 +26,7 @@ func (sdb *SqlDB) SaveStatistics(
 ) (retErr error) {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
-		farmPaymentId, err := tx.saveFarmPaymentStatistics(ctx, farmId, farmPaymentStatistics.AmountBTC)
+		farmPaymentId, err := tx.saveFarmPaymentStatistics(ctx, farmId, receivedRewardForFarmBtcDecimal)
 		if err != nil {
 			return err
 		}
@@ -115,10 +115,10 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, 
 	})
 }
 
-func (sdb *SqlDB) UpdateThresholdStatuses(ctx context.Context, processedTransactions []string, addressesWithThresholdToUpdate map[string]decimal.Decimal, farmId int64) (retErr error) {
+func (sdb *SqlDB) UpdateThresholdStatus(ctx context.Context, processedTransaction string, paymentTimestamp int64, addressesWithThresholdToUpdate map[string]decimal.Decimal, farmId int64) (retErr error) {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
-		if retErr = tx.markUTXOsAsProcessed(ctx, processedTransactions); retErr != nil {
+		if retErr = tx.markUTXOAsProcessed(ctx, processedTransaction, paymentTimestamp, farmId); retErr != nil {
 			return fmt.Errorf("failed to commit transaction: %s", retErr)
 		}
 

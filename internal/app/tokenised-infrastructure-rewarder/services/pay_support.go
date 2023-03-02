@@ -6,31 +6,40 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 )
 
-func (s *PayService) getTotalRewardForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) (decimal.Decimal, []string, error) {
-	var totalAmountBTC decimal.Decimal
-	var transactionIdsToMarkAsProcessed []string // to be marked as processed at the end of the loop
+func (s *PayService) getUnspentTxDetails(ctx context.Context, btcClient BtcClient, unspentResult btcjson.ListUnspentResult) (btcjson.TxRawResult, error) {
+	txHash, err := chainhash.NewHashFromStr(unspentResult.TxID)
+	if err != nil {
+		return btcjson.TxRawResult{}, err
+	}
+
+	txRawResult, err := btcClient.GetRawTransactionVerbose(txHash)
+	if err != nil {
+		return btcjson.TxRawResult{}, err
+	}
+
+	return *txRawResult, nil
+}
+
+func (s *PayService) getUnspentTxsForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
 	unspentTransactions, err := btcClient.ListUnspent()
 	if err != nil {
-		return decimal.Zero, nil, err
+		return nil, err
 	}
 
 	validUnspentTransactions, err := filterUnspentTransactions(ctx, unspentTransactions, storage, farmAddresses)
 	if err != nil {
-		return decimal.Zero, nil, err
+		return nil, err
 	}
 
-	for _, elem := range validUnspentTransactions {
-		totalAmountBTC = totalAmountBTC.Add(decimal.NewFromFloat(elem.Amount))
-		transactionIdsToMarkAsProcessed = append(transactionIdsToMarkAsProcessed, elem.TxID)
-	}
-
-	return totalAmountBTC, transactionIdsToMarkAsProcessed, nil
+	return validUnspentTransactions, nil
 }
 
 func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.CollectionData) ([]string, error) {
@@ -51,15 +60,15 @@ func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.
 	return verifiedCollectionIds, nil
 }
 
-func (s *PayService) filterExpiredNFTs(farmCollectionsWithNFTs []types.Collection) int {
+func (s *PayService) filterExpiredBeforePeriodNFTs(farmCollectionsWithNFTs []types.Collection, periodStart int64) int {
 	nonExpiredNFTsCount := 0
-	now := s.helper.Unix()
 	for i := 0; i < len(farmCollectionsWithNFTs); i++ {
 		var nonExpiredNFTs []types.NFT
 		for j := 0; j < len(farmCollectionsWithNFTs[i].Nfts); j++ {
 			currentNft := farmCollectionsWithNFTs[i].Nfts[j]
-			if now > currentNft.DataJson.ExpirationDate {
-				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", farmCollectionsWithNFTs[i].Denom.Id,
+			if periodStart > currentNft.DataJson.ExpirationDate {
+
+				log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired before period start! Skipping....", farmCollectionsWithNFTs[i].Denom.Id,
 					currentNft.Id, currentNft.DataJson.ExpirationDate)
 				continue
 			}
@@ -70,6 +79,28 @@ func (s *PayService) filterExpiredNFTs(farmCollectionsWithNFTs []types.Collectio
 	}
 
 	return nonExpiredNFTsCount
+}
+
+func (s *PayService) getNftTimestamps(ctx context.Context, storage Storage, nft types.NFT, nftTransferHistory types.NftTransferHistory, denomId string, periodEnd int64) (int64, int64, error) {
+	payoutTimes, err := storage.GetPayoutTimesForNFT(ctx, denomId, nft.Id)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	nftPeriodStart, err := s.findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	var nftPeriodEnd int64
+	// nft expired before within this period
+	if nft.DataJson.ExpirationDate < periodEnd {
+		nftPeriodEnd = nft.DataJson.ExpirationDate
+	} else {
+		nftPeriodEnd = periodEnd
+	}
+
+	return nftPeriodStart, nftPeriodEnd, nil
 }
 
 func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomId, nftId string) (types.NftTransferHistory, error) {
@@ -87,12 +118,13 @@ func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomI
 	return nftTransferHistory, nil
 }
 
-func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, int64, error) {
+// returns last payment time for this nft or nft mint time
+func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, error) {
 	l := len(payoutTimes)
-	if l == 0 { // first time payment - start time is time of minting, end time is now
-		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, s.helper.Unix(), nil
+	if l == 0 { // first time payment - start time is time of minting
+		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, nil
 	}
-	return payoutTimes[l-1].PayoutPeriodEnd, s.helper.Unix(), nil // last time we paid until now
+	return payoutTimes[l-1].PayoutPeriodEnd, nil // last time we paid until now
 }
 
 func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmountsBtcDecimal map[string]decimal.Decimal, storage Storage, farmId int64) (map[string]decimal.Decimal, map[string]types.AmountInfo, error) {
@@ -159,6 +191,7 @@ func isChangeTransaction(unspentTx btcjson.ListUnspentResult, farmAddresses []st
 }
 
 func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentResult, storage Storage) (bool, error) {
+
 	transaction, err := storage.GetUTXOTransaction(ctx, unspentTx.TxID)
 	switch err {
 	case nil:
@@ -187,7 +220,7 @@ func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountIn
 	result := make(map[string]float64)
 	for k, v := range destinationAddressesWithAmount {
 		if v.ThresholdReached {
-			amountString := v.Amount.StringFixedBank(8)
+			amountString := v.Amount.RoundFloor(8).String()
 			amountFloat, err := strconv.ParseFloat(amountString, 64)
 			if err != nil {
 				return nil, err

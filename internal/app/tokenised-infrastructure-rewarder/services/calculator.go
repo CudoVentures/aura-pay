@@ -3,11 +3,8 @@ package services
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 )
 
@@ -15,11 +12,14 @@ import (
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
 func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory,
-	collectionDenomId, nftId string, periodStart, periodEnd int64, statistics *types.NFTStatistics, currentNftOwner, payoutAddrNetwork string, rewardForNftAfterFeeBtcDecimal decimal.Decimal) (map[string]float64, error) {
+	collectionDenomId, nftId string, periodStart, periodEnd int64, currentNftOwner, payoutAddrNetwork string, rewardForNftAfterFeeBtcDecimal decimal.Decimal) (map[string]float64, []types.NFTOwnerInformation, error) {
 
 	totalPeriodTimeInSeconds := periodEnd - periodStart
-	if totalPeriodTimeInSeconds <= 0 {
-		return nil, fmt.Errorf("invalid period, start (%d) end (%d)", periodStart, periodEnd)
+	// tx time is block time
+	// many transactions can have the same timestamps
+	// so 0 time between last payment tx and current is a valid case
+	if totalPeriodTimeInSeconds < 0 {
+		return nil, nil, fmt.Errorf("invalid period, start (%d) end (%d)", periodStart, periodEnd)
 	}
 
 	var transferHistoryForTimePeriod []types.NftTransferEvent
@@ -32,16 +32,15 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 	}
 
 	ownersWithPercentOwnedTime := make(map[string]float64)
-	statisticsAdditionalData := types.NFTOwnerInformation{}
-
 	// no transfers for this period, we give the current owner 100%
 	if len(transferHistoryForTimePeriod) == 0 {
 		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, currentNftOwner, payoutAddrNetwork, nftId, collectionDenomId)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		ownersWithPercentOwnedTime[nftPayoutAddress] = 100
 
+		statisticsAdditionalData := types.NFTOwnerInformation{}
 		statisticsAdditionalData.TimeOwnedFrom = periodStart
 		statisticsAdditionalData.TimeOwnedTo = periodEnd
 		statisticsAdditionalData.TotalTimeOwned = periodEnd - periodStart
@@ -50,9 +49,17 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		statisticsAdditionalData.Owner = currentNftOwner
 		statisticsAdditionalData.Reward = rewardForNftAfterFeeBtcDecimal
 
-		statistics.NFTOwnersForPeriod = []types.NFTOwnerInformation{statisticsAdditionalData}
-
-		return ownersWithPercentOwnedTime, nil
+		return ownersWithPercentOwnedTime,
+			[]types.NFTOwnerInformation{{
+				TimeOwnedFrom:      periodStart,
+				TimeOwnedTo:        periodEnd,
+				TotalTimeOwned:     periodEnd - periodStart,
+				PayoutAddress:      nftPayoutAddress,
+				PercentOfTimeOwned: 100,
+				Owner:              currentNftOwner,
+				Reward:             rewardForNftAfterFeeBtcDecimal,
+			}},
+			nil
 	}
 
 	if periodStart < transferHistoryForTimePeriod[0].Timestamp {
@@ -74,45 +81,41 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 	})
 
 	var totalCalculatedReward decimal.Decimal
-
+	nftOwnersInformation := []types.NFTOwnerInformation{}
 	for i := 0; i < len(transferHistoryForTimePeriod)-1; i++ {
-
 		timeOwned := transferHistoryForTimePeriod[i+1].Timestamp - transferHistoryForTimePeriod[i].Timestamp
-		statisticsAdditionalData.TimeOwnedFrom = transferHistoryForTimePeriod[i].Timestamp
-		statisticsAdditionalData.TimeOwnedTo = transferHistoryForTimePeriod[i+1].Timestamp
-
-		statisticsAdditionalData.TotalTimeOwned = timeOwned
-
 		percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
-		statisticsAdditionalData.PercentOfTimeOwned = percentOfTimeOwned
 
 		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, transferHistoryForTimePeriod[i].To, payoutAddrNetwork, nftId, collectionDenomId)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
-		statisticsAdditionalData.Owner = transferHistoryForTimePeriod[i].To
-
 		calculatedReward := rewardForNftAfterFeeBtcDecimal.Mul(decimal.NewFromFloat(percentOfTimeOwned / 100))
-		statisticsAdditionalData.Reward = calculatedReward
 		totalCalculatedReward = totalCalculatedReward.Add(calculatedReward)
-
 		ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
 
-		statistics.NFTOwnersForPeriod = append(statistics.NFTOwnersForPeriod, statisticsAdditionalData)
+		nftOwnersInformation = append(nftOwnersInformation, types.NFTOwnerInformation{
+			PercentOfTimeOwned: percentOfTimeOwned,
+			TotalTimeOwned:     timeOwned,
+			TimeOwnedFrom:      transferHistoryForTimePeriod[i].Timestamp,
+			TimeOwnedTo:        transferHistoryForTimePeriod[i+1].Timestamp,
+			PayoutAddress:      nftPayoutAddress,
+			Owner:              transferHistoryForTimePeriod[i].To,
+			Reward:             calculatedReward,
+		})
 	}
 
 	nftRewardDistributionleftovers := rewardForNftAfterFeeBtcDecimal.Sub(totalCalculatedReward)
 
 	if nftRewardDistributionleftovers.LessThan(decimal.Zero) {
-		return nil, fmt.Errorf("calculated NFT reward distribution is greater than the total given. CalculatedForOwnerDistribution: %s, TotalGiventoDistribute: %s", totalCalculatedReward, rewardForNftAfterFeeBtcDecimal)
+		return nil, nil, fmt.Errorf("calculated NFT reward distribution is greater than the total given. CalculatedForOwnerDistribution: %s, TotalGiventoDistribute: %s", totalCalculatedReward, rewardForNftAfterFeeBtcDecimal)
 	}
 
-	lastOwnerIndex := len(statistics.NFTOwnersForPeriod) - 1
-	statistics.NFTOwnersForPeriod[lastOwnerIndex].Reward = statistics.NFTOwnersForPeriod[lastOwnerIndex].Reward.Add(nftRewardDistributionleftovers)
+	lastOwnerIndex := len(nftOwnersInformation) - 1
+	nftOwnersInformation[lastOwnerIndex].Reward = nftOwnersInformation[lastOwnerIndex].Reward.Add(nftRewardDistributionleftovers)
 
-	return ownersWithPercentOwnedTime, nil
+	return ownersWithPercentOwnedTime, nftOwnersInformation, nil
 }
 
 func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) decimal.Decimal {
@@ -171,19 +174,10 @@ func sumMintedHashPowerForCollection(collection types.Collection) float64 {
 	var totalMintedHashPowerForCollection float64
 
 	for _, nft := range collection.Nfts {
-		if time.Now().Unix() > nft.DataJson.ExpirationDate {
-			log.Info().Msgf("Nft with denomId {%s} and tokenId {%s} and expirationDate {%d} has expired! Skipping....", collection.Denom.Id, nft.Id, nft.DataJson.ExpirationDate)
-			continue
-		}
 		totalMintedHashPowerForCollection += nft.DataJson.HashRateOwned
 	}
 
 	return totalMintedHashPowerForCollection
-}
-
-func roundToPrecision(value float64) (result float64) {
-	result, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", value), 64)
-	return
 }
 
 func calculatePercent(available float64, actual float64, reward decimal.Decimal) decimal.Decimal {
@@ -191,9 +185,21 @@ func calculatePercent(available float64, actual float64, reward decimal.Decimal)
 		return decimal.Zero
 	}
 
-	payoutRewardPercent := actual / available
-	calculatedReward := reward.Mul(decimal.NewFromFloat(payoutRewardPercent))
+	payoutRewardPercent := decimal.NewFromFloat(actual).Div(decimal.NewFromFloat(available))
+	calculatedReward := reward.Mul(payoutRewardPercent)
 
 	// btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
 	return calculatedReward
+}
+
+func calculatePercentByTime(timestampPrevPayment, timestampCurrentPayment, nftStartTime, nftEndTime int64, totalRewardForPeriod decimal.Decimal) decimal.Decimal {
+	if nftStartTime <= timestampPrevPayment && nftEndTime >= timestampCurrentPayment {
+		return totalRewardForPeriod
+	}
+
+	timeMinted := nftEndTime - nftStartTime
+	wholePeriod := timestampCurrentPayment - timestampPrevPayment
+	percentOfPeriodMitned := decimal.NewFromInt(timeMinted).Div(decimal.NewFromInt(wholePeriod))
+
+	return totalRewardForPeriod.Mul(percentOfPeriodMitned)
 }

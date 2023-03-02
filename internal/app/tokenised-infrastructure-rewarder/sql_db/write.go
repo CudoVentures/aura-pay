@@ -130,17 +130,17 @@ func (tx *DbTx) updateCurrentAcummulatedAmountForAddress(ctx context.Context, ad
 	return err
 }
 
-func (tx *DbTx) markUTXOsAsProcessed(ctx context.Context, tx_hashes []string) error {
+func (tx *DbTx) markUTXOAsProcessed(ctx context.Context, tx_hash string, paymentTimestamp, farmId int64) error {
 	var UTXOMaps []map[string]interface{}
-	for _, hash := range tx_hashes {
-		m := map[string]interface{}{
-			"tx_hash":   hash,
-			"processed": true,
-			"createdAt": time.Now().UTC(),
-			"updatedAt": time.Now().UTC(),
-		}
-		UTXOMaps = append(UTXOMaps, m)
+	m := map[string]interface{}{
+		"tx_hash":           tx_hash,
+		"processed":         true,
+		"payment_timestamp": paymentTimestamp,
+		"farm_id":           farmId,
+		"createdAt":         time.Now().UTC(),
+		"updatedAt":         time.Now().UTC(),
 	}
+	UTXOMaps = append(UTXOMaps, m)
 
 	_, err := tx.NamedExecContext(ctx, insertUTXOWithStatus, UTXOMaps)
 	return err
@@ -153,8 +153,8 @@ func (sdb *SqlDB) SetInitialAccumulatedAmountForAddress(ctx context.Context, add
 }
 
 const (
-	insertUTXOWithStatus = `INSERT INTO utxo_transactions (tx_hash, processed, "createdAt", "updatedAt")
-	   VALUES (:tx_hash, :processed, :createdAt, :updatedAt)`
+	insertUTXOWithStatus = `INSERT INTO utxo_transactions (tx_hash, processed, "createdAt", "updatedAt", farm_id, payment_timestamp)
+	   VALUES (:tx_hash, :processed, :createdAt, :updatedAt, :farm_id, :payment_timestamp)`
 
 	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status
 	(tx_hash, status, time_sent, farm_sub_account_name, retry_count, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7)`
