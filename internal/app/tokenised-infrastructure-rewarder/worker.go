@@ -69,7 +69,7 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 
 			if processingError != nil {
 				errorCount++
-				log.Error().Msgf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
+				errorEncountered(config, processingError, errorCount)
 				if errorCount >= config.ServiceMaxErrorCount {
 					maxErrorCountReached(config, err)
 					return
@@ -80,10 +80,20 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 }
 
 func maxErrorCountReached(config *infrastructure.Config, err error) {
-	h := infrastructure.NewHelper(config)
-	message := fmt.Sprintf("Application has exceeded the ServiceMaxErrorCount: {%d} and needs manual intervention!", config.ServiceMaxErrorCount)
+	message := fmt.Sprintf("Application has exceeded the ServiceMaxErrorCount: {%d} and needs manual intervention!\n Error: {%s}", config.ServiceMaxErrorCount, err)
 	log.Error().Msg(message)
-	err = h.SendMail(message, []string{config.SMTPToAddress})
+	sendMail(config, message)
+}
+
+func errorEncountered(config *infrastructure.Config, processingError error, errorCount int) {
+	message := fmt.Sprintf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
+	log.Error().Msg(message)
+	sendMail(config, message)
+}
+
+func sendMail(config *infrastructure.Config, message string) {
+	h := infrastructure.NewHelper(config)
+	err := h.SendMail(message)
 	if err != nil {
 		panic(err)
 	}

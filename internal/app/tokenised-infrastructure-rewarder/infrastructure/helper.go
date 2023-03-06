@@ -1,8 +1,11 @@
 package infrastructure
 
 import (
-	"net/smtp"
+	"fmt"
 	"time"
+
+	"github.com/sendgrid/sendgrid-go"
+	"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
 
 func NewHelper(config *Config) *Helper {
@@ -29,22 +32,17 @@ func (h *Helper) Date() (year int, month time.Month, day int) {
 	return time.Now().Date()
 }
 
-func (h *Helper) SendMail(message string, to []string) error {
-	from := h.config.SMTPFromAddress
-	password := h.config.SMTPPassword
-	smtpHost := h.config.SMTPHost
-	smtpPort := h.config.SMTPPort
-
-	bt := []byte(message)
-
-	// Create authentication
-	auth := smtp.PlainAuth("", from, password, smtpHost)
-
-	// Send actual message
-	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, bt)
+func (h *Helper) SendMail(message string) error {
+	from := mail.NewEmail("Aura Pay Service", h.config.MailFromAddress)
+	subject := "Automatic email from Aura Pay Service"
+	to := mail.NewEmail("User", h.config.MailToAddress)
+	plainTextContent := message
+	htmlContent := fmt.Sprintf("<strong>%s</strong>", message)
+	emailMsg := mail.NewSingleEmail(from, subject, to, plainTextContent, htmlContent)
+	client := sendgrid.NewSendClient(h.config.SendgridApiKey)
+	_, err := client.Send(emailMsg)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
