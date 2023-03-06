@@ -928,7 +928,7 @@ func (_ *mockHelper) Date() (year int, month time.Month, day int) {
 	return 2022, time.October, 24
 }
 
-func (_ *mockHelper) SendMail(message string, to []string) error {
+func (_ *mockHelper) SendMail(message string) error {
 	return nil
 }
 

@@ -18,10 +18,11 @@ import (
 
 func NewPayService(config *infrastructure.Config, apiRequester ApiRequester, helper Helper, btcNetworkParams *types.BtcNetworkParams) *PayService {
 	return &PayService{
-		config:           config,
-		helper:           helper,
-		btcNetworkParams: btcNetworkParams,
-		apiRequester:     apiRequester,
+		config:             config,
+		helper:             helper,
+		btcNetworkParams:   btcNetworkParams,
+		apiRequester:       apiRequester,
+		lastEmailTimestamp: 0,
 	}
 }
 
@@ -33,7 +34,13 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 
 	for _, farm := range farms {
 		if err := s.processFarm(ctx, btcClient, storage, farm); err != nil {
-			log.Error().Msgf("processing farm {%s} failed. Error: %s", farm.SubAccountName, err)
+			msg := fmt.Sprintf("processing farm {%s} failed. Error: %s", farm.SubAccountName, err)
+			// send email only once per hour
+			if s.helper.Unix() >= s.lastEmailTimestamp+int64(time.Minute.Seconds()*30) {
+				s.helper.SendMail(msg)
+				s.lastEmailTimestamp = s.helper.Unix()
+			}
+			log.Error().Msg(msg)
 			continue
 		}
 	}
@@ -411,10 +418,11 @@ func validateFarm(farm types.Farm) error {
 }
 
 type PayService struct {
-	config           *infrastructure.Config
-	helper           Helper
-	btcNetworkParams *types.BtcNetworkParams
-	apiRequester     ApiRequester
+	config             *infrastructure.Config
+	helper             Helper
+	btcNetworkParams   *types.BtcNetworkParams
+	apiRequester       ApiRequester
+	lastEmailTimestamp int64
 }
 
 type ApiRequester interface {
@@ -488,5 +496,5 @@ type Helper interface {
 	DaysIn(m time.Month, year int) int
 	Unix() int64
 	Date() (year int, month time.Month, day int)
-	SendMail(message string, to []string) error
+	SendMail(message string) error
 }

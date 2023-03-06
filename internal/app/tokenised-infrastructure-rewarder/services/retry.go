@@ -72,7 +72,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 	if retryCountExceeded {
 		message := fmt.Sprintf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; Farm Name: {%s}", tx.TxHash, tx.FarmSubAccountName)
 		log.Error().Msg(message)
-		err = s.helper.SendMail(message, []string{s.config.SMTPToAddress})
+		err = s.helper.SendMail(message)
 		if err != nil {
 			return err
 		}
