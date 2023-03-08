@@ -76,7 +76,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	if len(unspentTxsForFarm) == 0 {
-		log.Info().Msgf("no unspent TXs for farm {{%s}}....skipping this farm", farm.SubAccountName)
+		log.Info().Msgf("no unspent TXs for farm {{%s}} with address {{%s}}....skipping this farm", farm.SubAccountName, farm.AddressForReceivingRewardsFromPool)
 		return nil
 	}
 
