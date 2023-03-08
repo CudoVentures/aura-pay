@@ -195,7 +195,7 @@ func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentRe
 	transaction, err := storage.GetUTXOTransaction(ctx, unspentTx.TxID)
 	switch err {
 	case nil:
-		return transaction.Processed == true, nil
+		return transaction.Processed, nil
 	case sql.ErrNoRows:
 		return false, nil // not found thus not processed
 	default:
