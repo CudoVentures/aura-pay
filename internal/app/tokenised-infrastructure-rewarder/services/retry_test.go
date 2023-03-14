@@ -217,43 +217,43 @@ func setupMockStorageRetryService() *mockStorage {
 
 	var uncomfirmedTransactions = []types.TransactionHashWithStatus{
 		{
-			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881",
-			TimeSent:           1666641098,
-			FarmSubAccountName: "farm_sub_account_name_1",
-			RetryCount:         0,
+			TxHash:            "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881",
+			TimeSent:          1666641098,
+			FarmBtcWalletName: "farm_sub_account_name_1",
+			RetryCount:        0,
 		},
 		{
-			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882",
-			TimeSent:           1666641098,
-			FarmSubAccountName: "farm_sub_account_name_1",
-			RetryCount:         0,
+			TxHash:            "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882",
+			TimeSent:          1666641098,
+			FarmBtcWalletName: "farm_sub_account_name_1",
+			RetryCount:        0,
 		},
 		{
-			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883", // skipped
-			TimeSent:           1666641098,
-			FarmSubAccountName: "farm_sub_account_name_1",
-			RetryCount:         0,
+			TxHash:            "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883", // skipped
+			TimeSent:          1666641098,
+			FarmBtcWalletName: "farm_sub_account_name_1",
+			RetryCount:        0,
 		},
 		{
-			TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884",
-			TimeSent:           10,
-			FarmSubAccountName: "farm_sub_account_name_1",
-			RetryCount:         0,
+			TxHash:            "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884",
+			TimeSent:          10,
+			FarmBtcWalletName: "farm_sub_account_name_1",
+			RetryCount:        0,
 		},
 	}
 
 	uncomfirmedTransactions = append(uncomfirmedTransactions, types.TransactionHashWithStatus{
-		TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886",
-		TimeSent:           10,
-		FarmSubAccountName: "farm_sub_account_name_1",
-		RetryCount:         2,
+		TxHash:            "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886",
+		TimeSent:          10,
+		FarmBtcWalletName: "farm_sub_account_name_1",
+		RetryCount:        2,
 	})
 
 	uncomfirmedTransactions = append(uncomfirmedTransactions, types.TransactionHashWithStatus{
-		TxHash:             "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887",
-		TimeSent:           10,
-		FarmSubAccountName: "farm_sub_account_name_1",
-		RetryCount:         0,
+		TxHash:            "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887",
+		TimeSent:          10,
+		FarmBtcWalletName: "farm_sub_account_name_1",
+		RetryCount:        0,
 	})
 
 	storage.On("GetTxHashesByStatus", mock.Anything, types.TransactionPending).Return(uncomfirmedTransactions, nil)

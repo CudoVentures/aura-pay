@@ -34,7 +34,7 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 
 	for _, farm := range farms {
 		if err := s.processFarm(ctx, btcClient, storage, farm); err != nil {
-			msg := fmt.Sprintf("processing farm {%s} failed. Error: %s", farm.SubAccountName, err)
+			msg := fmt.Sprintf("processing farm {%s} failed. Error: %s", farm.RewardsFromPoolBtcWalletName, err)
 			// send email only once per hour
 			if s.helper.Unix() >= s.lastEmailTimestamp+int64(time.Minute.Seconds()*30) {
 				s.helper.SendMail(msg)
@@ -49,25 +49,25 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 }
 
 func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, storage Storage, farm types.Farm) error {
-	log.Debug().Msgf("Processing farm with name %s..", farm.SubAccountName)
+	log.Debug().Msgf("Processing farm with name %s..", farm.RewardsFromPoolBtcWalletName)
 	err := validateFarm(farm)
 	if err != nil {
 		return err
 	}
 
-	_, err = btcClient.LoadWallet(farm.SubAccountName)
+	_, err = btcClient.LoadWallet(farm.RewardsFromPoolBtcWalletName)
 	if err != nil {
 		return err
 	}
-	log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.SubAccountName)
+	log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.RewardsFromPoolBtcWalletName)
 
 	defer func() {
-		if err := btcClient.UnloadWallet(&farm.SubAccountName); err != nil {
-			log.Error().Msgf("Failed to unload wallet %s: %s", farm.SubAccountName, err)
+		if err := btcClient.UnloadWallet(&farm.RewardsFromPoolBtcWalletName); err != nil {
+			log.Error().Msgf("Failed to unload wallet %s: %s", farm.RewardsFromPoolBtcWalletName, err)
 			return
 		}
 
-		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.SubAccountName)
+		log.Debug().Msgf("Farm Wallet: {%s} unloaded", farm.RewardsFromPoolBtcWalletName)
 	}()
 
 	unspentTxsForFarm, err := s.getUnspentTxsForFarm(ctx, btcClient, storage, []string{farm.AddressForReceivingRewardsFromPool})
@@ -76,7 +76,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	if len(unspentTxsForFarm) == 0 {
-		log.Info().Msgf("no unspent TXs for farm {{%s}} with address {{%s}}....skipping this farm", farm.SubAccountName, farm.AddressForReceivingRewardsFromPool)
+		log.Info().Msgf("no unspent TXs for farm {{%s}} with address {{%s}}....skipping this farm", farm.RewardsFromPoolBtcWalletName, farm.AddressForReceivingRewardsFromPool)
 		return nil
 	}
 
@@ -109,11 +109,11 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	defer func() {
 		if err := btcClient.WalletLock(); err != nil {
-			log.Error().Msgf("Failed to lock wallet %s: %s", farm.SubAccountName, err)
+			log.Error().Msgf("Failed to lock wallet %s: %s", farm.RewardsFromPoolBtcWalletName, err)
 			return
 		}
 
-		log.Debug().Msgf("Farm Wallet: {%s} locked", farm.SubAccountName)
+		log.Debug().Msgf("Farm Wallet: {%s} locked", farm.RewardsFromPoolBtcWalletName)
 	}()
 
 	// for each payment
@@ -131,9 +131,9 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 		log.Debug().Msgf("-------------------------------------------------")
 		log.Debug().Msgf("Processing Unspent TX: %s, Payment period: %d to %d", unspentTxForFarm.TxID, lastPaymentTimestamp, periodEnd)
-		log.Debug().Msgf("Total reward for farm \"%s\": %s", farm.SubAccountName, receivedRewardForFarmBtcDecimal)
+		log.Debug().Msgf("Total reward for farm \"%s\": %s", farm.RewardsFromPoolBtcWalletName, receivedRewardForFarmBtcDecimal)
 		log.Debug().Msgf("Cudos part of total farm reward: %s", cudosFeeOfTotalRewardBtcDecimal)
-		log.Debug().Msgf("Total reward for farm \"%s\" after cudos fee: %s", farm.SubAccountName, totalRewardForFarmAfterCudosFeeBtcDecimal)
+		log.Debug().Msgf("Total reward for farm \"%s\" after cudos fee: %s", farm.RewardsFromPoolBtcWalletName, totalRewardForFarmAfterCudosFeeBtcDecimal)
 
 		collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
 		if err != nil {
@@ -162,7 +162,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		// 	}
 		// }
 
-		log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.SubAccountName, currentHashPowerForFarm)
+		log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.RewardsFromPoolBtcWalletName, currentHashPowerForFarm)
 
 		hourlyMaintenanceFeeInBtcDecimal := s.calculateHourlyMaintenanceFee(farm, currentHashPowerForFarm)
 
@@ -172,11 +172,11 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		}
 
 		if len(verifiedDenomIds) == 0 {
-			log.Error().Msgf("no verified colletions for farm {%s}", farm.SubAccountName)
+			log.Error().Msgf("no verified colletions for farm {%s}", farm.RewardsFromPoolBtcWalletName)
 			return nil
 		}
 
-		log.Debug().Msgf("Verified collections for farm %s: %s", farm.SubAccountName, fmt.Sprintf("%v", verifiedDenomIds))
+		log.Debug().Msgf("Verified collections for farm %s: %s", farm.RewardsFromPoolBtcWalletName, fmt.Sprintf("%v", verifiedDenomIds))
 
 		farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionsWithNFTs(ctx, verifiedDenomIds)
 		if err != nil {
@@ -198,13 +198,13 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		log.Debug().Msgf("Non expired NFTs count: %d", nonExpiredNFTsCount)
 
 		if nonExpiredNFTsCount == 0 {
-			log.Error().Msgf("all nfts for farm {%s} are expired", farm.SubAccountName)
+			log.Error().Msgf("all nfts for farm {%s} are expired", farm.RewardsFromPoolBtcWalletName)
 			return nil
 		}
 
 		mintedHashPowerForFarm := sumMintedHashPowerForAllCollections(farmCollectionsWithNFTs)
 
-		log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.SubAccountName, mintedHashPowerForFarm)
+		log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.RewardsFromPoolBtcWalletName, mintedHashPowerForFarm)
 
 		rewardForNftOwnersBtcDecimal := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarmAfterCudosFeeBtcDecimal)
 		leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
@@ -220,7 +220,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			rewardToReturnBtcDecimal = totalRewardForFarmAfterCudosFeeBtcDecimal.Sub(rewardForNftOwnersBtcDecimal)
 			addLeftoverRewardToFarmOwner(destinationAddressesWithAmountBtcDecimal, rewardToReturnBtcDecimal, farm.LeftoverRewardPayoutAddress)
 		}
-		log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwnersBtcDecimal, rewardToReturnBtcDecimal, farm.SubAccountName)
+		log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn: %s, farm: {%s}", rewardForNftOwnersBtcDecimal, rewardToReturnBtcDecimal, farm.RewardsFromPoolBtcWalletName)
 
 		var statistics []types.NFTStatistics
 		var collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation
@@ -319,7 +319,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 			collectionPaymentAllocationsStatistics = append(collectionPaymentAllocationsStatistics, collectionPaymentAllocation)
 
-			log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn from collection: %s, farm: {%s}, collection: {%d}", nftRewardsAfterFeesBtcDecimal, farmLeftoverForCollection, farm.SubAccountName, collectionPaymentAllocation.CollectionId)
+			log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn from collection: %s, farm: {%s}, collection: {%d}", nftRewardsAfterFeesBtcDecimal, farmLeftoverForCollection, farm.RewardsFromPoolBtcWalletName, collectionPaymentAllocation.CollectionId)
 		}
 
 		// return to the farm owner whatever is left
@@ -339,7 +339,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 		}
 
 		if len(destinationAddressesWithAmountBtcDecimal) == 0 {
-			return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.SubAccountName)
+			return fmt.Errorf("no addresses found to pay for Farm {%s}", farm.RewardsFromPoolBtcWalletName)
 		}
 
 		var totalAmountToPayToAddressesBtcDecimal decimal.Decimal
@@ -357,17 +357,19 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 		addressesWithThresholdToUpdateBtcDecimal, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmountBtcDecimal, storage, farm.Id)
 		if err != nil {
+			fmt.Println("4444444444444")
+
 			return err
 		}
 
-		log.Debug().Msgf("Destination addresses with amount for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(destinationAddressesWithAmountBtcDecimal))
+		log.Debug().Msgf("Destination addresses with amount for farm {%s}: {%s}", farm.RewardsFromPoolBtcWalletName, fmt.Sprint(destinationAddressesWithAmountBtcDecimal))
 
 		addressesToSendBtc, err := convertAmountToBTC(addressesWithAmountInfo)
 		if err != nil {
 			return err
 		}
 
-		log.Debug().Msgf("Addresses above threshold that will be sent for farm {%s}: {%s}", farm.SubAccountName, fmt.Sprint(addressesToSendBtc))
+		log.Debug().Msgf("Addresses above threshold that will be sent for farm {%s}: {%s}", farm.RewardsFromPoolBtcWalletName, fmt.Sprint(addressesToSendBtc))
 
 		txHash := ""
 		if len(addressesToSendBtc) > 0 {
@@ -384,7 +386,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 			return err
 		}
 
-		if err := storage.SaveStatistics(ctx, receivedRewardForFarmBtcDecimal, collectionPaymentAllocationsStatistics, addressesWithAmountInfo, statistics, txHash, farm.Id, farm.SubAccountName); err != nil {
+		if err := storage.SaveStatistics(ctx, receivedRewardForFarmBtcDecimal, collectionPaymentAllocationsStatistics, addressesWithAmountInfo, statistics, txHash, farm.Id, farm.RewardsFromPoolBtcWalletName); err != nil {
 			log.Error().Msgf("Failed to save statistics for tx hash {%s}: %s", txHash, err)
 			return err
 		}
@@ -395,8 +397,8 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 }
 
 func validateFarm(farm types.Farm) error {
-	if farm.SubAccountName == "" {
-		return fmt.Errorf("farm has empty Sub Account Name. Farm Id: {%d}", farm.Id)
+	if farm.RewardsFromPoolBtcWalletName == "" {
+		return fmt.Errorf("farm has empty Wallet Name. Farm Id: {%d}", farm.Id)
 	}
 
 	i := farm.MaintenanceFeeInBtc

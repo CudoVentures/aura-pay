@@ -70,7 +70,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return err
 	}
 	if retryCountExceeded {
-		message := fmt.Sprintf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; Farm Name: {%s}", tx.TxHash, tx.FarmSubAccountName)
+		message := fmt.Sprintf("transaction has reached max RBF retry count and manual intervention will be needed. TxHash: {%s}; Farm Name: {%s}", tx.TxHash, tx.FarmBtcWalletName)
 		log.Error().Msg(message)
 		err = s.helper.SendMail(message)
 		if err != nil {
@@ -78,23 +78,23 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		}
 		return nil
 	}
-	_, err = btcClient.LoadWallet(tx.FarmSubAccountName)
+	_, err = btcClient.LoadWallet(tx.FarmBtcWalletName)
 	if err != nil {
 		return err
 	}
-	log.Debug().Msgf("Farm Wallet: {%s} loaded", tx.FarmSubAccountName)
+	log.Debug().Msgf("Farm Wallet: {%s} loaded", tx.FarmBtcWalletName)
 
 	defer func() {
 		if err := btcClient.WalletLock(); err != nil {
-			log.Error().Msgf("Failed to lock wallet %s: %s", tx.FarmSubAccountName, err)
+			log.Error().Msgf("Failed to lock wallet %s: %s", tx.FarmBtcWalletName, err)
 		}
-		log.Debug().Msgf("Farm Wallet: {%s} locked", tx.FarmSubAccountName)
+		log.Debug().Msgf("Farm Wallet: {%s} locked", tx.FarmBtcWalletName)
 
-		err = btcClient.UnloadWallet(&tx.FarmSubAccountName)
+		err = btcClient.UnloadWallet(&tx.FarmBtcWalletName)
 		if err != nil {
-			log.Error().Msgf("Failed to unload wallet %s: %s", tx.FarmSubAccountName, err)
+			log.Error().Msgf("Failed to unload wallet %s: %s", tx.FarmBtcWalletName, err)
 		}
-		log.Debug().Msgf("Farm Wallet: {%s} unloaded", tx.FarmSubAccountName)
+		log.Debug().Msgf("Farm Wallet: {%s} unloaded", tx.FarmBtcWalletName)
 	}()
 
 	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
@@ -107,7 +107,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return err
 	}
 
-	err = storage.SaveRBFTransactionInformation(ctx, tx.TxHash, types.TransactionReplaced, newRBFtxHash, types.TransactionPending, tx.FarmSubAccountName, tx.RetryCount+1)
+	err = storage.SaveRBFTransactionInformation(ctx, tx.TxHash, types.TransactionReplaced, newRBFtxHash, types.TransactionPending, tx.FarmBtcWalletName, tx.RetryCount+1)
 
 	return nil
 }

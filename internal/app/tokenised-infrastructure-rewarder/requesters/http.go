@@ -25,7 +25,8 @@ type Requester struct {
 }
 
 const (
-	StatusCodeOK = 200
+	StatusCodeOK       = 200
+	StatusCodeNotFound = 404
 )
 
 func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error) {
@@ -56,6 +57,11 @@ func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, 
 	if err != nil {
 		return "", err
 	}
+
+	if res.StatusCode == StatusCodeNotFound {
+		return "", fmt.Errorf("address not found in the node addressbook: %s", cudosAddress)
+	}
+
 	if res.StatusCode != StatusCodeOK {
 		return "", fmt.Errorf("error! Request Failed: %s with StatusCode: %d, Error: %s", res.Status, res.StatusCode, string(bytes))
 	}

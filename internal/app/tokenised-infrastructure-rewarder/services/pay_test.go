@@ -537,6 +537,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 		{
 			Id:                                 1,
 			SubAccountName:                     "farm_1",
+			RewardsFromPoolBtcWalletName:       "farm_1",
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
 			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
@@ -545,6 +546,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 		{
 			Id:                                 2,
 			SubAccountName:                     "farm_2",
+			RewardsFromPoolBtcWalletName:       "farm_2",
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
 			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_2",
@@ -798,6 +800,7 @@ func setupMockStorage() *mockStorage {
 		{
 			Id:                                 1,
 			SubAccountName:                     "farm_1",
+			RewardsFromPoolBtcWalletName:       "farm_1",
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
 			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
@@ -807,6 +810,7 @@ func setupMockStorage() *mockStorage {
 		{
 			Id:                                 2,
 			SubAccountName:                     "farm_2",
+			RewardsFromPoolBtcWalletName:       "farm_2",
 			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
 			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
 			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_2",

@@ -7,10 +7,11 @@ import (
 )
 
 type Farm struct {
-	Id             int64  `db:"id"`
-	Name           string `db:"name"`
-	Description    string `db:"description"`
-	SubAccountName string `db:"sub_account_name"`
+	Id                           int64  `db:"id"`
+	Name                         string `db:"name"`
+	Description                  string `db:"description"`
+	SubAccountName               string `db:"sub_account_name"`
+	RewardsFromPoolBtcWalletName string `db:"rewards_from_pool_btc_wallet_name"`
 	// Location                           string  `db:"location"`
 	TotalHashPower                     float64 `db:"total_farm_hashrate"`
 	AddressForReceivingRewardsFromPool string  `db:"address_for_receiving_rewards_from_pool"`
@@ -92,25 +93,25 @@ type NFTOwnerInformationRepo struct {
 }
 
 type TransactionHashWithStatus struct {
-	Id                 string    `db:"id"`
-	FarmPaymentId      int64     `db:"farm_payment_id"`
-	TxHash             string    `db:"tx_hash"`
-	Status             string    `db:"status"`
-	TimeSent           int64     `db:"time_sent"`
-	FarmSubAccountName string    `db:"farm_sub_account_name"`
-	RetryCount         int       `db:"retry_count"`
-	CreatedAt          time.Time `db:"createdAt"`
-	UpdatedAt          time.Time `db:"updatedAt"`
+	Id                string    `db:"id"`
+	FarmPaymentId     int64     `db:"farm_payment_id"`
+	TxHash            string    `db:"tx_hash"`
+	Status            string    `db:"status"`
+	TimeSent          int64     `db:"time_sent"`
+	FarmBtcWalletName string    `db:"farm_btc_wallet_name"`
+	RetryCount        int       `db:"retry_count"`
+	CreatedAt         time.Time `db:"createdAt"`
+	UpdatedAt         time.Time `db:"updatedAt"`
 }
 
 type RBFTransactionHistory struct {
-	Id                 string    `db:"id"`
-	FarmId             string    `db:"farm_id"`
-	OldTxHash          string    `db:"old_tx_hash"`
-	NewTxHash          string    `db:"new_tx_hash"`
-	FarmSubAccountName string    `db:"farm_sub_account_name"`
-	CreatedAt          time.Time `db:"createdAt"`
-	UpdatedAt          time.Time `db:"updatedAt"`
+	Id                string    `db:"id"`
+	FarmId            string    `db:"farm_id"`
+	OldTxHash         string    `db:"old_tx_hash"`
+	NewTxHash         string    `db:"new_tx_hash"`
+	FarmBtcWalletName string    `db:"farm_btc_wallet_name"`
+	CreatedAt         time.Time `db:"createdAt"`
+	UpdatedAt         time.Time `db:"updatedAt"`
 }
 
 type UTXOTransaction struct {
