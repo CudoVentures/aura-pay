@@ -174,7 +174,7 @@ func (s *PayService) processFarmUnspentTx(
 
 	log.Debug().Msgf("Minted hash for farm %s: %.6f", farm.RewardsFromPoolBtcWalletName, mintedHashPowerForFarm)
 
-	rewardForNftOwnersBtcDecimal := calculatePercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarmAfterCudosFeeBtcDecimal)
+	rewardForNftOwnersBtcDecimal := calculateRewardByPercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarmAfterCudosFeeBtcDecimal)
 	leftoverHashPower := currentHashPowerForFarm - mintedHashPowerForFarm // if hash power increased or not all of it is used as NFTs
 	var rewardToReturnBtcDecimal decimal.Decimal
 
@@ -369,7 +369,7 @@ func (s *PayService) processNft(
 	}
 
 	// first calculate nft parf ot the farm as percent of hash power
-	totalRewardForNftBtcDecimal := calculatePercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwnersBtcDecimal)
+	totalRewardForNftBtcDecimal := calculateRewardByPercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwnersBtcDecimal)
 
 	// if nft was minted after the last payment, part of the reward before the mint is still for the farm
 	rewardForNftBtcDecimal := calculatePercentByTime(lastPaymentTimestamp, periodEnd, nftPeriodStart, nftPeriodEnd, totalRewardForNftBtcDecimal)

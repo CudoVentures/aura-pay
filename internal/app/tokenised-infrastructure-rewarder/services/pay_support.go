@@ -14,6 +14,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// gets the details for a single unspent transaction from the BTC node
+// this is needed for the timestamp of the TX
 func (s *PayService) getUnspentTxDetails(ctx context.Context, btcClient BtcClient, unspentResult btcjson.ListUnspentResult) (btcjson.TxRawResult, error) {
 	txHash, err := chainhash.NewHashFromStr(unspentResult.TxID)
 	if err != nil {
@@ -28,6 +30,8 @@ func (s *PayService) getUnspentTxDetails(ctx context.Context, btcClient BtcClien
 	return *txRawResult, nil
 }
 
+// gets all the unspent transactions for the farm wallet
+// the farm wallet must fisrst be loaded
 func (s *PayService) getUnspentTxsForFarm(ctx context.Context, btcClient BtcClient, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
 	unspentTransactions, err := btcClient.ListUnspent()
 	if err != nil {
@@ -42,6 +46,9 @@ func (s *PayService) getUnspentTxsForFarm(ctx context.Context, btcClient BtcClie
 	return validUnspentTransactions, nil
 }
 
+// tries to get the collection from BDJuno
+// it also check there if it is verified
+// basically if a collection is not verified (minted), it does not exist on the chain
 func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.CollectionData) ([]string, error) {
 	var verifiedCollectionIds []string
 	for _, collection := range collections.Data.DenomsByDataProperty {
@@ -60,6 +67,11 @@ func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.
 	return verifiedCollectionIds, nil
 }
 
+// for each collection
+// for each nft of that collection
+// check if it's expiration date is before the period start
+// if it is, it shouldn't receive any rewards for that payment
+// if it is not expired - add it to the list that is to be returned
 func (s *PayService) filterExpiredBeforePeriodNFTs(farmCollectionsWithNFTs []types.Collection, periodStart int64) int {
 	nonExpiredNFTsCount := 0
 	for i := 0; i < len(farmCollectionsWithNFTs); i++ {
@@ -81,6 +93,10 @@ func (s *PayService) filterExpiredBeforePeriodNFTs(farmCollectionsWithNFTs []typ
 	return nonExpiredNFTsCount
 }
 
+// calculates the period start and end for a given nft
+// gets the payout times entries for that nft
+// the period start for the nft is the bigger one from the bigger from the last payout time, or nft mint time
+// the period end is the smaller from the expiration date and the given period end
 func (s *PayService) getNftTimestamps(ctx context.Context, storage Storage, nft types.NFT, nftTransferHistory types.NftTransferHistory, denomId string, periodEnd int64) (int64, int64, error) {
 	payoutTimes, err := storage.GetPayoutTimesForNFT(ctx, denomId, nft.Id)
 	if err != nil {
@@ -103,6 +119,8 @@ func (s *PayService) getNftTimestamps(ctx context.Context, storage Storage, nft 
 	return nftPeriodStart, nftPeriodEnd, nil
 }
 
+// gets the nft transfer history entries from BDJuno
+// sorts them
 func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomId, nftId string) (types.NftTransferHistory, error) {
 	// TODO: This oculd be optimized, why fetching all events everytime
 	nftTransferHistory, err := s.apiRequester.GetNftTransferHistory(ctx, collectionDenomId, nftId, 1) // all transfer events
@@ -118,7 +136,12 @@ func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomI
 	return nftTransferHistory, nil
 }
 
-// returns last payment time for this nft or nft mint time
+// gets the higher from the last payment timestamp or the mint timestamp
+// if there is any payment it is expected that it was done after the mint timestamp
+// so if there are payment the last one's timestamp is returned
+// otherwise - the mint event timestamp
+// it is expected that the inputs are sorted
+// TODO: do some checks, or get the max from both
 func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, error) {
 	l := len(payoutTimes)
 	if l == 0 { // first time payment - start time is time of minting

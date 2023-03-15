@@ -118,6 +118,9 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 	return ownersWithPercentOwnedTime, nftOwnersInformation, nil
 }
 
+// calculateHourlyMaintenanceFee calculates the hourly maintenance fee for a farm
+// the farm maintenance fee is given in BTC on early basis
+// split that into hourly fee
 func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashPowerForFarm float64) decimal.Decimal {
 	currentYear, currentMonth, _ := s.helper.Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
@@ -131,6 +134,11 @@ func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashP
 	return hourlyFeeInBtcDecimal
 }
 
+// calculate the hours that the period consists of
+// calculate fee based on the hourly fee multiplied by the period hours
+// if the fee is bigger than the nft reward, reduce it to the nft reward and set the reward to zero
+// else reduce the nft reward by the fee
+// finally distribute the maintenance fee between aura and farm
 func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	periodEnd int64,
 	hourlyFeeInBtcDecimal decimal.Decimal,
@@ -152,6 +160,8 @@ func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	return nftMaintenanceFeeForPayoutPeriodBtcDecimal, partOfMaintenanceFeeForCudoBtcDecimal, rewardForNftBtcDecimal
 }
 
+// calculates the cudos/aura fee from the total farm payment before maintenance fees
+// the fee is taken from the payment service env
 func (s *PayService) calculateCudosFeeOfTotalFarmIncome(totalFarmIncomeBtcDecimal decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
 
 	farmIncomeCudosFeeBtcDecimal := totalFarmIncomeBtcDecimal.Mul(decimal.NewFromFloat(s.config.CUDOFeeOnAllBTC / 100)) // ex 10% = 0.1 * total
@@ -160,6 +170,8 @@ func (s *PayService) calculateCudosFeeOfTotalFarmIncome(totalFarmIncomeBtcDecima
 	return farmIncomeAfterCudosFeeBtcDecimal, farmIncomeCudosFeeBtcDecimal
 }
 
+// calculates the total hash power distributed to the collections
+// used for checks - it shouldn't exceed that of the farm
 func sumMintedHashPowerForAllCollections(collections []types.Collection) float64 {
 	var totalMintedHashPowerForAllCollections float64
 
@@ -170,6 +182,8 @@ func sumMintedHashPowerForAllCollections(collections []types.Collection) float64
 	return totalMintedHashPowerForAllCollections
 }
 
+// calculates the minted hash power for a collection
+// that means the minted nfts from that collection
 func sumMintedHashPowerForCollection(collection types.Collection) float64 {
 	var totalMintedHashPowerForCollection float64
 
@@ -180,18 +194,23 @@ func sumMintedHashPowerForCollection(collection types.Collection) float64 {
 	return totalMintedHashPowerForCollection
 }
 
-func calculatePercent(available float64, actual float64, reward decimal.Decimal) decimal.Decimal {
-	if available <= 0 || actual <= 0 || reward.LessThanOrEqual(decimal.Zero) {
+// given total hash power and allocated hash power for the given payment (nft, collection)
+// calculate the reward as percent of the total
+func calculateRewardByPercent(availableHashPower float64, actualHashPower float64, reward decimal.Decimal) decimal.Decimal {
+	if availableHashPower <= 0 || actualHashPower <= 0 || reward.LessThanOrEqual(decimal.Zero) {
 		return decimal.Zero
 	}
 
-	payoutRewardPercent := decimal.NewFromFloat(actual).Div(decimal.NewFromFloat(available))
+	payoutRewardPercent := decimal.NewFromFloat(actualHashPower).Div(decimal.NewFromFloat(availableHashPower))
 	calculatedReward := reward.Mul(payoutRewardPercent)
 
 	// btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
 	return calculatedReward
 }
 
+// given period and nft valid end time
+// calculate the reward it should take
+// this is used when nft that is minted or expired in the middle of a payment period exists
 func calculatePercentByTime(timestampPrevPayment, timestampCurrentPayment, nftStartTime, nftEndTime int64, totalRewardForPeriod decimal.Decimal) decimal.Decimal {
 	if nftStartTime <= timestampPrevPayment && nftEndTime >= timestampCurrentPayment {
 		return totalRewardForPeriod
@@ -204,6 +223,10 @@ func calculatePercentByTime(timestampPrevPayment, timestampCurrentPayment, nftSt
 	return totalRewardForPeriod.Mul(percentOfPeriodMitned)
 }
 
+// during calculations of the nft fees and rewards there are some inaccuracies
+// sum nft rewards and fees for each nft
+// and check that they are not bigger than the total reward for all nfts of the farm
+// return it so it van be distributed
 func calculateLeftoverNftRewardDistribution(rewardForNftOwnersBtcDecimal decimal.Decimal, statistics []types.NFTStatistics) (decimal.Decimal, error) {
 	// return to the farm owner whatever is left
 	var distributedNftRewards decimal.Decimal
@@ -220,7 +243,8 @@ func calculateLeftoverNftRewardDistribution(rewardForNftOwnersBtcDecimal decimal
 	return leftoverNftRewardDistribution, nil
 }
 
-// check that all of the amount is distributed and no more than it
+// sum all amounts for all addresses taht will be sent
+// they should equal exactly the total farm reward or something went wrong during calculation
 func checkTotalAmountToDistribute(receivedRewardForFarmBtcDecimal decimal.Decimal, destinationAddressesWithAmountBtcDecimal map[string]decimal.Decimal) error {
 	var totalAmountToPayToAddressesBtcDecimal decimal.Decimal
 

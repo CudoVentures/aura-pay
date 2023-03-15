@@ -64,20 +64,20 @@ func TestSumMintedHashPowerForAllCollections(t *testing.T) {
 }
 
 func TestCalculatePercentShouldReturnZeroIfInvalidHashingPowerProvided(t *testing.T) {
-	require.Equal(t, decimal.Zero, calculatePercent(-1, -1, decimal.NewFromInt(10000000)))
-	require.Equal(t, decimal.Zero, calculatePercent(10000, -1, decimal.NewFromInt(10000000)))
-	require.Equal(t, decimal.Zero, calculatePercent(-1, 10000, decimal.NewFromInt(10000000)))
-	require.Equal(t, decimal.Zero, calculatePercent(0, 0, decimal.NewFromInt(10000000)))
-	require.Equal(t, decimal.Zero, calculatePercent(10000, 0, decimal.NewFromInt(10000000)))
-	require.Equal(t, decimal.Zero, calculatePercent(0, 10000, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculateRewardByPercent(-1, -1, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculateRewardByPercent(10000, -1, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculateRewardByPercent(-1, 10000, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculateRewardByPercent(0, 0, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculateRewardByPercent(10000, 0, decimal.NewFromInt(10000000)))
+	require.Equal(t, decimal.Zero, calculateRewardByPercent(0, 10000, decimal.NewFromInt(10000000)))
 }
 
 func TestCalculatePercentShouldReturnZeroIfRewardIsZero(t *testing.T) {
-	require.Equal(t, decimal.Zero, calculatePercent(10000, 10000, decimal.Zero))
+	require.Equal(t, decimal.Zero, calculateRewardByPercent(10000, 10000, decimal.Zero))
 }
 
 func TestCalculatePercent(t *testing.T) {
-	require.Equal(t, decimal.NewFromInt(10).String(), calculatePercent(10000, 1000, decimal.NewFromInt(100)).String())
+	require.Equal(t, decimal.NewFromInt(10).String(), calculateRewardByPercent(10000, 1000, decimal.NewFromInt(100)).String())
 }
 
 func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnErrorIfInvalidPeriod(t *testing.T) {
