@@ -59,7 +59,6 @@ func TestRetryService_Execute(t *testing.T) {
 	assert.Equal(t, expectedFailedTransactions, failedTransactions)
 
 }
-
 func TestRetryService_Execute_With_Database(t *testing.T) {
 	skipDBTests(t)
 

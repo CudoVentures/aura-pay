@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
+	services "github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/services"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -140,38 +139,4 @@ func (mp *mockProvider) InitDBConnection() (*sqlx.DB, error) {
 	mp.initDbConnectionCallsCount += 1
 	args := mp.Called()
 	return args.Get(0).(*sqlx.DB), args.Error(1)
-}
-
-type mockAPIRequester struct {
-	mock.Mock
-}
-
-func (mar *mockAPIRequester) GetNftTransferHistory(ctx context.Context, collectionDenomId, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
-	args := mar.Called(ctx, collectionDenomId, nftId, fromTimestamp)
-	return args.Get(0).(types.NftTransferHistory), args.Error(1)
-}
-
-func (mar *mockAPIRequester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farmName, sinceTimestamp string) (float64, error) {
-	args := mar.Called(ctx, farmName, sinceTimestamp)
-	return args.Get(0).(float64), args.Error(1)
-}
-
-func (mar *mockAPIRequester) GetFarmCollectionsFromHasura(ctx context.Context, farmId int64) (types.CollectionData, error) {
-	args := mar.Called(ctx, farmId)
-	return args.Get(0).(types.CollectionData), args.Error(1)
-}
-
-func (mar *mockAPIRequester) VerifyCollection(ctx context.Context, denomId string) (bool, error) {
-	args := mar.Called(ctx, denomId)
-	return args.Bool(0), args.Error(1)
-}
-
-func (mar *mockAPIRequester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []string) ([]types.Collection, error) {
-	args := mar.Called(ctx, denomIds)
-	return args.Get(0).([]types.Collection), args.Error(1)
-}
-
-func (mar *mockAPIRequester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error) {
-	args := mar.Called(ctx, cudosAddress, network, tokenId, denomId)
-	return args.String(0), args.Error(1)
 }

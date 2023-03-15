@@ -3,13 +3,13 @@ package services
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sort"
 	"strconv"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 )
@@ -211,7 +211,6 @@ func removeAddressesWithZeroReward(destinationAddressesWithAmount map[string]dec
 		if destinationAddressesWithAmount[key].IsZero() {
 			delete(destinationAddressesWithAmount, key)
 		}
-
 	}
 }
 
@@ -250,4 +249,123 @@ func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPay
 		payoutAmount := nftPayoutAmount.Mul(decimal.NewFromFloat(percentFromReward / 100))
 		destinationAddressesWithAmount[nftPayoutAddress] = destinationAddressesWithAmount[nftPayoutAddress].Add(payoutAmount)
 	}
+}
+
+func validateFarm(farm types.Farm) error {
+	if farm.RewardsFromPoolBtcWalletName == "" {
+		return fmt.Errorf("farm has empty Wallet Name. Farm Id: {%d}", farm.Id)
+	}
+
+	i := farm.MaintenanceFeeInBtc
+	if i <= 0 {
+		return fmt.Errorf("farm has maintenance fee set below 0. Farm Id: {%d}", farm.Id)
+	}
+
+	if farm.AddressForReceivingRewardsFromPool == "" {
+		return fmt.Errorf("farm has no AddressForReceivingRewardsFromPool, farm Id: {%d}", farm.Id)
+	}
+	if farm.MaintenanceFeePayoutAddress == "" {
+		return fmt.Errorf("farm has no MaintenanceFeePayoutAddress, farm Id: {%d}", farm.Id)
+	}
+	if farm.LeftoverRewardPayoutAddress == "" {
+		return fmt.Errorf("farm has no LeftoverRewardPayoutAddress, farm Id: {%d}", farm.Id)
+	}
+
+	return nil
+}
+
+// try to load the wallet. If it fails, increase counter
+// if it fails 15 times, throw error that will result in err on the terminal and email sent
+func (s *PayService) loadWallet(btcClient BtcClient, farmName string) (bool, error) {
+	_, err := btcClient.LoadWallet(farmName)
+	if err != nil {
+		s.btcWalletOpenFailsPerFarm[farmName]++
+		if s.btcWalletOpenFailsPerFarm[farmName] >= 15 {
+			s.btcWalletOpenFailsPerFarm[farmName] = 0
+			return false, fmt.Errorf("failed to load wallet %s for 15 times", farmName)
+		}
+
+		log.Warn().Msgf("Failed to load wallet %s for %d consecutive times: %s", farmName, s.btcWalletOpenFailsPerFarm[farmName], err)
+		return false, nil
+	}
+
+	s.btcWalletOpenFailsPerFarm[farmName] = 0
+	log.Debug().Msgf("Farm Wallet: {%s} loaded", farmName)
+
+	return true, nil
+}
+
+func unloadWallet(btcClient BtcClient, farmName string) {
+	if err := btcClient.UnloadWallet(&farmName); err != nil {
+		log.Error().Msgf("Failed to unload wallet %s: %s", farmName, err)
+		return
+	}
+
+	log.Debug().Msgf("Farm Wallet: {%s} unloaded", farmName)
+}
+
+func lockWallet(btcClient BtcClient, farmName string) {
+	if err := btcClient.WalletLock(); err != nil {
+		log.Error().Msgf("Failed to lock wallet %s: %s", farmName, err)
+		return
+	}
+
+	log.Debug().Msgf("Farm Wallet: {%s} locked", farmName)
+}
+
+func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storage Storage, farm types.Farm) (int64, error) {
+	lastUTXOTransaction, err := storage.GetLastUTXOTransactionByFarmId(ctx, farm.Id)
+	if err != nil {
+		return 0, err
+	}
+
+	// no payment found, so this is the first one. Get the one from foundry
+	if lastUTXOTransaction.PaymentTimestamp == 0 {
+		if s.config.IsTesting {
+			return 0, nil
+		} else {
+			return s.apiRequester.GetFarmStartTime(ctx, farm.SubAccountName)
+		}
+	} else {
+		return lastUTXOTransaction.PaymentTimestamp, nil
+	}
+}
+
+func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage Storage, farm types.Farm) ([]types.Collection, map[string]types.AuraPoolCollection, error) {
+	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
+	if err != nil {
+		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
+	}
+
+	verifiedDenomIds, err := s.verifyCollectionIds(ctx, collections)
+	if err != nil {
+		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
+	}
+
+	log.Debug().Msgf("Verified collections for farm %s: %s", farm.RewardsFromPoolBtcWalletName, fmt.Sprintf("%v", verifiedDenomIds))
+
+	farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionsWithNFTs(ctx, verifiedDenomIds)
+	if err != nil {
+		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
+	}
+
+	farmAuraPoolCollections, err := storage.GetFarmAuraPoolCollections(ctx, farm.Id)
+	if err != nil {
+		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
+	}
+
+	// make a map for faster getting
+	farmAuraPoolCollectionsMap := map[string]types.AuraPoolCollection{}
+	for _, farmAuraPoolCollection := range farmAuraPoolCollections {
+		farmAuraPoolCollectionsMap[farmAuraPoolCollection.DenomId] = farmAuraPoolCollection
+	}
+
+	for _, collection := range farmCollectionsWithNFTs {
+		_, ok := farmAuraPoolCollectionsMap[collection.Denom.Id]
+		if !ok {
+			return []types.Collection{}, map[string]types.AuraPoolCollection{}, fmt.Errorf("aura pool collection not found by denom id {%s}", collection.Denom.Id)
+		}
+	}
+
+	return farmCollectionsWithNFTs, farmAuraPoolCollectionsMap, nil
 }

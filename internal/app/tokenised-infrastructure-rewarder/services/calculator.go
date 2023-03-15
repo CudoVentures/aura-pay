@@ -203,3 +203,34 @@ func calculatePercentByTime(timestampPrevPayment, timestampCurrentPayment, nftSt
 
 	return totalRewardForPeriod.Mul(percentOfPeriodMitned)
 }
+
+func calculateLeftoverNftRewardDistribution(rewardForNftOwnersBtcDecimal decimal.Decimal, statistics []types.NFTStatistics) (decimal.Decimal, error) {
+	// return to the farm owner whatever is left
+	var distributedNftRewards decimal.Decimal
+	for _, nftStat := range statistics {
+		distributedNftRewards = distributedNftRewards.Add(nftStat.Reward).Add(nftStat.MaintenanceFee).Add(nftStat.CUDOPartOfMaintenanceFee)
+	}
+
+	leftoverNftRewardDistribution := rewardForNftOwnersBtcDecimal.Sub(distributedNftRewards)
+
+	if leftoverNftRewardDistribution.LessThan(decimal.Zero) {
+		return decimal.Decimal{}, fmt.Errorf("distributed NFT awards bigger than the farm reward after cudos fee. NftRewardDistribution: %s, TotalFarmRewardAfterCudosFee: %s", distributedNftRewards, rewardForNftOwnersBtcDecimal)
+	}
+
+	return leftoverNftRewardDistribution, nil
+}
+
+// check that all of the amount is distributed and no more than it
+func checkTotalAmountToDistribute(receivedRewardForFarmBtcDecimal decimal.Decimal, destinationAddressesWithAmountBtcDecimal map[string]decimal.Decimal) error {
+	var totalAmountToPayToAddressesBtcDecimal decimal.Decimal
+
+	for _, amount := range destinationAddressesWithAmountBtcDecimal {
+		totalAmountToPayToAddressesBtcDecimal = totalAmountToPayToAddressesBtcDecimal.Add(amount)
+	}
+
+	if !totalAmountToPayToAddressesBtcDecimal.Equals(receivedRewardForFarmBtcDecimal) {
+		return fmt.Errorf("distributed amount doesn't equal total farm rewards. Distributed amount: {%s}, TotalFarmReward: {%s}", totalAmountToPayToAddressesBtcDecimal, receivedRewardForFarmBtcDecimal)
+	}
+
+	return nil
+}
