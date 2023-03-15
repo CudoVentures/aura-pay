@@ -18,11 +18,12 @@ import (
 
 func NewPayService(config *infrastructure.Config, apiRequester ApiRequester, helper Helper, btcNetworkParams *types.BtcNetworkParams) *PayService {
 	return &PayService{
-		config:             config,
-		helper:             helper,
-		btcNetworkParams:   btcNetworkParams,
-		apiRequester:       apiRequester,
-		lastEmailTimestamp: 0,
+		config:                    config,
+		helper:                    helper,
+		btcNetworkParams:          btcNetworkParams,
+		apiRequester:              apiRequester,
+		lastEmailTimestamp:        0,
+		btcWalletOpenFailsPerFarm: make(map[string]int),
 	}
 }
 
@@ -35,7 +36,7 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 	for _, farm := range farms {
 		if err := s.processFarm(ctx, btcClient, storage, farm); err != nil {
 			msg := fmt.Sprintf("processing farm {%s} failed. Error: %s", farm.RewardsFromPoolBtcWalletName, err)
-			// send email only once per hour
+			// send email only once per half hour
 			if s.helper.Unix() >= s.lastEmailTimestamp+int64(time.Minute.Seconds()*30) {
 				s.helper.SendMail(msg)
 				s.lastEmailTimestamp = s.helper.Unix()
@@ -57,8 +58,17 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 
 	_, err = btcClient.LoadWallet(farm.RewardsFromPoolBtcWalletName)
 	if err != nil {
-		return err
+		s.btcWalletOpenFailsPerFarm[farm.RewardsFromPoolBtcWalletName]++
+		if s.btcWalletOpenFailsPerFarm[farm.RewardsFromPoolBtcWalletName] >= 15 {
+			s.btcWalletOpenFailsPerFarm[farm.RewardsFromPoolBtcWalletName] = 0
+			return fmt.Errorf("failed to load wallet %s for 15 times", farm.RewardsFromPoolBtcWalletName)
+		}
+
+		log.Warn().Msgf("Failed to load wallet %s for %d consecutive times: %s", farm.RewardsFromPoolBtcWalletName, s.btcWalletOpenFailsPerFarm[farm.RewardsFromPoolBtcWalletName], err)
+		return nil
 	}
+
+	s.btcWalletOpenFailsPerFarm[farm.RewardsFromPoolBtcWalletName] = 0
 	log.Debug().Msgf("Farm Wallet: {%s} loaded", farm.RewardsFromPoolBtcWalletName)
 
 	defer func() {
@@ -420,11 +430,12 @@ func validateFarm(farm types.Farm) error {
 }
 
 type PayService struct {
-	config             *infrastructure.Config
-	helper             Helper
-	btcNetworkParams   *types.BtcNetworkParams
-	apiRequester       ApiRequester
-	lastEmailTimestamp int64
+	config                    *infrastructure.Config
+	helper                    Helper
+	btcNetworkParams          *types.BtcNetworkParams
+	apiRequester              ApiRequester
+	lastEmailTimestamp        int64
+	btcWalletOpenFailsPerFarm map[string]int
 }
 
 type ApiRequester interface {
