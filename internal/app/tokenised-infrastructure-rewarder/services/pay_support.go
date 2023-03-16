@@ -150,6 +150,15 @@ func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, 
 	return payoutTimes[l-1].PayoutPeriodEnd, nil // last time we paid until now
 }
 
+// filterByPaymentThreshold filters the destinationAddressesWithAmountsBtcDecimal map by the payment threshold value.
+// If the total accumulated amount for an address is greater than or equal to the payment threshold value, the function
+// sets the thresholdReached flag to true in the returned addressesToSend map, otherwise, it sets the flag to false.
+// The function also updates the accumulated amount for each address based on the amount sent, and returns the
+// updated addressesWithThresholdToUpdateBtcDecimal map.
+// Returns:
+// - map[string]decimal.Decimal: A map with the destination addresses as keys and the updated accumulated amounts as values.
+// - map[string]types.AmountInfo: A map with the destination addresses as keys and the amount to send and thresholdReached flag as values.
+// - error: An error encountered during the function execution, if any.
 func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmountsBtcDecimal map[string]decimal.Decimal, storage Storage, farmId int64) (map[string]decimal.Decimal, map[string]types.AmountInfo, error) {
 	thresholdInBtcDecimal := decimal.NewFromFloat(s.config.GlobalPayoutThresholdInBTC)
 
@@ -189,6 +198,12 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 	return addressesWithThresholdToUpdateBtcDecimal, addressesToSend, nil
 }
 
+// filterUnspentTransactions filters the given list of unspent transactions by removing transactions that
+// have already been processed and change transactions. A change transaction is a transaction that is
+// sending funds back to the farm addresses.
+// Returns:
+// - []btcjson.ListUnspentResult: A filtered list of unspent transactions.
+// - error: An error encountered during the function execution, if any.
 func filterUnspentTransactions(ctx context.Context, transactions []btcjson.ListUnspentResult, storage Storage, farmAddresses []string) ([]btcjson.ListUnspentResult, error) {
 	var validTransactions []btcjson.ListUnspentResult
 	for _, unspentTx := range transactions {
@@ -204,6 +219,10 @@ func filterUnspentTransactions(ctx context.Context, transactions []btcjson.ListU
 	return validTransactions, nil
 }
 
+// isChangeTransaction checks if the given unspent transaction is a change transaction. A change transaction
+// is a transaction that is sending funds back to the farm addresses.
+// Returns:
+// - bool: Returns true if the unspent transaction is a change transaction, false otherwise.
 func isChangeTransaction(unspentTx btcjson.ListUnspentResult, farmAddresses []string) bool {
 	for _, address := range farmAddresses {
 		if address == unspentTx.Address {
@@ -213,8 +232,11 @@ func isChangeTransaction(unspentTx btcjson.ListUnspentResult, farmAddresses []st
 	return true
 }
 
+// isTransactionProcessed checks if the given unspent transaction has been processed by querying the storage.
+// Returns:
+// - bool: Returns true if the transaction has been processed, false otherwise.
+// - error: An error encountered during the function execution, if any.
 func isTransactionProcessed(ctx context.Context, unspentTx btcjson.ListUnspentResult, storage Storage) (bool, error) {
-
 	transaction, err := storage.GetUTXOTransaction(ctx, unspentTx.TxID)
 	switch err {
 	case nil:
@@ -237,7 +259,17 @@ func removeAddressesWithZeroReward(destinationAddressesWithAmount map[string]dec
 	}
 }
 
-// Converts decimals to BTC so it can accepted by the RPC interface
+// convertAmountToBTC converts the amounts in the destinationAddressesWithAmount map from decimal to
+// float64 and filters the map to only include the addresses where the threshold has been reached.
+// The returned map contains the destination addresses as keys and the amounts in BTC as float64 values.
+//
+// Parameters:
+// - destinationAddressesWithAmount map[string]types.AmountInfo: A map with the destination addresses as keys
+//   and the amount and thresholdReached flag as values.
+//
+// Returns:
+// - map[string]float64: A map with the destination addresses as keys and the amounts in BTC as float64 values.
+// - error: An error encountered during the conversion, if any.
 func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountInfo) (map[string]float64, error) {
 	result := make(map[string]float64)
 	for k, v := range destinationAddressesWithAmount {
@@ -254,10 +286,28 @@ func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountIn
 	return result, nil
 }
 
-func addPaymentAmountToAddress(destinationAddressesWithAmount map[string]decimal.Decimal, maintenanceFeeAmountbtcDecimal decimal.Decimal, farmMaintenanceFeePayoutAddress string) {
-	destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress] = destinationAddressesWithAmount[farmMaintenanceFeePayoutAddress].Add(maintenanceFeeAmountbtcDecimal)
+// addPaymentAmountToAddress adds the specified amount (amountToAdd) to the corresponding address (address) in the
+// destinationAddressesWithAmount map.
+//
+// Parameters:
+// - destinationAddressesWithAmount map[string]decimal.Decimal: A map with the destination addresses as keys
+//   and the accumulated amounts as values.
+// - amountToAdd decimal.Decimal: The amount to be added to the specified address.
+// - address string: The address to which the amount will be added.
+func addPaymentAmountToAddress(destinationAddressesWithAmount map[string]decimal.Decimal, amountToAdd decimal.Decimal, address string) {
+	destinationAddressesWithAmount[address] = destinationAddressesWithAmount[address].Add(amountToAdd)
 }
 
+// addLeftoverRewardToFarmOwner adds the leftover reward amount (leftoverReward) to the farm owner's default
+// payout address (farmDefaultPayoutAddress) in the destinationAddressesWithAmount map.
+// If the farm owner's default payout address already exists in the map, the leftover reward is added to the existing amount.
+// Otherwise, a new entry is created with the farm owner's default payout address and the leftover reward as the value.
+//
+// Parameters:
+// - destinationAddressesWithAmount map[string]decimal.Decimal: A map with the destination addresses as keys
+//   and the accumulated amounts as values.
+// - leftoverReward decimal.Decimal: The leftover reward amount to be added.
+// - farmDefaultPayoutAddress string: The farm owner's default payout address.
 func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]decimal.Decimal, leftoverReward decimal.Decimal, farmDefaultPayoutAddress string) {
 	if _, ok := destinationAddressesWithAmount[farmDefaultPayoutAddress]; ok {
 		// log to statistics here if we are doing accumulation send for an nft
@@ -267,6 +317,14 @@ func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]deci
 	}
 }
 
+// distributeRewardsToOwners distributes the NFT payout amount (nftPayoutAmount) to the respective owners based on
+// their percentage of ownership (ownersWithPercentOwned) and updates the destinationAddressesWithAmount map accordingly.
+//
+// Parameters:
+// - ownersWithPercentOwned map[string]float64: A map with the NFT payout addresses as keys and the percentage of ownership as values.
+// - nftPayoutAmount decimal.Decimal: The NFT payout amount to be distributed.
+// - destinationAddressesWithAmount map[string]decimal.Decimal: A map with the destination addresses as keys
+//   and the accumulated amounts as values. This map will be updated with the new payout amounts.
 func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount decimal.Decimal, destinationAddressesWithAmount map[string]decimal.Decimal) {
 	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
 		payoutAmount := nftPayoutAmount.Mul(decimal.NewFromFloat(percentFromReward / 100))
@@ -274,13 +332,19 @@ func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPay
 	}
 }
 
+// validateFarm checks if the provided farm (farm) has valid properties. It returns an error if any of the following
+// conditions are not met:
+// - The farm must have a non-empty wallet name for rewards.
+// - The farm's maintenance fee must be greater than 0.
+// - The farm must have a non-empty address for receiving rewards from the pool.
+// - The farm must have a non-empty maintenance fee payout address.
+// - The farm must have a non-empty leftover reward payout address.
 func validateFarm(farm types.Farm) error {
 	if farm.RewardsFromPoolBtcWalletName == "" {
 		return fmt.Errorf("farm has empty Wallet Name. Farm Id: {%d}", farm.Id)
 	}
 
-	i := farm.MaintenanceFeeInBtc
-	if i <= 0 {
+	if farm.MaintenanceFeeInBtc <= 0 {
 		return fmt.Errorf("farm has maintenance fee set below 0. Farm Id: {%d}", farm.Id)
 	}
 
@@ -297,8 +361,13 @@ func validateFarm(farm types.Farm) error {
 	return nil
 }
 
-// try to load the wallet. If it fails, increase counter
-// if it fails 15 times, throw error that will result in err on the terminal and email sent
+// loadWallet attempts to load the specified Bitcoin wallet using the given BTC client.
+// If the wallet fails to load for 15 consecutive attempts, the function returns an error.
+// The function returns a boolean to indicate whether the wallet was successfully loaded or not.
+// If the wallet is loaded successfully - nullate the fail counter for the wallet.
+// Returns:
+// - bool: True if the wallet was successfully loaded, false otherwise.
+// - error: An error indicating the reason for the wallet load failure, if any.
 func (s *PayService) loadWallet(btcClient BtcClient, farmName string) (bool, error) {
 	_, err := btcClient.LoadWallet(farmName)
 	if err != nil {
@@ -318,6 +387,9 @@ func (s *PayService) loadWallet(btcClient BtcClient, farmName string) (bool, err
 	return true, nil
 }
 
+// unloadWallet attempts to unload the specified Bitcoin wallet (farmName) using the given BTC client.
+// If the wallet fails to unload, an error message is logged. If the wallet is successfully unloaded, a debug
+// message is logged.
 func unloadWallet(btcClient BtcClient, farmName string) {
 	if err := btcClient.UnloadWallet(&farmName); err != nil {
 		log.Error().Msgf("Failed to unload wallet %s: %s", farmName, err)
@@ -327,6 +399,9 @@ func unloadWallet(btcClient BtcClient, farmName string) {
 	log.Debug().Msgf("Farm Wallet: {%s} unloaded", farmName)
 }
 
+// lockWallet attempts to lock the specified Bitcoin wallet (farmName) using the given BTC client.
+// If the wallet fails to lock, an error message is logged. If the wallet is successfully locked, a debug
+// message is logged.
 func lockWallet(btcClient BtcClient, farmName string) {
 	if err := btcClient.WalletLock(); err != nil {
 		log.Error().Msgf("Failed to lock wallet %s: %s", farmName, err)
@@ -336,6 +411,12 @@ func lockWallet(btcClient BtcClient, farmName string) {
 	log.Debug().Msgf("Farm Wallet: {%s} locked", farmName)
 }
 
+// getLastUTXOTransactionTimestamp retrieves the timestamp of the last UTXO transaction for the specified farm
+// using the provided Storage. If no previous transaction is found, the function returns the farm
+// start time.
+// Returns:
+// - int64: The timestamp of the last UTXO transaction, or the farm start time if no previous transaction is found.
+// - error: An error encountered during the function execution, if any.
 func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storage Storage, farm types.Farm) (int64, error) {
 	lastUTXOTransaction, err := storage.GetLastUTXOTransactionByFarmId(ctx, farm.Id)
 	if err != nil {
@@ -354,6 +435,13 @@ func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storag
 	}
 }
 
+// getCollectionsWithNftsForFarm retrieves the collections and their respective NFTs for the specified farm.
+// The function fetches the collections from BDJUno and verifies them. It then retrieves the NFTs associated with
+// the verified collections and the farm's AuraPoolCollections from the storage.
+// Returns:
+// - []types.Collection: A slice of the collections from the chain (BDJUno) with their associated NFTs.
+// - map[string]types.AuraPoolCollection: A map of AuraPoolCollections keyed by their Denom IDs taken from the storage.
+// - error: An error encountered during the function execution, if any.
 func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage Storage, farm types.Farm) ([]types.Collection, map[string]types.AuraPoolCollection, error) {
 	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
 	if err != nil {

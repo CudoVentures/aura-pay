@@ -24,6 +24,10 @@ func NewPayService(config *infrastructure.Config, apiRequester ApiRequester, hel
 	}
 }
 
+// Processes all approved farms by iterating through them and calling the processFarm function for each farm.
+// In case of an error while processing a farm,
+// the function logs the error message
+// and sends an email notification (limited to once per half hour) to inform about the failure.
 func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage Storage) error {
 	farms, err := storage.GetApprovedFarms(ctx)
 	if err != nil {
@@ -46,6 +50,17 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 	return nil
 }
 
+/*
+processFarm function processes a single farm by performing a series of steps:
+
+1. Validate the farm.
+2. Load the farm wallet.
+3. Get unspent transactions for the farm wallet.
+4. Get the last payment timestamp for the farm.
+5. Unlock the farm wallet.
+6. Process each unspent transaction for the farm.
+7. Lock the farm wallet after processing.
+*/
 func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, storage Storage, farm types.Farm) error {
 	log.Debug().Msgf("Processing farm with name %s..", farm.RewardsFromPoolBtcWalletName)
 	err := validateFarm(farm)
@@ -103,6 +118,28 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	return nil
 }
 
+/*
+	This function processes an unspent transaction for a specific farm
+	and calculates the reward distribution for NFT owners, the farm owner, and the Cudos fee.
+	It processes each collection within the farm and sends the rewards accordingly.
+
+	1. Retrieve the details of an unspent transaction using getUnspentTxDetails().
+	   Needed to get the timestamp of the transaction.
+	2. Calculate the period end, total reward for the farm, Cudos fee of total farm income, and total reward after Cudos fee.
+	3. Compute the total hash power for the farm and the hourly maintenance fee based on the farm's hash power.
+	4. Get verified collections and their minted NFTs for the farm.
+	5. Filter out expired NFTs.
+	6. Compute the minted hash power for the farm by summing up the minted hash power
+	   of all the minted nfts in all the collections.
+	7. Calculate the reward for NFT owners and the leftovers by minted hash power.
+	8. Initialize a map to store destination addresses with their corresponding amounts in Bitcoin.
+	9. Add the Cudos fee on total farm income and the leftover reward to the farm owner to the map.
+	10. Loop through all collections and process each collection and their minted nfts.
+		Update the map of destination addresses with amounts and append the statistics to their respective variables.
+	11. Send the rewards and update the statistics.
+
+	Return the period end so it can be used as period start in the next transaction if there is any.
+*/
 func (s *PayService) processFarmUnspentTx(
 	ctx context.Context,
 	btcClient BtcClient,
@@ -128,29 +165,9 @@ func (s *PayService) processFarmUnspentTx(
 	log.Debug().Msgf("Cudos part of total farm reward: %s", cudosFeeOfTotalRewardBtcDecimal)
 	log.Debug().Msgf("Total reward for farm \"%s\" after cudos fee: %s", farm.RewardsFromPoolBtcWalletName, totalRewardForFarmAfterCudosFeeBtcDecimal)
 
-	// currently always getting the hash power as set in the farm entity in the Aura Pool Service
-	// that way the rewards will be sent proportionally, no matter the current hash power of the farm
-	// otherwise there is a case where the farm hash power falls below the registered and the calculations fail
-	// if this case is to be handled, it need more work
 	currentHashPowerForFarm := farm.TotalHashPower
 	log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.RewardsFromPoolBtcWalletName, currentHashPowerForFarm)
 	hourlyMaintenanceFeeInBtcDecimal := s.calculateHourlyMaintenanceFee(farm, currentHashPowerForFarm)
-	// var currentHashPowerForFarm float64
-	// if s.config.IsTesting {
-	// 	currentHashPowerForFarm = farm.TotalHashPower // for testing & QA
-	// } else {
-	// 	// used to get current hash from FOUNDRY //
-	//  // set the date to the period begin?
-	// 	currentHashPowerForFarm, err = s.apiRequester.GetFarmTotalHashPowerFromPoolToday(ctx, farm.SubAccountName,
-	// 		time.Now().AddDate(0, 0, -1).UTC().Format("2006-09-23"))
-	// 	if err != nil {
-	// 		return err
-	// 	}
-
-	// 	if currentHashPowerForFarm <= 0 {
-	// 		return fmt.Errorf("invalid hash power (%f) for farm (%s)", currentHashPowerForFarm, farm.SubAccountName)
-	// 	}
-	// }
 
 	farmCollectionsWithNFTs, farmAuraPoolCollectionsMap, err := s.getCollectionsWithNftsForFarm(ctx, storage, farm)
 	if err != nil {
@@ -240,6 +257,21 @@ func (s *PayService) processFarmUnspentTx(
 	return periodEnd, nil
 }
 
+/*
+	Processes a collection within a farm, calculates reward and maintenance fee allocations for each NFT,
+	and distributes these amounts to their respective addresses.
+	It returns a CollectionProcessResult object containing relevant statistics and payment allocation information.
+
+	1. Loop through each NFT in the collection and process the NFT. If the NFT is processed successfully,
+	   update the maintenance fee and rewards variables, and append the NFT's statistics to the array.
+	2. Distribute maintenance fees to the farm and CUDO fee payout addresses, and distribute rewards to the NFT owners.
+	3. Calculate the collection's percentage of rewards based on its hash power.
+	4. Compute the collection award allocation, CUDO general fee for the collection,
+	   CUDO maintenance fee for the collection, farm maintenance fee for the collection, and farm leftover for the collection.
+	5. Create a CollectionPaymentAllocation object to store information about the collection's payment allocations.
+	6. Return a CollectionProcessResult object containing CUDO maintenance fee, farm maintenance fee,
+	   NFT rewards after fees, collection payment allocation, and NFT statistics.
+*/
 func (s *PayService) processCollection(
 	ctx context.Context,
 	storage Storage,
@@ -340,6 +372,25 @@ func (s *PayService) processCollection(
 	}, nil
 }
 
+/*
+	Processes an NFT within a collection, calculates its reward and maintenance fee,
+	and returns an NftProcessResult object containing relevant statistics and payment allocation information.
+
+	1. Retrieve the NFT transfer history for the given NFT from BDJuno.
+	2. Determine the NFT's period start and end times based on its transfer history and mint timestamp.
+	   Period start should be the lower of the last payment to that nft or the mint time.
+	   Period end should be the lower of the current payment timestamp and the nft expiration timestamp.
+	3. If the NFT's period start time is after the payment period end, skip the current NFT as it doesn't need to be processed.
+	4. Calculate the total reward for the NFT based on its percentage of hash power within the farm.
+	5. Adjust the reward for the NFT based on its mint time. This step ensures that if the NFT was minted after the last payment,
+	   only the part of the reward after the mint is considered for the NFT.
+	6. Calculate the maintenance fee, CUDO's part of the maintenance fee, and the reward for the NFT after fees.
+	7. Calculate the reward percentages for each owner during the NFT's period.
+	   This step takes into account the NFT's transfer history and calculates the rewards based on the ownership duration.
+	8. Return an NftProcessResult object containing CUDO's part of the maintenance fee, the maintenance fee,
+	   the reward for the NFT after fees, the reward percentages for all owners during the period,
+	   the owners for the period, and the NFT's period start and end times.
+*/
 func (s *PayService) processNft(
 	ctx context.Context,
 	storage Storage,
@@ -407,6 +458,30 @@ func (s *PayService) processNft(
 	}, true, nil
 }
 
+/*
+	This function is responsible for distributing rewards to the destination addresses,
+	ensuring that the total reward amount is correctly distributed,
+	and filtering addresses based on the payment threshold.
+	Additionally, it updates the threshold status for each address and saves the reward statistics.
+
+	1. Calculate any leftover rewards that were not distributed to NFT owners.
+	2. If there are any leftover rewards, add them to the farm owner's payout address.
+	3. Check if there are any addresses in the destinationAddressesWithAmountBtcDecimal map to pay rewards.
+	   If not, return an error, since this is not a valid case.
+	   At least the farms address should be present in the map.
+	   TODO: Is there a case where the total payed amount to the farm is under the threshold?
+	4. Verify that the total amount to be distributed is equal to the amount of rewards distributed.
+	   If there's a mismatch, return an error.
+	5. Remove any addresses with zero rewards from the destination addresses list.
+	6. Filter the payments based on the payment threshold.
+	   Update the addresses that have reached the payment threshold.
+	7. Convert the reward amounts to floats with 8 decimals (BTC type).
+	8. Send the rewards to the destination addresses.
+	   If the transaction is successful, store the transaction hash.
+	9. Update the threshold statuses for the addresses.
+   10. Save the statistics for the rewards, NFT allocations, and payment allocations.
+
+*/
 func (s *PayService) sendRewards(
 	ctx context.Context,
 	storage Storage,
