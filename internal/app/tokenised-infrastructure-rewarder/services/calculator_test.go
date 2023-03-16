@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -497,6 +500,405 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldFailIfGetPayoutAd
 
 	_, _, err = s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
 	require.Equal(t, failErr, err)
+}
+
+func TestCalculateHourlyMaintenanceFee(t *testing.T) {
+	result, _ := decimal.NewFromString("0.0000000134408602")
+	testCases := []struct {
+		desc                    string
+		farm                    types.Farm
+		currentHashPowerForFarm float64
+		helper                  Helper
+		expectedResult          decimal.Decimal
+	}{
+		{
+			desc: "successful case",
+			farm: types.Farm{
+				MaintenanceFeeInBtc: 0.01,
+			},
+			currentHashPowerForFarm: 1000,
+			expectedResult:          result,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := NewPayService(nil, &mockAPIRequester{}, &mockHelper{}, nil)
+
+			result := s.calculateHourlyMaintenanceFee(tc.farm, tc.currentHashPowerForFarm)
+			assert.Equal(t, tc.expectedResult.String(), result.String(), "unexpected result for %s", tc.desc)
+		})
+	}
+}
+
+func TestCalculateMaintenanceFeeForNFT(t *testing.T) {
+	testCases := []struct {
+		desc                      string
+		periodStart               int64
+		periodEnd                 int64
+		hourlyFeeInBtcDecimal     decimal.Decimal
+		rewardForNftBtcDecimal    decimal.Decimal
+		config                    infrastructure.Config
+		expectedNftMaintenanceFee decimal.Decimal
+		expectedCudoMaintenance   decimal.Decimal
+		expectedRewardForNft      decimal.Decimal
+	}{
+		{
+			desc:                   "successful case",
+			periodStart:            0,
+			periodEnd:              3600,
+			hourlyFeeInBtcDecimal:  decimal.NewFromFloat(0.0001),
+			rewardForNftBtcDecimal: decimal.NewFromFloat(0.001),
+			config: infrastructure.Config{
+				CUDOMaintenanceFeePercent: 10,
+			},
+			expectedNftMaintenanceFee: decimal.NewFromFloat(0.00009),
+			expectedCudoMaintenance:   decimal.NewFromFloat(0.00001),
+			expectedRewardForNft:      decimal.NewFromFloat(0.0009),
+		}, {
+			desc:                   "zero reward",
+			periodStart:            0,
+			periodEnd:              3600,
+			hourlyFeeInBtcDecimal:  decimal.NewFromFloat(0.0001),
+			rewardForNftBtcDecimal: decimal.Zero,
+			config: infrastructure.Config{
+				CUDOMaintenanceFeePercent: 10,
+			},
+			expectedNftMaintenanceFee: decimal.Zero,
+			expectedCudoMaintenance:   decimal.Zero,
+			expectedRewardForNft:      decimal.Zero,
+		},
+		{
+			desc:                   "zero maintenance fee",
+			periodStart:            0,
+			periodEnd:              3600,
+			hourlyFeeInBtcDecimal:  decimal.Zero,
+			rewardForNftBtcDecimal: decimal.NewFromFloat(0.001),
+			config: infrastructure.Config{
+				CUDOMaintenanceFeePercent: 10,
+			},
+			expectedNftMaintenanceFee: decimal.Zero,
+			expectedCudoMaintenance:   decimal.Zero,
+			expectedRewardForNft:      decimal.NewFromFloat(0.001),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := NewPayService(&tc.config, &mockAPIRequester{}, &mockHelper{}, nil)
+
+			nftMaintenanceFee, cudoMaintenance, rewardForNft := s.calculateMaintenanceFeeForNFT(tc.periodStart, tc.periodEnd, tc.hourlyFeeInBtcDecimal, tc.rewardForNftBtcDecimal)
+			assert.Equal(t, tc.expectedNftMaintenanceFee.String(), nftMaintenanceFee.String(), "unexpected NFT maintenance fee for %s", tc.desc)
+			assert.Equal(t, tc.expectedCudoMaintenance.String(), cudoMaintenance.String(), "unexpected Cudo maintenance fee for %s", tc.desc)
+			assert.Equal(t, tc.expectedRewardForNft.String(), rewardForNft.String(), "unexpected reward for NFT for %s", tc.desc)
+		})
+	}
+}
+
+func TestCalculateCudosFeeOfTotalFarmIncome(t *testing.T) {
+	testCases := []struct {
+		desc                         string
+		config                       infrastructure.Config
+		totalFarmIncomeBtcDecimal    decimal.Decimal
+		expectedFarmIncomeBtcDecimal decimal.Decimal
+		expectedCudosFeeBtcDecimal   decimal.Decimal
+	}{
+		{
+			desc: "Test with a 10% CUDO fee",
+			config: infrastructure.Config{
+				CUDOFeeOnAllBTC: 10,
+			},
+			totalFarmIncomeBtcDecimal:    decimal.NewFromFloat(1),
+			expectedFarmIncomeBtcDecimal: decimal.NewFromFloat(0.9),
+			expectedCudosFeeBtcDecimal:   decimal.NewFromFloat(0.1),
+		},
+		{
+			desc: "Test with a 20% CUDO fee",
+			config: infrastructure.Config{
+				CUDOFeeOnAllBTC: 20,
+			},
+			totalFarmIncomeBtcDecimal:    decimal.NewFromFloat(1),
+			expectedFarmIncomeBtcDecimal: decimal.NewFromFloat(0.8),
+			expectedCudosFeeBtcDecimal:   decimal.NewFromFloat(0.2),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			payService := NewPayService(&tc.config, &mockAPIRequester{}, &mockHelper{}, nil)
+
+			farmIncomeBtcDecimal, cudosFeeBtcDecimal := payService.calculateCudosFeeOfTotalFarmIncome(tc.totalFarmIncomeBtcDecimal)
+
+			if !farmIncomeBtcDecimal.Equal(tc.expectedFarmIncomeBtcDecimal) {
+				t.Errorf("Expected farm income: %s, got: %s", tc.expectedFarmIncomeBtcDecimal, farmIncomeBtcDecimal)
+			}
+
+			if !cudosFeeBtcDecimal.Equal(tc.expectedCudosFeeBtcDecimal) {
+				t.Errorf("Expected CUDO fee: %s, got: %s", tc.expectedCudosFeeBtcDecimal, cudosFeeBtcDecimal)
+			}
+		})
+	}
+}
+
+func TestSumMintedHashPowerForCollection(t *testing.T) {
+	testCases := []struct {
+		desc                   string
+		collection             types.Collection
+		expectedTotalHashPower float64
+	}{
+		{
+			desc: "Test with multiple NFTs",
+			collection: types.Collection{
+				Nfts: []types.NFT{
+					{
+						DataJson: types.NFTDataJson{
+							HashRateOwned: 10,
+						},
+					},
+					{
+						DataJson: types.NFTDataJson{
+							HashRateOwned: 20,
+						},
+					},
+					{
+						DataJson: types.NFTDataJson{
+							HashRateOwned: 30,
+						},
+					},
+				},
+			},
+			expectedTotalHashPower: 60,
+		},
+		{
+			desc: "Test with a single NFT",
+			collection: types.Collection{
+				Nfts: []types.NFT{
+					{
+						DataJson: types.NFTDataJson{
+							HashRateOwned: 5,
+						},
+					},
+				},
+			},
+			expectedTotalHashPower: 5,
+		},
+		{
+			desc: "Test with an empty collection",
+			collection: types.Collection{
+				Nfts: []types.NFT{},
+			},
+			expectedTotalHashPower: 0,
+		},
+	}
+
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			totalHashPower := sumMintedHashPowerForCollection(tC.collection)
+
+			if totalHashPower != tC.expectedTotalHashPower {
+				t.Errorf("Expected total hash power: %f, got: %f", tC.expectedTotalHashPower, totalHashPower)
+			}
+		})
+	}
+}
+
+func TestCalculateRewardByPercent(t *testing.T) {
+	testCases := []struct {
+		desc               string
+		availableHashPower float64
+		actualHashPower    float64
+		reward             decimal.Decimal
+		expectedReward     decimal.Decimal
+	}{
+		{
+			desc:               "Test with valid input",
+			availableHashPower: 100,
+			actualHashPower:    25,
+			reward:             decimal.NewFromFloat(1),
+			expectedReward:     decimal.NewFromFloat(0.25),
+		},
+		{
+			desc:               "Test with zero available hash power",
+			availableHashPower: 0,
+			actualHashPower:    25,
+			reward:             decimal.NewFromFloat(1),
+			expectedReward:     decimal.Zero,
+		},
+		{
+			desc:               "Test with zero actual hash power",
+			availableHashPower: 100,
+			actualHashPower:    0,
+			reward:             decimal.NewFromFloat(1),
+			expectedReward:     decimal.Zero,
+		},
+		{
+			desc:               "Test with zero reward",
+			availableHashPower: 100,
+			actualHashPower:    25,
+			reward:             decimal.Zero,
+			expectedReward:     decimal.Zero,
+		},
+	}
+
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			calculatedReward := calculateRewardByPercent(tC.availableHashPower, tC.actualHashPower, tC.reward)
+
+			if !calculatedReward.Equal(tC.expectedReward) {
+				t.Errorf("Expected reward: %s, got: %s", tC.expectedReward, calculatedReward)
+			}
+		})
+	}
+}
+
+func TestCalculatePercentByTime(t *testing.T) {
+	testCases := []struct {
+		desc                    string
+		timestampPrevPayment    int64
+		timestampCurrentPayment int64
+		nftStartTime            int64
+		nftEndTime              int64
+		totalRewardForPeriod    decimal.Decimal
+		expectedReward          decimal.Decimal
+	}{
+		{
+			desc:                    "Test with valid input",
+			timestampPrevPayment:    1000,
+			timestampCurrentPayment: 2000,
+			nftStartTime:            1000,
+			nftEndTime:              2000,
+			totalRewardForPeriod:    decimal.NewFromFloat(1),
+			expectedReward:          decimal.NewFromFloat(1),
+		},
+		{
+			desc:                    "Test with NFT only active for half the period",
+			timestampPrevPayment:    1000,
+			timestampCurrentPayment: 2000,
+			nftStartTime:            1000,
+			nftEndTime:              1500,
+			totalRewardForPeriod:    decimal.NewFromFloat(1),
+			expectedReward:          decimal.NewFromFloat(0.5),
+		},
+		{
+			desc:                    "Test with NFT not active during the period",
+			timestampPrevPayment:    1000,
+			timestampCurrentPayment: 2000,
+			nftStartTime:            3000,
+			nftEndTime:              4000,
+			totalRewardForPeriod:    decimal.NewFromFloat(1),
+			expectedReward:          decimal.Zero,
+		},
+	}
+
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			calculatedReward := calculatePercentByTime(tC.timestampPrevPayment, tC.timestampCurrentPayment, tC.nftStartTime, tC.nftEndTime, tC.totalRewardForPeriod)
+
+			if !calculatedReward.Equal(tC.expectedReward) {
+				t.Errorf("Expected reward: %s, got: %s", tC.expectedReward, calculatedReward)
+			}
+		})
+	}
+}
+
+func TestCalculateLeftoverNftRewardDistribution(t *testing.T) {
+	testCases := []struct {
+		desc               string
+		rewardForNftOwners decimal.Decimal
+		statistics         []types.NFTStatistics
+		expectedLeftover   decimal.Decimal
+		expectedError      error
+	}{
+		{
+			desc:               "Test with valid input",
+			rewardForNftOwners: decimal.NewFromFloat(1),
+			statistics: []types.NFTStatistics{
+				{
+					Reward:                   decimal.NewFromFloat(0.2),
+					MaintenanceFee:           decimal.NewFromFloat(0.1),
+					CUDOPartOfMaintenanceFee: decimal.NewFromFloat(0.05),
+				},
+				{
+					Reward:                   decimal.NewFromFloat(0.3),
+					MaintenanceFee:           decimal.NewFromFloat(0.2),
+					CUDOPartOfMaintenanceFee: decimal.NewFromFloat(0.1),
+				},
+			},
+			expectedLeftover: decimal.NewFromFloat(0.05),
+			expectedError:    nil,
+		},
+		{
+			desc:               "Test with distributed rewards exceeding farm reward",
+			rewardForNftOwners: decimal.NewFromFloat(1),
+			statistics: []types.NFTStatistics{
+				{
+					Reward:                   decimal.NewFromFloat(0.5),
+					MaintenanceFee:           decimal.NewFromFloat(0.3),
+					CUDOPartOfMaintenanceFee: decimal.NewFromFloat(0.1),
+				},
+				{
+					Reward:                   decimal.NewFromFloat(0.6),
+					MaintenanceFee:           decimal.NewFromFloat(0.4),
+					CUDOPartOfMaintenanceFee: decimal.NewFromFloat(0.2),
+				},
+			},
+			expectedLeftover: decimal.Decimal{},
+			expectedError:    fmt.Errorf("distributed NFT awards bigger than the farm reward after cudos fee. NftRewardDistribution: %s, TotalFarmRewardAfterCudosFee: %s", decimal.NewFromFloat(2.1), decimal.NewFromFloat(1)),
+		},
+	}
+
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			leftover, err := calculateLeftoverNftRewardDistribution(tC.rewardForNftOwners, tC.statistics)
+			if err != nil && tC.expectedError.Error() != err.Error() {
+				t.Errorf("Expected error: %s, got: %s", tC.expectedError, err)
+			}
+
+			if !leftover.Equal(tC.expectedLeftover) {
+				t.Errorf("Expected leftover: %s, got: %s", tC.expectedLeftover, leftover)
+			}
+		})
+	}
+}
+
+func TestCheckTotalAmountToDistribute(t *testing.T) {
+	testCases := []struct {
+		desc                              string
+		receivedRewardForFarmBtcDecimal   decimal.Decimal
+		destinationAddressesWithAmountBtc map[string]decimal.Decimal
+		expectedError                     error
+	}{
+		{
+			desc:                            "Equal amounts",
+			receivedRewardForFarmBtcDecimal: decimal.NewFromInt(100),
+			destinationAddressesWithAmountBtc: map[string]decimal.Decimal{
+				"address1": decimal.NewFromInt(50),
+				"address2": decimal.NewFromInt(50),
+			},
+			expectedError: nil,
+		},
+		{
+			desc:                            "Unequal amounts",
+			receivedRewardForFarmBtcDecimal: decimal.NewFromInt(100),
+			destinationAddressesWithAmountBtc: map[string]decimal.Decimal{
+				"address1": decimal.NewFromInt(40),
+				"address2": decimal.NewFromInt(50),
+			},
+			expectedError: fmt.Errorf("distributed amount doesn't equal total farm rewards. Distributed amount: {90}, TotalFarmReward: {100}"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := checkTotalAmountToDistribute(tc.receivedRewardForFarmBtcDecimal, tc.destinationAddressesWithAmountBtc)
+
+			if tc.expectedError == nil && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			} else if tc.expectedError != nil && (err == nil || err.Error() != tc.expectedError.Error()) {
+				t.Errorf("Expected error: %v, got: %v", tc.expectedError, err)
+			}
+		})
+	}
 }
 
 type mockAPIRequester struct {

@@ -11,12 +11,16 @@ type Address struct {
 	Creator string `json:"creator"`
 }
 
+type NestedData struct {
+	Events []NftTransferEvent `json:"events"`
+}
+
+type Data struct {
+	NestedData NestedData `json:"action_nft_transfer_events"`
+}
+
 type NftTransferHistory struct {
-	Data struct {
-		NestedData struct {
-			Events []NftTransferEvent `json:"events"`
-		} `json:"action_nft_transfer_events"`
-	} `json:"data"`
+	Data Data `json:"data"`
 }
 
 type NftTransferEvent struct {
@@ -59,13 +63,17 @@ type CollectionResult struct {
 	Collections []Collection `json:"collections"`
 }
 
+type DenomsByDataProperty struct {
+	Id       string             `json:"id"`
+	DataJson DataJsonCollection `json:"data_json"`
+}
+
+type CData struct {
+	DenomsByDataProperty []DenomsByDataProperty `json:"denoms_by_data_property"`
+}
+
 type CollectionData struct {
-	Data struct {
-		DenomsByDataProperty []struct {
-			Id       string             `json:"id"`
-			DataJson DataJsonCollection `json:"data_json"`
-		} `json:"denoms_by_data_property"`
-	} `json:"data"`
+	Data CData `json:"data"`
 }
 
 type DataJsonCollection struct { // hasura response

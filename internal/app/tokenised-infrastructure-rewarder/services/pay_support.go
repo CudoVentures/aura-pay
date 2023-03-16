@@ -56,7 +56,6 @@ func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.
 		if err != nil {
 			return nil, err
 		}
-
 		if isVerified {
 			verifiedCollectionIds = append(verifiedCollectionIds, collection.Id)
 		} else {
@@ -444,6 +443,8 @@ func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storag
 // - error: An error encountered during the function execution, if any.
 func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage Storage, farm types.Farm) ([]types.Collection, map[string]types.AuraPoolCollection, error) {
 	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
+	fmt.Println(collections)
+	fmt.Println(err)
 	if err != nil {
 		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
 	}
@@ -454,7 +455,7 @@ func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage 
 	}
 
 	log.Debug().Msgf("Verified collections for farm %s: %s", farm.RewardsFromPoolBtcWalletName, fmt.Sprintf("%v", verifiedDenomIds))
-
+	fmt.Println(verifiedDenomIds)
 	farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionsWithNFTs(ctx, verifiedDenomIds)
 	if err != nil {
 		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err

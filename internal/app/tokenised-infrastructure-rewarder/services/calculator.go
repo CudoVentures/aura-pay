@@ -125,6 +125,7 @@ func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashP
 	currentYear, currentMonth, _ := s.helper.Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
 
+	fmt.Println(periodLength)
 	mtFeeInBtc := decimal.NewFromFloat(farm.MaintenanceFeeInBtc)
 
 	btcFeePerOneHashPowerBtcDecimal := mtFeeInBtc.Div(decimal.NewFromFloat(currentHashPowerForFarm))
@@ -156,6 +157,10 @@ func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 
 	partOfMaintenanceFeeForCudoBtcDecimal := nftMaintenanceFeeForPayoutPeriodBtcDecimal.Mul(decimal.NewFromFloat(s.config.CUDOMaintenanceFeePercent / 100)) // ex 10% from 1000 = 100
 	nftMaintenanceFeeForPayoutPeriodBtcDecimal = nftMaintenanceFeeForPayoutPeriodBtcDecimal.Sub(partOfMaintenanceFeeForCudoBtcDecimal)
+
+	fmt.Println("rewardForNftBtcDecimal", rewardForNftBtcDecimal)
+	fmt.Println("partOfMaintenanceFeeForCudoBtcDecimal", partOfMaintenanceFeeForCudoBtcDecimal)
+	fmt.Println("nftMaintenanceFeeForPayoutPeriodBtcDecimal", nftMaintenanceFeeForPayoutPeriodBtcDecimal)
 
 	return nftMaintenanceFeeForPayoutPeriodBtcDecimal, partOfMaintenanceFeeForCudoBtcDecimal, rewardForNftBtcDecimal
 }
@@ -208,12 +213,12 @@ func calculateRewardByPercent(availableHashPower float64, actualHashPower float6
 	return calculatedReward
 }
 
-// given period and nft valid end time
+// given period and nft valid period within this period
 // calculate the reward it should take
 // this is used when nft that is minted or expired in the middle of a payment period exists
 func calculatePercentByTime(timestampPrevPayment, timestampCurrentPayment, nftStartTime, nftEndTime int64, totalRewardForPeriod decimal.Decimal) decimal.Decimal {
-	if nftStartTime <= timestampPrevPayment && nftEndTime >= timestampCurrentPayment {
-		return totalRewardForPeriod
+	if nftEndTime <= timestampPrevPayment || nftStartTime >= timestampCurrentPayment {
+		return decimal.Zero
 	}
 
 	timeMinted := nftEndTime - nftStartTime

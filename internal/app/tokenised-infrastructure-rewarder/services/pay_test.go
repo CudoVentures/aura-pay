@@ -651,6 +651,238 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 	return apiRequester
 }
 
+func TestProcessFarmUnspentTx_HappyPath(t *testing.T) {
+	// Arrange
+	// Create mock implementations
+	mockBtcClient := setupMockBtcClient()
+	mockStorage := setupMockStorage()
+	mockApiRequester := setupMockApiRequester(t)
+
+	testCtx := context.Background()
+
+	config := &infrastructure.Config{
+		Network:                    "BTC",
+		CUDOMaintenanceFeePercent:  50,
+		CUDOFeeOnAllBTC:            2,
+		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC: 0.01,
+		DbDriverName:               "postgres",
+		DbUser:                     "postgresUser",
+		DbPassword:                 "mysecretpassword",
+		DbHost:                     "127.0.0.1",
+		DbPort:                     "5432",
+		DbName:                     "aura-pay-test-db",
+	}
+
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	testLastPaymentTimestamp := int64(1666641078)
+	testFarm := types.Farm{
+		Id:                                 1,
+		SubAccountName:                     "farm_1",
+		RewardsFromPoolBtcWalletName:       "farm_1",
+		AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
+		LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
+		MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
+		MaintenanceFeeInBtc:                1,
+		TotalHashPower:                     1200,
+	}
+
+	testUnspentTx := btcjson.ListUnspentResult{TxID: "1", Amount: 6.25, Address: "address_for_receiving_reward_from_pool_1"}
+
+	s := NewPayService(config, mockApiRequester, &mockHelper{}, btcNetworkParams)
+
+	// Act
+	periodEnd, err := s.processFarmUnspentTx(testCtx, mockBtcClient, mockStorage, testFarm, testUnspentTx, testLastPaymentTimestamp)
+
+	// Check if the function returns no error and the correct period end
+	require.NoError(t, err)
+	require.Equal(t, int64(1666641078), periodEnd)
+
+	// Check if the mocked methods were called with the expected arguments
+
+	txHash, _ := chainhash.NewHashFromStr("1")
+	mockBtcClient.AssertCalled(t, "GetRawTransactionVerbose", txHash)
+	mockApiRequester.AssertCalled(t, "GetFarmCollectionsFromHasura", testCtx, int64(1))
+	mockApiRequester.AssertCalled(t, "GetFarmCollectionsWithNFTs", testCtx, []string{"farm_1_denom_1"})
+	mockStorage.AssertCalled(t, "GetFarmAuraPoolCollections", testCtx, int64(1))
+}
+
+func TestProcessFarmUnspentTx_FailedToGetTxDetails(t *testing.T) {
+	// Arrange
+	// Create mock implementations
+	mockBtcClient := setupMockBtcClient()
+	mockStorage := setupMockStorage()
+	mockApiRequester := setupMockApiRequester(t)
+
+	testCtx := context.Background()
+
+	config := &infrastructure.Config{
+		Network:                    "BTC",
+		CUDOMaintenanceFeePercent:  50,
+		CUDOFeeOnAllBTC:            2,
+		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC: 0.01,
+		DbDriverName:               "postgres",
+		DbUser:                     "postgresUser",
+		DbPassword:                 "mysecretpassword",
+		DbHost:                     "127.0.0.1",
+		DbPort:                     "5432",
+		DbName:                     "aura-pay-test-db",
+	}
+
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	testLastPaymentTimestamp := int64(1666641078)
+	testFarm := types.Farm{
+		Id:                                 1,
+		SubAccountName:                     "farm_1",
+		RewardsFromPoolBtcWalletName:       "farm_1",
+		AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
+		LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
+		MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
+		MaintenanceFeeInBtc:                1,
+		TotalHashPower:                     1200,
+	}
+
+	testUnspentTx := btcjson.ListUnspentResult{TxID: "1", Amount: 6.25, Address: "address_for_receiving_reward_from_pool_1"}
+
+	txHash, _ := chainhash.NewHashFromStr("1")
+	// call once to clear mock
+	mockBtcClient.GetRawTransactionVerbose(txHash)
+	mockBtcClient.On("GetRawTransactionVerbose", txHash).Return(&btcjson.TxRawResult{}, fmt.Errorf("error")).Once()
+	s := NewPayService(config, mockApiRequester, &mockHelper{}, btcNetworkParams)
+
+	// Act
+	_, err := s.processFarmUnspentTx(testCtx, mockBtcClient, mockStorage, testFarm, testUnspentTx, testLastPaymentTimestamp)
+
+	// Check if the function returns no error and the correct period end
+	require.Error(t, err)
+}
+
+func TestProcessFarmUnspentTx_FailedToCollections(t *testing.T) {
+	// Arrange
+	// Create mock implementations
+	mockBtcClient := setupMockBtcClient()
+	mockStorage := setupMockStorage()
+	mockApiRequester := setupMockApiRequester(t)
+
+	testCtx := context.Background()
+
+	config := &infrastructure.Config{
+		Network:                    "BTC",
+		CUDOMaintenanceFeePercent:  50,
+		CUDOFeeOnAllBTC:            2,
+		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC: 0.01,
+		DbDriverName:               "postgres",
+		DbUser:                     "postgresUser",
+		DbPassword:                 "mysecretpassword",
+		DbHost:                     "127.0.0.1",
+		DbPort:                     "5432",
+		DbName:                     "aura-pay-test-db",
+	}
+
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	testLastPaymentTimestamp := int64(1666641078)
+	testFarm := types.Farm{
+		Id:                                 1,
+		SubAccountName:                     "farm_1",
+		RewardsFromPoolBtcWalletName:       "farm_1",
+		AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
+		LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
+		MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
+		MaintenanceFeeInBtc:                1,
+		TotalHashPower:                     1200,
+	}
+
+	testUnspentTx := btcjson.ListUnspentResult{TxID: "1", Amount: 6.25, Address: "address_for_receiving_reward_from_pool_1"}
+
+	mockApiRequester.GetFarmCollectionsFromHasura(testCtx, int64(1))
+	mockApiRequester.On("GetFarmCollectionsFromHasura", testCtx, int64(1)).Return(types.CollectionData{}, fmt.Errorf("error")).Once()
+
+	s := NewPayService(config, mockApiRequester, &mockHelper{}, btcNetworkParams)
+
+	// Act
+	_, err := s.processFarmUnspentTx(testCtx, mockBtcClient, mockStorage, testFarm, testUnspentTx, testLastPaymentTimestamp)
+
+	// Check if the function returns no error and the correct period end
+	require.Error(t, err)
+}
+
+func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
+	// Arrange
+	// Create mock implementations
+	mockBtcClient := setupMockBtcClient()
+	mockStorage := setupMockStorage()
+	mockApiRequester := setupMockApiRequester(t)
+
+	testCtx := context.Background()
+
+	config := &infrastructure.Config{
+		Network:                    "BTC",
+		CUDOMaintenanceFeePercent:  50,
+		CUDOFeeOnAllBTC:            2,
+		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC: 0.01,
+		DbDriverName:               "postgres",
+		DbUser:                     "postgresUser",
+		DbPassword:                 "mysecretpassword",
+		DbHost:                     "127.0.0.1",
+		DbPort:                     "5432",
+		DbName:                     "aura-pay-test-db",
+	}
+
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	testLastPaymentTimestamp := int64(1666641078)
+	testFarm := types.Farm{
+		Id:                                 1,
+		SubAccountName:                     "farm_1",
+		RewardsFromPoolBtcWalletName:       "farm_1",
+		AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
+		LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
+		MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
+		MaintenanceFeeInBtc:                1,
+		TotalHashPower:                     1200,
+	}
+
+	testUnspentTx := btcjson.ListUnspentResult{TxID: "1", Amount: 6.25, Address: "address_for_receiving_reward_from_pool_1"}
+
+	var myslice []string
+	mockApiRequester.GetFarmCollectionsFromHasura(testCtx, int64(1))
+	mockApiRequester.On("GetFarmCollectionsFromHasura", testCtx, int64(1)).Return(types.CollectionData{}, nil).Once()
+	mockApiRequester.On("GetFarmCollectionsWithNFTs", testCtx, myslice).Return([]types.Collection{}, nil).Once()
+
+	s := NewPayService(config, mockApiRequester, &mockHelper{}, btcNetworkParams)
+
+	// Act
+	periodEnd, err := s.processFarmUnspentTx(testCtx, mockBtcClient, mockStorage, testFarm, testUnspentTx, testLastPaymentTimestamp)
+
+	// Assert
+	require.NoError(t, err)
+	require.Equal(t, int64(0), periodEnd)
+
+	// Check if the mocked methods were called with the expected arguments
+	txHash, _ := chainhash.NewHashFromStr("1")
+	mockBtcClient.AssertCalled(t, "GetRawTransactionVerbose", txHash)
+	mockApiRequester.AssertCalled(t, "GetFarmCollectionsFromHasura", testCtx, int64(1))
+	mockApiRequester.AssertCalled(t, "GetFarmCollectionsWithNFTs", testCtx, myslice)
+}
+
 func setupMockBtcClient() *mockBtcClient {
 	btcClient := &mockBtcClient{}
 
@@ -676,7 +908,6 @@ func setupMockBtcClient() *mockBtcClient {
 }
 
 func (mbc *mockBtcClient) LoadWallet(walletName string) (*btcjson.LoadWalletResult, error) {
-
 	args := mbc.Called(walletName)
 	return args.Get(0).(*btcjson.LoadWalletResult), args.Error(1)
 }
