@@ -3,6 +3,8 @@ package tokenised_infrastructure_rewarder
 import (
 	"context"
 	"errors"
+
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -12,11 +14,16 @@ import (
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
+func TestMain(m *testing.M) {
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	os.Exit(m.Run())
+}
 func TestWorkerShouldReturnIfContextIsCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

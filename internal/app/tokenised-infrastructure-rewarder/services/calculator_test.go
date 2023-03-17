@@ -843,7 +843,7 @@ func TestCalculateLeftoverNftRewardDistribution(t *testing.T) {
 				},
 			},
 			expectedLeftover: decimal.Decimal{},
-			expectedError:    fmt.Errorf("distributed NFT awards bigger than the farm reward after cudos fee. NftRewardDistribution: %s, TotalFarmRewardAfterCudosFee: %s", decimal.NewFromFloat(2.1), decimal.NewFromFloat(1)),
+			expectedError:    fmt.Errorf("distributed NFT awards bigger than farm nft reward. NftRewardDistribution: %s, TotalFarmRewardAfterCudosFee: %s", decimal.NewFromFloat(2.1), decimal.NewFromFloat(1)),
 		},
 	}
 

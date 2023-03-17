@@ -236,7 +236,7 @@ func (s *PayService) processFarmUnspentTx(
 	}
 
 	log.Debug().Msgf("All collections processed. Starting the send process...")
-	if s.sendRewards(
+	if err := s.sendRewards(
 		ctx,
 		storage,
 		farm,
@@ -248,7 +248,7 @@ func (s *PayService) processFarmUnspentTx(
 		destinationAddressesWithAmountBtcDecimal,
 		statistics,
 		collectionPaymentAllocationsStatistics,
-	) != nil {
+	); err != nil {
 		return 0, err
 	}
 
@@ -421,9 +421,9 @@ func (s *PayService) processNft(
 
 	// first calculate nft parf ot the farm as percent of hash power
 	totalRewardForNftBtcDecimal := calculateRewardByPercent(mintedHashPowerForFarm, nft.DataJson.HashRateOwned, rewardForNftOwnersBtcDecimal)
-
 	// if nft was minted after the last payment, part of the reward before the mint is still for the farm
 	rewardForNftBtcDecimal := calculatePercentByTime(lastPaymentTimestamp, periodEnd, nftPeriodStart, nftPeriodEnd, totalRewardForNftBtcDecimal)
+
 	maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal := s.calculateMaintenanceFeeForNFT(
 		nftPeriodStart,
 		nftPeriodEnd,
@@ -510,11 +510,10 @@ func (s *PayService) sendRewards(
 
 	// check that all of the amount is distributed and no more than it
 	log.Debug().Msgf("Checking if total amount given is the same as distributed...")
-	if checkTotalAmountToDistribute(totalRewardForFarmAfterCudosFeeBtcDecimal, destinationAddressesWithAmountBtcDecimal) != nil {
+	if checkTotalAmountToDistribute(receivedRewardForFarmBtcDecimal, destinationAddressesWithAmountBtcDecimal) != nil {
 		return fmt.Errorf("total amount given is not the same as distributed for Farm {%s}", farm.RewardsFromPoolBtcWalletName)
 	}
 
-	log.Debug().Msgf("Removing addressed with zero reward from the send list...")
 	removeAddressesWithZeroReward(destinationAddressesWithAmountBtcDecimal)
 
 	log.Debug().Msgf("Filtering payments by payment threshold...")

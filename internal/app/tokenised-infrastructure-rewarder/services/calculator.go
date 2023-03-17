@@ -125,7 +125,6 @@ func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashP
 	currentYear, currentMonth, _ := s.helper.Date()
 	periodLength := s.helper.DaysIn(currentMonth, currentYear)
 
-	fmt.Println(periodLength)
 	mtFeeInBtc := decimal.NewFromFloat(farm.MaintenanceFeeInBtc)
 
 	btcFeePerOneHashPowerBtcDecimal := mtFeeInBtc.Div(decimal.NewFromFloat(currentHashPowerForFarm))
@@ -157,10 +156,6 @@ func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 
 	partOfMaintenanceFeeForCudoBtcDecimal := nftMaintenanceFeeForPayoutPeriodBtcDecimal.Mul(decimal.NewFromFloat(s.config.CUDOMaintenanceFeePercent / 100)) // ex 10% from 1000 = 100
 	nftMaintenanceFeeForPayoutPeriodBtcDecimal = nftMaintenanceFeeForPayoutPeriodBtcDecimal.Sub(partOfMaintenanceFeeForCudoBtcDecimal)
-
-	fmt.Println("rewardForNftBtcDecimal", rewardForNftBtcDecimal)
-	fmt.Println("partOfMaintenanceFeeForCudoBtcDecimal", partOfMaintenanceFeeForCudoBtcDecimal)
-	fmt.Println("nftMaintenanceFeeForPayoutPeriodBtcDecimal", nftMaintenanceFeeForPayoutPeriodBtcDecimal)
 
 	return nftMaintenanceFeeForPayoutPeriodBtcDecimal, partOfMaintenanceFeeForCudoBtcDecimal, rewardForNftBtcDecimal
 }
@@ -217,6 +212,10 @@ func calculateRewardByPercent(availableHashPower float64, actualHashPower float6
 // calculate the reward it should take
 // this is used when nft that is minted or expired in the middle of a payment period exists
 func calculatePercentByTime(timestampPrevPayment, timestampCurrentPayment, nftStartTime, nftEndTime int64, totalRewardForPeriod decimal.Decimal) decimal.Decimal {
+	if nftStartTime <= timestampPrevPayment && nftEndTime >= timestampCurrentPayment {
+		return totalRewardForPeriod
+	}
+
 	if nftEndTime <= timestampPrevPayment || nftStartTime >= timestampCurrentPayment {
 		return decimal.Zero
 	}
@@ -242,7 +241,7 @@ func calculateLeftoverNftRewardDistribution(rewardForNftOwnersBtcDecimal decimal
 	leftoverNftRewardDistribution := rewardForNftOwnersBtcDecimal.Sub(distributedNftRewards)
 
 	if leftoverNftRewardDistribution.LessThan(decimal.Zero) {
-		return decimal.Decimal{}, fmt.Errorf("distributed NFT awards bigger than the farm reward after cudos fee. NftRewardDistribution: %s, TotalFarmRewardAfterCudosFee: %s", distributedNftRewards, rewardForNftOwnersBtcDecimal)
+		return decimal.Decimal{}, fmt.Errorf("distributed NFT awards bigger than farm nft reward. NftRewardDistribution: %s, TotalFarmRewardAfterCudosFee: %s", distributedNftRewards, rewardForNftOwnersBtcDecimal)
 	}
 
 	return leftoverNftRewardDistribution, nil
@@ -252,7 +251,6 @@ func calculateLeftoverNftRewardDistribution(rewardForNftOwnersBtcDecimal decimal
 // they should equal exactly the total farm reward or something went wrong during calculation
 func checkTotalAmountToDistribute(receivedRewardForFarmBtcDecimal decimal.Decimal, destinationAddressesWithAmountBtcDecimal map[string]decimal.Decimal) error {
 	var totalAmountToPayToAddressesBtcDecimal decimal.Decimal
-
 	for _, amount := range destinationAddressesWithAmountBtcDecimal {
 		totalAmountToPayToAddressesBtcDecimal = totalAmountToPayToAddressesBtcDecimal.Add(amount)
 	}
