@@ -79,16 +79,18 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 	}
 }
 
+var mSendMail = sendMail
+
 func maxErrorCountReached(config *infrastructure.Config, err error) {
 	message := fmt.Sprintf("Application has exceeded the ServiceMaxErrorCount: {%d} and needs manual intervention!\n Error: {%s}", config.ServiceMaxErrorCount, err)
 	log.Error().Msg(message)
-	sendMail(config, message)
+	mSendMail(config, message)
 }
 
 func errorEncountered(config *infrastructure.Config, processingError error, errorCount int) {
 	message := fmt.Sprintf("Application has encountered an error! Error: %s...Retrying for %d time", processingError, errorCount)
 	log.Error().Msg(message)
-	sendMail(config, message)
+	mSendMail(config, message)
 }
 
 func sendMail(config *infrastructure.Config, message string) {

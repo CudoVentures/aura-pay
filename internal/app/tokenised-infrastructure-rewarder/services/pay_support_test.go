@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
@@ -487,33 +489,107 @@ func TestConvertAmountToBTC(t *testing.T) {
 	}, result, "Amounts are not equal to the given up to 8th digit")
 }
 
+type GetCurrentAccumulatedAmountForAddressCalls struct {
+	result decimal.Decimal
+	err    error
+}
+
 func TestFilterByPaymentThreshold(t *testing.T) {
-	// Arrange
-	destinationAddressesWithAmount := map[string]types.AmountInfo{
-		"address1": {
-			Amount:           decimal.NewFromFloat(124.124124126),
-			ThresholdReached: true,
+
+	testCases := []struct {
+		desc                                       string
+		destinationAddressesWithAmountsBtcDecimal  map[string]decimal.Decimal
+		getCurrentAccumulatedAmountForAddressCalls map[string]GetCurrentAccumulatedAmountForAddressCalls
+		setInitialAccumulatedAmountForAddressCalls map[string]error
+		farmId                                     int64
+		expectedResult                             map[string]types.AmountInfo
+		expectedError                              error
+	}{
+		{
+			desc: "threshold not reached for both addresses",
+			destinationAddressesWithAmountsBtcDecimal: map[string]decimal.Decimal{
+				"address1": decimal.NewFromFloat(0.0004),
+				"address2": decimal.NewFromFloat(0.0006),
+			},
+			getCurrentAccumulatedAmountForAddressCalls: map[string]GetCurrentAccumulatedAmountForAddressCalls{
+				"address1": {decimal.NewFromFloat(0.0005), nil},
+				"address2": {decimal.NewFromFloat(0.0002), nil},
+			},
+			setInitialAccumulatedAmountForAddressCalls: map[string]error{"address2": nil},
+			expectedResult: map[string]types.AmountInfo{
+				"address1": {Amount: decimal.NewFromFloat(0.0009), ThresholdReached: false},
+				"address2": {Amount: decimal.NewFromFloat(0.0008), ThresholdReached: false},
+			},
+			expectedError: nil,
 		},
-		"address2": {
-			Amount:           decimal.NewFromFloat(0.123),
-			ThresholdReached: true,
+		{
+			desc: "threshold reached for one address",
+			destinationAddressesWithAmountsBtcDecimal: map[string]decimal.Decimal{
+				"address1": decimal.NewFromFloat(0.0006),
+				"address2": decimal.NewFromFloat(0.0004),
+			},
+			getCurrentAccumulatedAmountForAddressCalls: map[string]GetCurrentAccumulatedAmountForAddressCalls{
+				"address1": {decimal.NewFromFloat(0.0005), nil},
+				"address2": {decimal.NewFromFloat(0.0002), nil},
+			},
+			setInitialAccumulatedAmountForAddressCalls: map[string]error{"address2": nil},
+			expectedResult: map[string]types.AmountInfo{
+				"address1": {Amount: decimal.NewFromFloat(0.0011), ThresholdReached: true},
+				"address2": {Amount: decimal.NewFromFloat(0.0006), ThresholdReached: false},
+			},
+			expectedError: nil,
 		},
-		"address3": {
-			Amount:           decimal.NewFromFloat(12412323.1),
-			ThresholdReached: true,
+		{
+			desc: "error when getting accumulated amount",
+			destinationAddressesWithAmountsBtcDecimal: map[string]decimal.Decimal{
+				"address1": decimal.NewFromFloat(0.0006),
+			},
+			getCurrentAccumulatedAmountForAddressCalls: map[string]GetCurrentAccumulatedAmountForAddressCalls{
+				"address1": {decimal.Decimal{}, errors.New("error getting accumulated amount")},
+			},
+			setInitialAccumulatedAmountForAddressCalls: map[string]error{"address2": nil},
+			expectedResult: nil,
+			expectedError:  errors.New("error getting accumulated amount"),
+		},
+		{
+			desc: "error when setting initial accumulated amount",
+			destinationAddressesWithAmountsBtcDecimal: map[string]decimal.Decimal{
+				"address1": decimal.NewFromFloat(0.0006),
+			},
+			getCurrentAccumulatedAmountForAddressCalls: map[string]GetCurrentAccumulatedAmountForAddressCalls{
+				"address1": {decimal.Decimal{}, sql.ErrNoRows},
+			},
+			setInitialAccumulatedAmountForAddressCalls: map[string]error{"address1": errors.New("error setting initial accumulated amount")},
+			expectedResult: nil,
+			expectedError:  errors.New("error setting initial accumulated amount"),
 		},
 	}
 
-	// Act
-	result, err := convertAmountToBTC(destinationAddressesWithAmount)
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			ctx := context.Background()
+			config := infrastructure.Config{GlobalPayoutThresholdInBTC: 0.001}
+			mockStorage := mockStorage{}
 
-	//Assert
-	require.NoError(t, err)
-	require.Equal(t, map[string]float64{
-		"address1": 124.12412412,
-		"address2": 0.123,
-		"address3": 12412323.1,
-	}, result, "Amounts are not equal to the given up to 8th digit")
+			for address, result := range tC.getCurrentAccumulatedAmountForAddressCalls {
+				mockStorage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, address, mock.Anything).Return(result.result, result.err).Once()
+			}
+			for address, err := range tC.setInitialAccumulatedAmountForAddressCalls {
+				mockStorage.On("SetInitialAccumulatedAmountForAddress", mock.Anything, address, mock.Anything, mock.Anything).Return(err).Once()
+			}
+			payService := NewPayService(&config, &mockAPIRequester{}, &mockHelper{}, &types.BtcNetworkParams{})
+
+			_, addressesToSend, err := payService.filterByPaymentThreshold(ctx, tC.destinationAddressesWithAmountsBtcDecimal, &mockStorage, tC.farmId)
+
+			if (err == nil && tC.expectedError != nil) || (err != nil && tC.expectedError == nil) || (err != nil && tC.expectedError != nil && err.Error() != tC.expectedError.Error()) {
+				t.Errorf("Expected error %v, but got %v", tC.expectedError, err)
+			}
+
+			if !reflect.DeepEqual(addressesToSend, tC.expectedResult) {
+				t.Errorf("Expected result %v, but got %v", tC.expectedResult, addressesToSend)
+			}
+		})
+	}
 }
 
 func TestGetNftTransferHistory(t *testing.T) {

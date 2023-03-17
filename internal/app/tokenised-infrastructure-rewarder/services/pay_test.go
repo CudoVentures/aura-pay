@@ -503,154 +503,6 @@ func TestPayService_ProcessPayment_NFT_Minted_After_Payment_Period(t *testing.T)
 	require.NoError(t, s.Execute(context.Background(), setupMockBtcClient(), storage))
 }
 
-func tearDownDatabase(sqlxDB *sqlx.DB) {
-	_, err := sqlxDB.Exec("TRUNCATE TABLE utxo_transactions")
-	if err != nil {
-		panic(err)
-	}
-	_, err = sqlxDB.Exec("TRUNCATE TABLE threshold_amounts")
-	if err != nil {
-		panic(err)
-	}
-	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_destination_addresses_with_amount")
-	if err != nil {
-		panic(err)
-	}
-	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_nft_owners_payout_history CASCADE ")
-	if err != nil {
-		panic(err)
-	}
-	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_nft_payout_history CASCADE")
-	if err != nil {
-		panic(err)
-	}
-	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_tx_hash_status")
-	if err != nil {
-		panic(err)
-	}
-}
-
-func setupMockApiRequester(t *testing.T) *mockAPIRequester {
-	apiRequester := &mockAPIRequester{}
-
-	farms := []types.Farm{
-		{
-			Id:                                 1,
-			SubAccountName:                     "farm_1",
-			RewardsFromPoolBtcWalletName:       "farm_1",
-			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
-			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
-			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
-			MaintenanceFeeInBtc:                1,
-		},
-		{
-			Id:                                 2,
-			SubAccountName:                     "farm_2",
-			RewardsFromPoolBtcWalletName:       "farm_2",
-			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
-			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
-			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_2",
-			MaintenanceFeeInBtc:                0.01,
-		},
-	}
-
-	apiRequester.On("GetFarms", mock.Anything).Return(farms, nil)
-
-	farm1Data := `
-	{
-		"data": {
-			"denoms_by_data_property": [
-				{
-					"id": "farm_1_denom_1",
-					"data_json": {
-						"farm_id": "farm_1",
-						"owner": "farm_1_denom_1_owner"
-					}
-				}
-			]
-		}
-	}
-	`
-
-	var farm1CollectionData types.CollectionData
-	require.NoError(t, json.Unmarshal([]byte(farm1Data), &farm1CollectionData))
-
-	apiRequester.On("GetFarmCollectionsFromHasura", mock.Anything, int64(1)).Return(farm1CollectionData, nil).Once()
-
-	apiRequester.On("GetFarmTotalHashPowerFromPoolToday", mock.Anything, "farm_1", mock.Anything).Return(1200.0, nil).Once()
-
-	apiRequester.On("VerifyCollection", mock.Anything, "farm_1_denom_1").Return(true, nil)
-
-	farm1Denom1Data := `
-	[
-		{
-			"denom": {
-				"id": "farm_1_denom_1"
-			},
-			"nfts": [
-				{
-					"id": "1",
-					"data_json": {
-						"expiration_date": 1919101878,
-						"hash_rate_owned": 960
-					}
-				},
-				{
-					"id": "2",
-					"data_json": {
-						"expiration_date": 1643089013,
-						"hash_rate_owned": 1000
-					}
-				}
-			]
-		}
-	]
-	`
-
-	var farm1Denom1CollectionWithNFTs []types.Collection
-	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Data), &farm1Denom1CollectionWithNFTs))
-
-	apiRequester.On("GetFarmCollectionsWithNFTs", mock.Anything, []string{"farm_1_denom_1"}).Return(farm1Denom1CollectionWithNFTs, nil).Once()
-
-	farm1Denom1Nft1TransferHistoryJSON := `
-	{
-		"data": {
-			"action_nft_transfer_events": {
-				"events": [
-					{
-						"to": "nft_minter",
-						"from": "0x0",
-						"timestamp": 1664999478
-					},
-					{
-						"to": "nft_owner_2",
-						"from": "nft_minter",
-						"timestamp": 1665431478
-					}
-				]
-			}
-		}
-	}`
-
-	var farm1Denom1Nft1TransferHistory types.NftTransferHistory
-	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Nft1TransferHistoryJSON), &farm1Denom1Nft1TransferHistory))
-
-	apiRequester.On("GetNftTransferHistory", mock.Anything, "farm_1_denom_1", "1", mock.Anything).Return(farm1Denom1Nft1TransferHistory, nil).Once()
-
-	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_minter", "BTC", "1", "farm_1_denom_1").Return("nft_minter_payout_addr", nil)
-	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
-
-	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
-	apiRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1":      1,
-		"cudo_maintenance_fee_payout_address_1": 1.25025537,
-		"nft_minter_payout_addr":                1.05249717,
-		"nft_owner_2_payout_addr":               2.94699207,
-	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
-
-	return apiRequester
-}
-
 func TestProcessFarmUnspentTx_HappyPath(t *testing.T) {
 	// Arrange
 	// Create mock implementations
@@ -881,6 +733,256 @@ func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
 	mockBtcClient.AssertCalled(t, "GetRawTransactionVerbose", txHash)
 	mockApiRequester.AssertCalled(t, "GetFarmCollectionsFromHasura", testCtx, int64(1))
 	mockApiRequester.AssertCalled(t, "GetFarmCollectionsWithNFTs", testCtx, myslice)
+}
+
+// func TestSendRewards(t *testing.T) {
+// 	tests := []struct {
+// 		name                                             string
+// 		unspentTxForFarm                                 btcjson.ListUnspentResult
+// 		receivedRewardForFarmBtcDecimal                  decimal.Decimal
+// 		rewardForNftOwnersBtcDecimal                     decimal.Decimal
+// 		totalRewardForFarmAfterCudosFeeBtcDecimal        decimal.Decimal
+// 		destinationAddressesWithAmountBtcDecimal         map[string]decimal.Decimal
+// 		statistics                                       []types.NFTStatistics
+// 		currentAcummulatedAmountForAddress               map[string]decimal.Decimal
+// 		expectedAddressesToSendBtc                       map[string]float64
+// 		expectedAddressesWithThresholdToUpdateBtcDecimal map[string]decimal.Decimal
+// 		expectedAddressesWithAmountInfo                  map[string]types.AmountInfo
+// 		sendManyResult                                   error
+// 		updateThresholdStatusResult                      error
+// 		saveStatisticsResult                             error
+// 		mockStorageFuncResult                            error
+// 		mockAPIRequesterFuncResult                       error
+// 		expectError                                      error
+// 	}{
+// 		{
+// 			name: "happy path",
+// 			unspentTxForFarm: btcjson.ListUnspentResult{
+// 				TxID:    "1",
+// 				Amount:  6.25,
+// 				Address: "address_for_receiving_reward_from_pool_1",
+// 			},
+// 			rewardForNftOwnersBtcDecimal:              decimal.NewFromFloat(1),
+// 			totalRewardForFarmAfterCudosFeeBtcDecimal: decimal.NewFromFloat(5),
+// 			destinationAddressesWithAmountBtcDecimal: map[string]decimal.Decimal{
+// 				"address_for_receiving_reward_from_pool_1": decimal.NewFromFloat(4),
+// 				"nft_holder_address_1":                     decimal.NewFromFloat(1),
+// 			},
+// 			statistics: []types.NFTStatistics{
+// 				{
+// 					Reward: decimal.NewFromFloat(1),
+// 				},
+// 			},
+// 			currentAcummulatedAmountForAddress: map[string]decimal.Decimal{
+// 				"address_for_receiving_reward_from_pool_1": decimal.Zero,
+// 				"nft_holder_address_1":                     decimal.Zero,
+// 			},
+// 			expectedAddressesToSendBtc: map[string]float64{
+// 				"address_for_receiving_reward_from_pool_1": 4,
+// 				"nft_holder_address_1":                     1,
+// 			},
+// 			expectedAddressesWithThresholdToUpdateBtcDecimal: map[string]decimal.Decimal{
+// 				"address_for_receiving_reward_from_pool_1": decimal.NewFromFloat(4),
+// 				"nft_holder_address_1":                     decimal.NewFromFloat(1),
+// 			},
+// 			expectedAddressesWithAmountInfo: map[string]types.AmountInfo{
+// 				"address_for_receiving_reward_from_pool_1": {Amount: decimal.NewFromFloat(4), ThresholdReached: true},
+// 				"nft_holder_address_1":                     {Amount: decimal.NewFromFloat(1), ThresholdReached: true},
+// 			},
+// 			sendManyResult:              nil,
+// 			updateThresholdStatusResult: nil,
+// 			saveStatisticsResult:        nil,
+// 			mockAPIRequesterFuncResult:  nil,
+// 			expectError:                 nil,
+// 		},
+// 	}
+
+// 	for _, test := range tests {
+// 		t.Run(test.name, func(t *testing.T) {
+// 			mockStorage := new(mockStorage)
+// 			mockAPIRequester := new(mockAPIRequester)
+
+// 			mockAPIRequester.On("SendMany", mock.Anything, test.expectedAddressesToSendBtc).Return(test.sendManyResult).Once()
+// 			mockStorage.On("UpdateThresholdStatus", mock.Anything, test.unspentTxForFarm.TxID, mock.Anything, test.expectedAddressesWithThresholdToUpdateBtcDecimal, mock.Anything).Return(test.updateThresholdStatusResult).Once()
+// 			mockStorage.On("SaveStatistics", mock.Anything, mock.Anything, mock.Anything, test.expectedAddressesWithAmountInfo, test.statistics, mock.Anything, mock.Anything, mock.Anything).Return(test.saveStatisticsResult).Once()
+
+// 			for address, amount := range test.currentAcummulatedAmountForAddress {
+// 				mockStorage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, address, mock.Anything).Return(amount, nil).Once()
+// 			}
+// 			payService := NewPayService(&infrastructure.Config{GlobalPayoutThresholdInBTC: 1}, mockAPIRequester, &mockHelper{}, &types.BtcNetworkParams{})
+
+// 			err := payService.sendRewards(
+// 				context.Background(),
+// 				mockStorage,
+// 				types.Farm{},
+// 				test.unspentTxForFarm,
+// 				int64(1),
+// 				test.receivedRewardForFarmBtcDecimal,
+// 				test.rewardForNftOwnersBtcDecimal,
+// 				test.totalRewardForFarmAfterCudosFeeBtcDecimal,
+// 				test.destinationAddressesWithAmountBtcDecimal,
+// 				test.statistics,
+// 				[]types.CollectionPaymentAllocation{},
+// 			)
+
+// 			fmt.Println(err)
+// 			if test.expectError != nil {
+// 				assert.Error(t, err, "Expected error in test case")
+// 			} else {
+// 				assert.NoError(t, err, "Expected no error in test case")
+// 			}
+// 			mockStorage.AssertExpectations(t)
+// 			mockAPIRequester.AssertExpectations(t)
+// 		})
+// 	}
+// }
+
+func tearDownDatabase(sqlxDB *sqlx.DB) {
+	_, err := sqlxDB.Exec("TRUNCATE TABLE utxo_transactions")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE threshold_amounts")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_destination_addresses_with_amount")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_nft_owners_payout_history CASCADE ")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_nft_payout_history CASCADE")
+	if err != nil {
+		panic(err)
+	}
+	_, err = sqlxDB.Exec("TRUNCATE TABLE statistics_tx_hash_status")
+	if err != nil {
+		panic(err)
+	}
+}
+
+func setupMockApiRequester(t *testing.T) *mockAPIRequester {
+	apiRequester := &mockAPIRequester{}
+
+	farms := []types.Farm{
+		{
+			Id:                                 1,
+			SubAccountName:                     "farm_1",
+			RewardsFromPoolBtcWalletName:       "farm_1",
+			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
+			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
+			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
+			MaintenanceFeeInBtc:                1,
+		},
+		{
+			Id:                                 2,
+			SubAccountName:                     "farm_2",
+			RewardsFromPoolBtcWalletName:       "farm_2",
+			AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_2",
+			LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_2",
+			MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_2",
+			MaintenanceFeeInBtc:                0.01,
+		},
+	}
+
+	apiRequester.On("GetFarms", mock.Anything).Return(farms, nil)
+
+	farm1Data := `
+	{
+		"data": {
+			"denoms_by_data_property": [
+				{
+					"id": "farm_1_denom_1",
+					"data_json": {
+						"farm_id": "farm_1",
+						"owner": "farm_1_denom_1_owner"
+					}
+				}
+			]
+		}
+	}
+	`
+
+	var farm1CollectionData types.CollectionData
+	require.NoError(t, json.Unmarshal([]byte(farm1Data), &farm1CollectionData))
+
+	apiRequester.On("GetFarmCollectionsFromHasura", mock.Anything, int64(1)).Return(farm1CollectionData, nil).Once()
+
+	apiRequester.On("GetFarmTotalHashPowerFromPoolToday", mock.Anything, "farm_1", mock.Anything).Return(1200.0, nil).Once()
+
+	apiRequester.On("VerifyCollection", mock.Anything, "farm_1_denom_1").Return(true, nil)
+
+	farm1Denom1Data := `
+	[
+		{
+			"denom": {
+				"id": "farm_1_denom_1"
+			},
+			"nfts": [
+				{
+					"id": "1",
+					"data_json": {
+						"expiration_date": 1919101878,
+						"hash_rate_owned": 960
+					}
+				},
+				{
+					"id": "2",
+					"data_json": {
+						"expiration_date": 1643089013,
+						"hash_rate_owned": 1000
+					}
+				}
+			]
+		}
+	]
+	`
+
+	var farm1Denom1CollectionWithNFTs []types.Collection
+	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Data), &farm1Denom1CollectionWithNFTs))
+
+	apiRequester.On("GetFarmCollectionsWithNFTs", mock.Anything, []string{"farm_1_denom_1"}).Return(farm1Denom1CollectionWithNFTs, nil).Once()
+
+	farm1Denom1Nft1TransferHistoryJSON := `
+	{
+		"data": {
+			"action_nft_transfer_events": {
+				"events": [
+					{
+						"to": "nft_minter",
+						"from": "0x0",
+						"timestamp": 1664999478
+					},
+					{
+						"to": "nft_owner_2",
+						"from": "nft_minter",
+						"timestamp": 1665431478
+					}
+				]
+			}
+		}
+	}`
+
+	var farm1Denom1Nft1TransferHistory types.NftTransferHistory
+	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Nft1TransferHistoryJSON), &farm1Denom1Nft1TransferHistory))
+
+	apiRequester.On("GetNftTransferHistory", mock.Anything, "farm_1_denom_1", "1", mock.Anything).Return(farm1Denom1Nft1TransferHistory, nil).Once()
+
+	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_minter", "BTC", "1", "farm_1_denom_1").Return("nft_minter_payout_addr", nil)
+	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
+
+	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
+	apiRequester.On("SendMany", mock.Anything, map[string]float64{
+		"leftover_reward_payout_address_1":      1,
+		"cudo_maintenance_fee_payout_address_1": 1.25025537,
+		"nft_minter_payout_addr":                1.05249717,
+		"nft_owner_2_payout_addr":               2.94699207,
+	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
+
+	return apiRequester
 }
 
 func setupMockBtcClient() *mockBtcClient {

@@ -165,13 +165,15 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 
 	addressesToSend := make(map[string]types.AmountInfo)
 
-	for key := range destinationAddressesWithAmountsBtcDecimal {
-		amountAccumulatedBtcDecimal, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, key, farmId)
+	for address := range destinationAddressesWithAmountsBtcDecimal {
+
+		amountAccumulatedBtcDecimal, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, address, farmId)
+
 		if err != nil {
 			switch err {
 			case sql.ErrNoRows:
 				log.Info().Msgf("No threshold found, inserting...")
-				err = storage.SetInitialAccumulatedAmountForAddress(ctx, key, farmId, 0)
+				err = storage.SetInitialAccumulatedAmountForAddress(ctx, address, farmId, 0)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -180,17 +182,17 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 			}
 		}
 
-		totalAmountAccumulatedForAddressBtcDecimal := destinationAddressesWithAmountsBtcDecimal[key].Add(amountAccumulatedBtcDecimal)
+		totalAmountAccumulatedForAddressBtcDecimal := destinationAddressesWithAmountsBtcDecimal[address].Add(amountAccumulatedBtcDecimal)
 		amountToSendBtcDecimal := totalAmountAccumulatedForAddressBtcDecimal.RoundFloor(8) // up to 1 satoshi
 
 		if totalAmountAccumulatedForAddressBtcDecimal.GreaterThanOrEqual(thresholdInBtcDecimal) {
 			// threshold reached, get amount to send up to 1 satoshi accuracy
 			// subtract it from the total amount to reset the threshold with w/e is left
-			addressesWithThresholdToUpdateBtcDecimal[key] = totalAmountAccumulatedForAddressBtcDecimal.Sub(amountToSendBtcDecimal)
-			addressesToSend[key] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: true}
+			addressesWithThresholdToUpdateBtcDecimal[address] = totalAmountAccumulatedForAddressBtcDecimal.Sub(amountToSendBtcDecimal)
+			addressesToSend[address] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: true}
 		} else {
-			addressesWithThresholdToUpdateBtcDecimal[key] = totalAmountAccumulatedForAddressBtcDecimal
-			addressesToSend[key] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: false}
+			addressesWithThresholdToUpdateBtcDecimal[address] = totalAmountAccumulatedForAddressBtcDecimal
+			addressesToSend[address] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: false}
 		}
 	}
 
@@ -443,8 +445,7 @@ func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storag
 // - error: An error encountered during the function execution, if any.
 func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage Storage, farm types.Farm) ([]types.Collection, map[string]types.AuraPoolCollection, error) {
 	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
-	fmt.Println(collections)
-	fmt.Println(err)
+
 	if err != nil {
 		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
 	}
@@ -455,7 +456,6 @@ func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage 
 	}
 
 	log.Debug().Msgf("Verified collections for farm %s: %s", farm.RewardsFromPoolBtcWalletName, fmt.Sprintf("%v", verifiedDenomIds))
-	fmt.Println(verifiedDenomIds)
 	farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionsWithNFTs(ctx, verifiedDenomIds)
 	if err != nil {
 		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err

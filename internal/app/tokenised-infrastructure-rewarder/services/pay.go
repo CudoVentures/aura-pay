@@ -511,7 +511,7 @@ func (s *PayService) sendRewards(
 	// check that all of the amount is distributed and no more than it
 	log.Debug().Msgf("Checking if total amount given is the same as distributed...")
 	if checkTotalAmountToDistribute(totalRewardForFarmAfterCudosFeeBtcDecimal, destinationAddressesWithAmountBtcDecimal) != nil {
-		return err
+		return fmt.Errorf("total amount given is not the same as distributed for Farm {%s}", farm.RewardsFromPoolBtcWalletName)
 	}
 
 	log.Debug().Msgf("Removing addressed with zero reward from the send list...")

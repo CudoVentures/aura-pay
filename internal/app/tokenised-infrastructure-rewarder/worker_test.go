@@ -12,6 +12,7 @@ import (
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -112,6 +113,39 @@ func TestWorkerShouldRetryIfDbConnectionFails(t *testing.T) {
 	cancel()
 
 	require.Greater(t, mp.initDbConnectionCallsCount, 1)
+}
+
+func TestMaxErrorCountReached(t *testing.T) {
+	config := &infrastructure.Config{
+		ServiceMaxErrorCount: 5,
+	}
+	err := errors.New("test error")
+
+	var receivedConfig *infrastructure.Config
+	var receivedMessage string
+
+	// Temporarily replace mSendMail function with a mock function
+	tempSendMail := mSendMail
+	mSendMail = func(config *infrastructure.Config, message string) {
+		receivedConfig = config
+		receivedMessage = message
+	}
+	defer func() { mSendMail = tempSendMail }() // Restore original function after the test
+
+	maxErrorCountReached(config, err)
+
+	assert.Equal(t, config, receivedConfig, "Expected config to be passed to sendMail")
+	assert.Contains(t, receivedMessage, "Application has exceeded the ServiceMaxErrorCount", "Expected message to contain error")
+}
+
+// MockHelper is a mock of the infrastructure.Helper
+type MockHelper struct {
+	mock.Mock
+}
+
+func (m *MockHelper) SendMail(message string) error {
+	args := m.Called(message)
+	return args.Error(0)
 }
 
 type mockPayService struct {
