@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -74,6 +75,167 @@ func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, 
 
 	return okStruct.Address.Value, nil
 
+}
+
+func (r *Requester) getTxsByEvents(ctx context.Context, query string, periodStart, periodEnd int64) ([]types.TxResponse, error) {
+
+	var txResponses []types.TxResponse
+	paginationLimit := 100
+	page := 0
+	shouldFetch := true
+
+	for shouldFetch {
+		//fetch batch
+		requestString := fmt.Sprintf("/cosmos/tx/v1beta1/txs?events=%s&pagination.limit=%d&order_by=ORDER_BY_DESC&pagination.offset=%d", query, paginationLimit, page*paginationLimit)
+
+		request, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
+		if err != nil {
+			fmt.Println(err)
+			return []types.TxResponse{}, err
+		}
+		client := &http.Client{Timeout: time.Second * 10}
+		response, err := client.Do(request)
+		if err != nil {
+			log.Error().Msgf("The HTTP request failed with error %s\n", err)
+			return []types.TxResponse{}, nil
+		}
+
+		if response.StatusCode != StatusCodeOK {
+			return []types.TxResponse{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d", response.Status, response.StatusCode)
+		}
+
+		defer response.Body.Close()
+		data, err := ioutil.ReadAll(response.Body)
+		if response.StatusCode != StatusCodeOK {
+			return []types.TxResponse{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
+		}
+
+		if err != nil {
+			log.Error().Msgf("Could read data [%s] from hasura to the specific type, error is: [%s]", data, err)
+			return []types.TxResponse{}, err
+		}
+		var res types.TxQueryResponse
+		if err := json.Unmarshal(data, &res); err != nil {
+			log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+			return []types.TxResponse{}, err
+		}
+
+		//add fetched to total
+		txResponses = append(txResponses, res.TxResponses...)
+
+		//if last timestamp is higher than period start, fetch next batch
+		lastTimestamp := int64(0)
+
+		if len(res.TxResponses) > 0 {
+			lastTimestampStr := res.TxResponses[len(res.TxResponses)-1].Timestamp
+
+			layout := "2006-01-02T15:04:05Z"
+			t, err := time.Parse(layout, lastTimestampStr)
+			lastTimestamp = t.Unix()
+			if err != nil {
+				return []types.TxResponse{}, err
+			}
+		}
+
+		if lastTimestamp < periodStart || len(res.TxResponses) < paginationLimit {
+			shouldFetch = false
+		}
+
+		page++
+	}
+
+	var result []types.TxResponse
+	//convert timestamps
+	for _, txResponse := range txResponses {
+		layout := "2006-01-02T15:04:05Z"
+		t, err := time.Parse(layout, txResponse.Timestamp)
+		if err != nil {
+			return []types.TxResponse{}, err
+		}
+
+		txResponse.TimestampInt = t.Unix()
+
+		//filter by period start and finish
+		if txResponse.TimestampInt >= periodStart && txResponse.TimestampInt <= periodEnd {
+			result = append(result, txResponse)
+		}
+	}
+
+	return result, nil
+}
+
+func (r *Requester) GetDenomNftTransferHistory(ctx context.Context, collectionDenomId string, lastPaymentTimestamp, periodEnd int64) ([]types.NftTransferEvent, error) {
+	var allTxResponses []types.TxResponse
+
+	txResponses, err := r.getTxsByEvents(ctx, "marketplace_mint_nft.denom_id%3D%27"+collectionDenomId+"%27", lastPaymentTimestamp, periodEnd)
+	if err != nil {
+		return []types.NftTransferEvent{}, err
+	}
+	allTxResponses = append(allTxResponses, txResponses...)
+
+	txResponses, err = r.getTxsByEvents(ctx, "buy_nft.denom_id%3D%27"+collectionDenomId+"%27", lastPaymentTimestamp, periodEnd)
+	if err != nil {
+		return []types.NftTransferEvent{}, err
+	}
+	allTxResponses = append(allTxResponses, txResponses...)
+
+	txResponses, err = r.getTxsByEvents(ctx, "transfer_nft.denom_id%3D%27"+collectionDenomId+"%27", lastPaymentTimestamp, periodEnd)
+	if err != nil {
+		return []types.NftTransferEvent{}, err
+	}
+	allTxResponses = append(allTxResponses, txResponses...)
+
+	var transferEvents []types.NftTransferEvent
+
+	for _, txResponse := range allTxResponses {
+		for _, event := range txResponse.Events {
+			if event.Type == "buy_nft" {
+				var transferEvent types.NftTransferEvent
+				transferEvent.Timestamp = txResponse.TimestampInt
+				transferEvent.DenomId = collectionDenomId
+				for _, attr := range event.Attributes {
+					if string(attr.Key) == "owner" {
+						transferEvent.From = string(attr.Value)
+					}
+					if string(attr.Key) == "buyer" {
+						transferEvent.To = string(attr.Value)
+					}
+					if string(attr.Key) == "token_id" {
+						transferEvent.TokenId = string(attr.Value)
+					}
+				}
+				transferEvents = append(transferEvents, transferEvent)
+				continue
+			}
+
+			if event.Type == "transfer_nft" {
+				var transferEvent types.NftTransferEvent
+				transferEvent.Timestamp = txResponse.TimestampInt
+				transferEvent.DenomId = collectionDenomId
+
+				for _, attr := range event.Attributes {
+					if string(attr.Key) == "from" {
+						transferEvent.From = string(attr.Value)
+					}
+					if string(attr.Key) == "to" {
+						transferEvent.To = string(attr.Value)
+					}
+					if string(attr.Key) == "token_id" {
+						transferEvent.TokenId = string(attr.Value)
+					}
+				}
+
+				transferEvents = append(transferEvents, transferEvent)
+				continue
+			}
+		}
+	}
+
+	sort.Slice(transferEvents, func(i, j int) bool {
+		return transferEvents[i].Timestamp < transferEvents[j].Timestamp
+	})
+
+	return transferEvents, nil
 }
 
 func (r *Requester) GetNftTransferHistory(ctx context.Context, collectionDenomId, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {

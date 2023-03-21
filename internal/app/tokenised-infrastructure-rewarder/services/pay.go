@@ -285,6 +285,11 @@ func (s *PayService) processCollection(
 	farmAuraPoolCollectionsMap map[string]types.AuraPoolCollection,
 ) (CollectionProcessResult, error) {
 	log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
+	log.Debug().Msgf("Getting collection transfer events..")
+	nftTransferEvents, err := s.apiRequester.GetDenomNftTransferHistory(ctx, collection.Denom.Id, lastPaymentTimestamp, periodEnd)
+	if err != nil {
+		return CollectionProcessResult{}, err
+	}
 
 	var CUDOMaintenanceFeeBtcDecimal decimal.Decimal
 	var farmMaintenanceFeeBtcDecimal decimal.Decimal
@@ -293,12 +298,20 @@ func (s *PayService) processCollection(
 	var nftStatistics []types.NFTStatistics
 
 	for _, nft := range collection.Nfts {
+		var currentNftTransferEvents []types.NftTransferEvent
+		for _, nftTransferEvent := range nftTransferEvents {
+			if nftTransferEvent.TokenId == nft.Id {
+				currentNftTransferEvents = append(currentNftTransferEvents, nftTransferEvent)
+			}
+		}
+
 		nftProcessResult, processed, err := s.processNft(
 			ctx,
 			storage,
 			farm,
 			collection,
 			nft,
+			currentNftTransferEvents,
 			destinationAddressesWithAmountBtcDecimal,
 			rewardForNftOwnersBtcDecimal,
 			mintedHashPowerForFarm,
@@ -397,6 +410,7 @@ func (s *PayService) processNft(
 	farm types.Farm,
 	collection types.Collection,
 	nft types.NFT,
+	nftTransferEvents []types.NftTransferEvent,
 	destinationAddressesWithAmountBtcDecimal map[string]decimal.Decimal,
 	rewardForNftOwnersBtcDecimal decimal.Decimal,
 	mintedHashPowerForFarm float64,
@@ -404,9 +418,12 @@ func (s *PayService) processNft(
 	lastPaymentTimestamp int64,
 	periodEnd int64,
 ) (NftProcessResult, bool, error) {
-	nftTransferHistory, err := s.getNftTransferHistory(ctx, collection.Denom.Id, nft.Id)
-	if err != nil {
-		return NftProcessResult{}, false, err
+	nftTransferHistory := types.NftTransferHistory{
+		Data: types.Data{
+			NestedData: types.NestedData{
+				Events: nftTransferEvents,
+			},
+		},
 	}
 
 	nftPeriodStart, nftPeriodEnd, err := s.getNftTimestamps(ctx, storage, nft, nftTransferHistory, collection.Denom.Id, periodEnd)

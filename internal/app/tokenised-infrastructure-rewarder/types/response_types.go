@@ -1,5 +1,9 @@
 package types
 
+import (
+	sdk "github.com/cosmos/cosmos-sdk/types"
+)
+
 type MappedAddress struct {
 	Address Address `json:"address"`
 }
@@ -23,7 +27,22 @@ type NftTransferHistory struct {
 	Data Data `json:"data"`
 }
 
+type TxResponse struct {
+	Timestamp    string `json:"timestamp"`
+	TimestampInt int64
+	Events       []sdk.Event `json:"events"`
+}
+
+type TxQueryResponse struct {
+	TxResponses []TxResponse `json:"tx_responses"`
+	Pagination  struct {
+		NextKey interface{} `json:"next_key"`
+	} `json:"pagination"`
+}
+
 type NftTransferEvent struct {
+	DenomId   string `json:"denom_id"`
+	TokenId   string `json:"token_id"`
 	To        string `json:"to"`
 	From      string `json:"from"`
 	Timestamp int64  `json:"timestamp"`
