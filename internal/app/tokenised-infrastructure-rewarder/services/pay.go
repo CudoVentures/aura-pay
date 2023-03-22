@@ -33,9 +33,8 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 	// 	return err
 	// }
 	a, err := s.apiRequester.GetDenomNftTransferHistory(ctx, "cudostestminting", int64(1679077855), int64(100000000000000000))
-	fmt.Println(a)
 	fmt.Println(len(a))
-	fmt.Println(err)
+
 	if err != nil {
 		return err
 	}

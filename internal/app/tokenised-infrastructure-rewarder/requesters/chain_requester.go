@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -98,7 +99,7 @@ func (r *Requester) getPeriodBlockBorders(ctx context.Context, periodStart, peri
 			fmt.Println(err)
 			return 0, 0, err
 		}
-		lastCheckedStartTime, err = convertTimeToTimestamp(block.Header.Time)
+		lastCheckedStartTime, err = convertTimeToTimestamp(block.Header.Time, "")
 		if err != nil {
 			return 0, 0, err
 		}
@@ -123,7 +124,7 @@ func (r *Requester) getPeriodBlockBorders(ctx context.Context, periodStart, peri
 			return 0, 0, err
 		}
 
-		lastCheckedEndTime, err = convertTimeToTimestamp(block.Header.Time)
+		lastCheckedEndTime, err = convertTimeToTimestamp(block.Header.Time, "")
 		if err != nil {
 			return 0, 0, err
 		}
@@ -154,7 +155,6 @@ func (r *Requester) getLatestBlock(ctx context.Context) (types.Block, error) {
 }
 
 func (r *Requester) getBlockAtHeight(ctx context.Context, height int64) (types.Block, error) {
-	fmt.Printf("%s/blocks/%d", r.config.NodeRestUrl, height)
 	request, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/blocks/%d", r.config.NodeRestUrl, height), nil)
 	if err != nil {
 		return types.Block{}, err
@@ -173,81 +173,142 @@ func (r *Requester) getBlockAtHeight(ctx context.Context, height int64) (types.B
 	return blockResponse.Block, nil
 }
 
-func (r *Requester) getTxsByEvents(ctx context.Context, query string) ([]types.TxResponse, error) {
-	var txResponses []types.TxResponse
+// func (r *Requester) getBlocks(ctx context.Context, startHeight, endHeight int64) ([]types.Block, error) {
+// 	query := "%22block.height%3E" + fmt.Sprint(startHeight) + "%20AND%20block.height%3C" + fmt.Sprint(endHeight) + "%22"
+// 	fmt.Printf("%s/block_search?query=%s", r.config.NodeRPCUrl, query)
+// 	request, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/blocks/%s", r.config.NodeRPCUrl, query), nil)
+// 	if err != nil {
+// 		return []types.Block{}, err
+// 	}
+
+// 	bytes, err := r.makeRequest(ctx, request)
+// 	if err != nil {
+// 		return []types.Block{}, err
+// 	}
+
+// 	blockResponse := types.BlockSearchResponse{}
+// 	if err := json.Unmarshal(bytes, &blockResponse); err != nil {
+// 		return []types.Block{}, err
+// 	}
+// 	var blocks []types.Block
+// 	for _, blockResponse := range blockResponse.Result.Blocks {
+// 		blocks = append(blocks, blockResponse.Block)
+// 	}
+
+// 	return blocks, nil
+// }
+
+func (r *Requester) getTxsByEvents(ctx context.Context, query string) ([]types.Tx, error) {
+	var txs []types.Tx
 	paginationLimit := 100
-	page := 0
+	page := 1
 	shouldFetch := true
 
 	for shouldFetch {
 		//fetch batch
-		requestString := fmt.Sprintf("/cosmos/tx/v1beta1/txs?events=%s&pagination.limit=%d&order_by=ORDER_BY_DESC&pagination.offset=%d", query, paginationLimit, page*paginationLimit)
-		fmt.Println(requestString)
-		request, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
+		requestString := "/tx_search?query=%22" + query + "%22" + "&per_page=" + fmt.Sprint(paginationLimit) + "&page=" + fmt.Sprint(page)
+		request, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRPCUrl+requestString, nil)
 		if err != nil {
-			return []types.TxResponse{}, err
+			return []types.Tx{}, err
 		}
 
 		bytes, err := r.makeRequest(ctx, request)
 		if err != nil {
-			return []types.TxResponse{}, err
+			return []types.Tx{}, err
 		}
 		var res types.TxQueryResponse
 		if err := json.Unmarshal(bytes, &res); err != nil {
 			log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", bytes, err)
-			return []types.TxResponse{}, err
+			return []types.Tx{}, err
 		}
 
 		//add fetched to total
-		txResponses = append(txResponses, res.TxResponses...)
-
-		// all pages fetched
-		total, err := strconv.Atoi(res.Pagination.Total)
-		if err != nil {
-			return []types.TxResponse{}, err
+		for _, tx := range res.Result.Txs {
+			txs = append(txs, tx)
 		}
 
-		fmt.Println(total)
-		fmt.Println(len(txResponses))
-		if len(txResponses) == total {
+		// all pages fetched
+		total, err := strconv.Atoi(res.Result.Total)
+		if err != nil {
+			return []types.Tx{}, err
+		}
+
+		if len(txs) == total {
 			shouldFetch = false
 		}
 
 		page++
 	}
 
-	return txResponses, nil
+	return txs, nil
 }
 
 func (r *Requester) GetDenomNftTransferHistory(ctx context.Context, collectionDenomId string, periodStart, periodEnd int64) ([]types.NftTransferEvent, error) {
 	// estimate block heights
-	// periodStartHeight, periodEndHeight, err := r.getPeriodBlockBorders(ctx, periodStart, periodEnd)
-	// if err != nil {
-	// 	return []types.NftTransferEvent{}, err
-	// }
-
-	// txResponses, err := r.getTxsByEvents(ctx, "buy_nft.denom_id%3D%27"+collectionDenomId+"%27", periodStart, periodEnd)
-	var allTxResponses []types.TxResponse
-	txResponses, err := r.getTxsByEvents(ctx, "message.module=%27"+"nft"+"%27%26tx.height%3E1000")
+	periodStartHeight, periodEndHeight, err := r.getPeriodBlockBorders(ctx, periodStart, periodEnd)
 	if err != nil {
 		return []types.NftTransferEvent{}, err
 	}
-	allTxResponses = append(allTxResponses, txResponses...)
 
-	// txResponses, err = r.getTxsByEvents(ctx, "transfer_nft.denom_id%3D%27"+collectionDenomId+"%27", periodStart, periodEnd)
+	// txResponses, err := r.getTxsByEvents(ctx, "buy_nft.denom_id%3D%27"+collectionDenomId+"%27", periodStart, periodEnd)
+	var allTxs []types.Tx
+	txs, err := r.getTxsByEvents(ctx, "message.module=%27nft%27%20AND%20tx.height%3E"+fmt.Sprint(periodStartHeight)+"%20AND%20tx.height%3C"+fmt.Sprint(periodEndHeight))
+	if err != nil {
+		return []types.NftTransferEvent{}, err
+	}
+	allTxs = append(allTxs, txs...)
+
+	// txs, err = r.getTxsByEvents(ctx, "transfer_nft.denom_id%3D%27"+collectionDenomId+"%27", periodStart, periodEnd)
 	// if err != nil {
 	// 	return []types.NftTransferEvent{}, err
 	// }
-	// allTxResponses = append(allTxResponses, txResponses...)
+	// allTxs = append(allTxs, txs...)
+
+	var txHashes []string
+	for _, tx := range allTxs {
+		txHashes = append(txHashes, tx.Hash)
+	}
+
+	hasuraTxs, err := r.getTxsFromHasura(ctx, txHashes)
+	if err != nil {
+		return []types.NftTransferEvent{}, err
+	}
+	hasuraTxHashmap := make(map[string]types.HasuraTx)
+	for _, tx := range hasuraTxs {
+		hasuraTxHashmap[tx.Hash] = tx
+	}
 
 	var transferEvents []types.NftTransferEvent
 
-	for _, txResponse := range allTxResponses {
-		txTimestamp, err := convertTimeToTimestamp(txResponse.Timestamp)
+	for _, tx := range allTxs {
+		var txTimestamp int64
+		hasuraTx, ok := hasuraTxHashmap[tx.Hash]
+		if !ok {
+			log.Debug().Msgf("Could not find tx [%s] in hasura. Fetching from chain...", tx.Hash)
+			heightInt, err := strconv.ParseInt(tx.Height, 10, 64)
+			if err != nil {
+				return []types.NftTransferEvent{}, err
+			}
+			block, err := r.getBlockAtHeight(ctx, heightInt)
+			if err != nil {
+				return []types.NftTransferEvent{}, err
+			}
+			txTimestamp, err = convertTimeToTimestamp(block.Header.Time, "")
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			lastInd := strings.LastIndex(hasuraTx.Block.Time, ".")
+			txTimestamp, err = convertTimeToTimestamp(hasuraTx.Block.Time[:lastInd], "2006-01-02T15:04:05")
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		if err != nil {
 			return []types.NftTransferEvent{}, err
 		}
-		for _, event := range txResponse.Events {
+		for _, event := range tx.TxResult.Events {
 			if event.Type == "buy_nft" {
 				var transferEvent types.NftTransferEvent
 				transferEvent.Timestamp = txTimestamp
@@ -325,8 +386,13 @@ func (r *Requester) makeRequest(ctx context.Context, request *http.Request) ([]b
 	return bytes, nil
 }
 
-func convertTimeToTimestamp(timeString string) (int64, error) {
-	timeLayout := "2006-01-02T15:04:05Z"
+func convertTimeToTimestamp(timeString string, layout string) (int64, error) {
+	var timeLayout string
+	if layout == "" {
+		timeLayout = "2006-01-02T15:04:05.000Z"
+	} else {
+		timeLayout = layout
+	}
 
 	t, err := time.Parse(timeLayout, timeString)
 	if err != nil {

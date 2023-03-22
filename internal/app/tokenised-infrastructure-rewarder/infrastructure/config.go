@@ -10,6 +10,7 @@ import (
 type Config struct {
 	HasuraURL                         string
 	NodeRestUrl                       string
+	NodeRPCUrl                        string
 	BitcoinNodeUrl                    string
 	BitcoinNodePort                   string
 	BitcoinNodeUserName               string
@@ -47,6 +48,7 @@ func NewConfig() *Config {
 	return &Config{
 		HasuraURL:                         getEnv("HASURA_URL", ""),
 		NodeRestUrl:                       getEnv("NODE_REST_URL", ""),
+		NodeRPCUrl:                        getEnv("NODE_RPC_URL", ""),
 		BitcoinNodeUrl:                    getEnv("BITCOIN_NODE_URL", ""),
 		BitcoinNodePort:                   getEnv("BITCOIN_NODE_PORT", ""),
 		BitcoinNodeUserName:               getEnv("BITCOIN_NODE_USER_NAME", ""),

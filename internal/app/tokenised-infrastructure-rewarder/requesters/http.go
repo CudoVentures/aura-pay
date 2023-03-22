@@ -132,6 +132,55 @@ func (r *Requester) getFarmDailyDataFromPool(ctx context.Context, farmName, sinc
 	return okStruct, nil
 }
 
+func (r *Requester) getTxsFromHasura(ctx context.Context, txHashes []string) ([]types.HasuraTx, error) {
+	hashesString := ""
+	for _, hash := range txHashes {
+		hashesString += fmt.Sprintf(`"%s",`, hash)
+	}
+	jsonData := map[string]string{
+		"query": fmt.Sprintf(`
+            {
+				transaction(where: {hash: {_in: %s}}) {
+					hash
+					block {
+					  timestamp
+					}
+				}
+            }
+        `, fmt.Sprintf("[%s]", strings.TrimSuffix(hashesString, ","))),
+	}
+
+	jsonValue, _ := json.Marshal(jsonData)
+	request, err := http.NewRequestWithContext(ctx, "POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
+	if err != nil {
+		return []types.HasuraTx{}, err
+	}
+	client := &http.Client{Timeout: time.Second * 10}
+	response, err := client.Do(request)
+	if err != nil {
+		log.Error().Msgf("The HTTP request failed with error %s\n", err)
+		return []types.HasuraTx{}, nil
+	}
+	defer response.Body.Close()
+
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return []types.HasuraTx{}, err
+	}
+	if response.StatusCode != StatusCodeOK {
+		return []types.HasuraTx{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
+	}
+
+	var res types.HasuraTxResult
+	if err := json.Unmarshal(data, &res); err != nil {
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return []types.HasuraTx{}, err
+	}
+
+	return res.Data.Transactions, nil
+}
+
 func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId int64) (types.CollectionData, error) {
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
