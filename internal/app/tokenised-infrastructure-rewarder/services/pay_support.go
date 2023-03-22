@@ -49,17 +49,17 @@ func (s *PayService) getUnspentTxsForFarm(ctx context.Context, btcClient BtcClie
 // tries to get the collection from BDJuno
 // it also check there if it is verified
 // basically if a collection is not verified (minted), it does not exist on the chain
-func (s *PayService) verifyCollectionIds(ctx context.Context, collections types.CollectionData) ([]string, error) {
+func (s *PayService) verifyCollectionIds(ctx context.Context, collections []types.AuraPoolCollection) ([]string, error) {
 	var verifiedCollectionIds []string
-	for _, collection := range collections.Data.DenomsByDataProperty {
-		isVerified, err := s.apiRequester.VerifyCollection(ctx, collection.Id)
+	for _, collection := range collections {
+		isVerified, err := s.apiRequester.VerifyCollection(ctx, collection.DenomId)
 		if err != nil {
 			return nil, err
 		}
 		if isVerified {
-			verifiedCollectionIds = append(verifiedCollectionIds, collection.Id)
+			verifiedCollectionIds = append(verifiedCollectionIds, collection.DenomId)
 		} else {
-			log.Info().Msgf("Collection with denomId %s is not verified", collection.Id)
+			log.Info().Msgf("Collection with denomId %s is not verified", collection.DenomId)
 		}
 	}
 
@@ -444,24 +444,18 @@ func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storag
 // - map[string]types.AuraPoolCollection: A map of AuraPoolCollections keyed by their Denom IDs taken from the storage.
 // - error: An error encountered during the function execution, if any.
 func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage Storage, farm types.Farm) ([]types.Collection, map[string]types.AuraPoolCollection, error) {
-	collections, err := s.apiRequester.GetFarmCollectionsFromHasura(ctx, farm.Id)
-
+	farmAuraPoolCollections, err := storage.GetFarmAuraPoolCollections(ctx, farm.Id)
 	if err != nil {
 		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
 	}
 
-	verifiedDenomIds, err := s.verifyCollectionIds(ctx, collections)
+	verifiedDenomIds, err := s.verifyCollectionIds(ctx, farmAuraPoolCollections)
 	if err != nil {
 		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
 	}
 
 	log.Debug().Msgf("Verified collections for farm %s: %s", farm.RewardsFromPoolBtcWalletName, fmt.Sprintf("%v", verifiedDenomIds))
 	farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionsWithNFTs(ctx, verifiedDenomIds)
-	if err != nil {
-		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
-	}
-
-	farmAuraPoolCollections, err := storage.GetFarmAuraPoolCollections(ctx, farm.Id)
 	if err != nil {
 		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
 	}
