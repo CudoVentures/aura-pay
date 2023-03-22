@@ -28,15 +28,14 @@ type NftTransferHistory struct {
 }
 
 type TxResponse struct {
-	Timestamp    string `json:"timestamp"`
-	TimestampInt int64
-	Events       []sdk.Event `json:"events"`
+	Timestamp string      `json:"timestamp"`
+	Events    []sdk.Event `json:"events"`
 }
 
 type TxQueryResponse struct {
 	TxResponses []TxResponse `json:"tx_responses"`
 	Pagination  struct {
-		NextKey interface{} `json:"next_key"`
+		Total string `json:"total"`
 	} `json:"pagination"`
 }
 
@@ -98,4 +97,17 @@ type CollectionData struct {
 type DataJsonCollection struct { // hasura response
 	FarmId string `json:"farm_id"`
 	Owner  string `json:"owner"`
+}
+
+type Blockheader struct {
+	Height string `json:"height"`
+	Time   string `json:"time"`
+}
+
+type Block struct {
+	Header Blockheader `json:"header"`
+}
+
+type GetBlockResponse struct {
+	Block Block `json:"block"`
 }

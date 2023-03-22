@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -29,23 +28,29 @@ func NewPayService(config *infrastructure.Config, apiRequester ApiRequester, hel
 // the function logs the error message
 // and sends an email notification (limited to once per half hour) to inform about the failure.
 func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage Storage) error {
-	farms, err := storage.GetApprovedFarms(ctx)
+	// farms, err := storage.GetApprovedFarms(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	a, err := s.apiRequester.GetDenomNftTransferHistory(ctx, "cudostestminting", int64(1679077855), int64(100000000000000000))
+	fmt.Println(a)
+	fmt.Println(len(a))
+	fmt.Println(err)
 	if err != nil {
 		return err
 	}
-
-	for _, farm := range farms {
-		if err := s.processFarm(ctx, btcClient, storage, farm); err != nil {
-			msg := fmt.Sprintf("processing farm {%s} failed. Error: %s", farm.RewardsFromPoolBtcWalletName, err)
-			// send email only once per half hour
-			if s.helper.Unix() >= s.lastEmailTimestamp+int64(time.Minute.Seconds()*30) {
-				s.helper.SendMail(msg)
-				s.lastEmailTimestamp = s.helper.Unix()
-			}
-			log.Error().Msg(msg)
-			continue
-		}
-	}
+	// for _, farm := range farms {
+	// 	if err := s.processFarm(ctx, btcClient, storage, farm); err != nil {
+	// 		msg := fmt.Sprintf("processing farm {%s} failed. Error: %s", farm.RewardsFromPoolBtcWalletName, err)
+	// 		// send email only once per half hour
+	// 		if s.helper.Unix() >= s.lastEmailTimestamp+int64(time.Minute.Seconds()*30) {
+	// 			s.helper.SendMail(msg)
+	// 			s.lastEmailTimestamp = s.helper.Unix()
+	// 		}
+	// 		log.Error().Msg(msg)
+	// 		continue
+	// 	}
+	// }
 
 	return nil
 }
@@ -286,11 +291,7 @@ func (s *PayService) processCollection(
 ) (CollectionProcessResult, error) {
 	log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
 	log.Debug().Msgf("Getting collection transfer events..")
-	nftTransferEvents, err := s.apiRequester.GetDenomNftTransferHistory(ctx, collection.Denom.Id, lastPaymentTimestamp, periodEnd)
-	if err != nil {
-		return CollectionProcessResult{}, err
-	}
-
+	// nftTransferEvents, err := s.apiRequester.GetDenomNftTransferHistory(ctx, collection.Denom.Id, lastPaymentTimestamp, periodEnd)
 	var CUDOMaintenanceFeeBtcDecimal decimal.Decimal
 	var farmMaintenanceFeeBtcDecimal decimal.Decimal
 	var nftRewardsAfterFeesBtcDecimal decimal.Decimal
@@ -298,20 +299,12 @@ func (s *PayService) processCollection(
 	var nftStatistics []types.NFTStatistics
 
 	for _, nft := range collection.Nfts {
-		var currentNftTransferEvents []types.NftTransferEvent
-		for _, nftTransferEvent := range nftTransferEvents {
-			if nftTransferEvent.TokenId == nft.Id {
-				currentNftTransferEvents = append(currentNftTransferEvents, nftTransferEvent)
-			}
-		}
-
 		nftProcessResult, processed, err := s.processNft(
 			ctx,
 			storage,
 			farm,
 			collection,
 			nft,
-			currentNftTransferEvents,
 			destinationAddressesWithAmountBtcDecimal,
 			rewardForNftOwnersBtcDecimal,
 			mintedHashPowerForFarm,
@@ -410,7 +403,6 @@ func (s *PayService) processNft(
 	farm types.Farm,
 	collection types.Collection,
 	nft types.NFT,
-	nftTransferEvents []types.NftTransferEvent,
 	destinationAddressesWithAmountBtcDecimal map[string]decimal.Decimal,
 	rewardForNftOwnersBtcDecimal decimal.Decimal,
 	mintedHashPowerForFarm float64,
@@ -418,12 +410,9 @@ func (s *PayService) processNft(
 	lastPaymentTimestamp int64,
 	periodEnd int64,
 ) (NftProcessResult, bool, error) {
-	nftTransferHistory := types.NftTransferHistory{
-		Data: types.Data{
-			NestedData: types.NestedData{
-				Events: nftTransferEvents,
-			},
-		},
+	nftTransferHistory, err := s.getNftTransferHistory(ctx, collection.Denom.Id, nft.Id)
+	if err != nil {
+		return NftProcessResult{}, false, err
 	}
 
 	nftPeriodStart, nftPeriodEnd, err := s.getNftTimestamps(ctx, storage, nft, nftTransferHistory, collection.Denom.Id, periodEnd)
