@@ -7,6 +7,7 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/jmoiron/sqlx"
@@ -41,11 +42,13 @@ type PayService struct {
 }
 
 type ApiRequester interface {
+	GetChainNftMintTimestamp(ctx context.Context, denomId, tokenId string) (int64, error)
+
 	GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error)
 
 	GetDenomNftTransferHistory(ctx context.Context, collectionDenomId string, lastPaymentTimestamp, periodEnd int64) ([]types.NftTransferEvent, error)
 
-	GetNftTransferHistory(ctx context.Context, collectionDenomId, nftId string, fromTimestamp int64) (types.NftTransferHistory, error)
+	GetHasuraCollectionNftMintEvents(ctx context.Context, collectionDenomId string) (types.NftMintHistory, error)
 
 	GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farmName, sinceTimestamp string) (float64, error)
 
@@ -79,6 +82,7 @@ type BtcClient interface {
 	GetRawTransactionVerbose(txHash *chainhash.Hash) (*btcjson.TxRawResult, error)
 
 	ListUnspent() ([]btcjson.ListUnspentResult, error)
+	GetBalance(account string) (btcutil.Amount, error)
 }
 
 type Storage interface {

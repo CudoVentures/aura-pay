@@ -11,7 +11,7 @@ import (
 // if the nft has been owned by two or more people you need to split this reward for each one of them based on the time of ownership
 // so a method that returns each nft owner for the time period with the time he owned it as percent
 // use this percent to calculate how much each one should get from the total reward
-func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory types.NftTransferHistory,
+func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx context.Context, nftTransferHistory []types.NftTransferEvent,
 	collectionDenomId, nftId string, periodStart, periodEnd int64, currentNftOwner, payoutAddrNetwork string, rewardForNftAfterFeeBtcDecimal decimal.Decimal) (map[string]float64, []types.NFTOwnerInformation, error) {
 
 	totalPeriodTimeInSeconds := periodEnd - periodStart
@@ -25,7 +25,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 	var transferHistoryForTimePeriod []types.NftTransferEvent
 
 	// get only those transfer events in the current time period
-	for _, transferHistoryElement := range nftTransferHistory.Data.NestedData.Events {
+	for _, transferHistoryElement := range nftTransferHistory {
 		if transferHistoryElement.Timestamp >= periodStart && transferHistoryElement.Timestamp <= periodEnd {
 			transferHistoryForTimePeriod = append(transferHistoryForTimePeriod, transferHistoryElement)
 		}
@@ -115,6 +115,15 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 	lastOwnerIndex := len(nftOwnersInformation) - 1
 	nftOwnersInformation[lastOwnerIndex].Reward = nftOwnersInformation[lastOwnerIndex].Reward.Add(nftRewardDistributionleftovers)
 
+	var finalTotalDistribution decimal.Decimal
+	for _, ownerInfo := range nftOwnersInformation {
+		finalTotalDistribution = finalTotalDistribution.Add(ownerInfo.Reward)
+	}
+
+	if !finalTotalDistribution.Equal(rewardForNftAfterFeeBtcDecimal) {
+		return nil, nil, fmt.Errorf("calculated NFT reward distribution is not equal to the total given. CalculatedForOwnerDistribution: %s, TotalGiventoDistribute: %s", finalTotalDistribution, rewardForNftAfterFeeBtcDecimal)
+	}
+
 	return ownersWithPercentOwnedTime, nftOwnersInformation, nil
 }
 
@@ -142,22 +151,27 @@ func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashP
 func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	periodEnd int64,
 	hourlyFeeInBtcDecimal decimal.Decimal,
-	rewardForNftBtcDecimal decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal) {
-
+	rewardForNftBtcDecimal decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, error) {
 	periodInHoursToPayFor := float64(periodEnd-periodStart) / float64(3600) // period for which we are paying the MT fee
 
+	var rewardForNftAfterFeesBtcDecimal decimal.Decimal
 	nftMaintenanceFeeForPayoutPeriodBtcDecimal := hourlyFeeInBtcDecimal.Mul(decimal.NewFromFloat(periodInHoursToPayFor)) // the fee for the period
 	if nftMaintenanceFeeForPayoutPeriodBtcDecimal.GreaterThan(rewardForNftBtcDecimal) {                                  // if the fee is greater - it has higher priority then the users reward
 		nftMaintenanceFeeForPayoutPeriodBtcDecimal = rewardForNftBtcDecimal
-		rewardForNftBtcDecimal = decimal.Zero
+		rewardForNftAfterFeesBtcDecimal = decimal.Zero
 	} else {
-		rewardForNftBtcDecimal = rewardForNftBtcDecimal.Sub(nftMaintenanceFeeForPayoutPeriodBtcDecimal)
+		rewardForNftAfterFeesBtcDecimal = rewardForNftBtcDecimal.Sub(nftMaintenanceFeeForPayoutPeriodBtcDecimal)
 	}
 
 	partOfMaintenanceFeeForCudoBtcDecimal := nftMaintenanceFeeForPayoutPeriodBtcDecimal.Mul(decimal.NewFromFloat(s.config.CUDOMaintenanceFeePercent / 100)) // ex 10% from 1000 = 100
 	nftMaintenanceFeeForPayoutPeriodBtcDecimal = nftMaintenanceFeeForPayoutPeriodBtcDecimal.Sub(partOfMaintenanceFeeForCudoBtcDecimal)
 
-	return nftMaintenanceFeeForPayoutPeriodBtcDecimal, partOfMaintenanceFeeForCudoBtcDecimal, rewardForNftBtcDecimal
+	totalCalculated := nftMaintenanceFeeForPayoutPeriodBtcDecimal.Add(partOfMaintenanceFeeForCudoBtcDecimal).Add(rewardForNftAfterFeesBtcDecimal)
+	if !totalCalculated.Equal(rewardForNftBtcDecimal) {
+		return decimal.Zero, decimal.Zero, decimal.Zero, fmt.Errorf("the sum of the maintenance fee, cudos fee and the reward for the nft is not equal to the reward for the nft. MaintenanceFee: %s, CudosFee: %s, Reward: %s, Sum: %s. AmountToDistribute: %s", nftMaintenanceFeeForPayoutPeriodBtcDecimal, partOfMaintenanceFeeForCudoBtcDecimal, rewardForNftBtcDecimal, totalCalculated, rewardForNftBtcDecimal)
+	}
+
+	return nftMaintenanceFeeForPayoutPeriodBtcDecimal, partOfMaintenanceFeeForCudoBtcDecimal, rewardForNftAfterFeesBtcDecimal, nil
 }
 
 // calculates the cudos/aura fee from the total farm payment before maintenance fees

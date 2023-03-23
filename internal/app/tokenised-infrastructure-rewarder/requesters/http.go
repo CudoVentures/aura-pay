@@ -29,45 +29,46 @@ const (
 	StatusCodeNotFound = 404
 )
 
-func (r *Requester) GetNftTransferHistory(ctx context.Context, collectionDenomId, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
+func (r *Requester) GetHasuraCollectionNftMintEvents(ctx context.Context, collectionDenomId string) (types.NftMintHistory, error) {
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
 		{
-			action_nft_transfer_events(denom_id: "%s", token_id: %s, from_time: %d, to_time: %d) {
-			  events
-			}
+			nft_transfer_history(where: {denom_id: {_eq: "%s"}, old_owner: {_eq: "0x0"}}) {
+				id
+				timestamp
+			  }
 		}
-        `, collectionDenomId, nftId, fromTimestamp, time.Now().Unix()),
+        `, collectionDenomId),
 	}
 
 	jsonValue, _ := json.Marshal(jsonData)
 	request, err := http.NewRequestWithContext(ctx, "POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
 	if err != nil {
-		return types.NftTransferHistory{}, err
+		return types.NftMintHistory{}, err
 	}
 	client := &http.Client{Timeout: time.Second * 10}
 	response, err := client.Do(request)
 	if err != nil {
 		log.Error().Msgf("The HTTP request failed with error %s\n", err)
-		return types.NftTransferHistory{}, nil
+		return types.NftMintHistory{}, nil
 	}
 	if response.StatusCode != StatusCodeOK {
-		return types.NftTransferHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d", response.Status, response.StatusCode)
+		return types.NftMintHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d", response.Status, response.StatusCode)
 	}
 	defer response.Body.Close()
 	data, err := ioutil.ReadAll(response.Body)
 	if response.StatusCode != StatusCodeOK {
-		return types.NftTransferHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
+		return types.NftMintHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
 	}
 
 	if err != nil {
 		log.Error().Msgf("Could read data [%s] from hasura to the specific type, error is: [%s]", data, err)
-		return types.NftTransferHistory{}, err
+		return types.NftMintHistory{}, err
 	}
-	var res types.NftTransferHistory
+	var res types.NftMintHistory
 	if err := json.Unmarshal(data, &res); err != nil {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
-		return types.NftTransferHistory{}, err
+		return types.NftMintHistory{}, err
 	}
 
 	return res, nil

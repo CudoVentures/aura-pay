@@ -87,50 +87,58 @@ func (r *Requester) getPeriodBlockBorders(ctx context.Context, periodStart, peri
 	lastCheckedStartTime := time.Now().Unix()
 	// get the block before the period start
 	// repeat until fount height before the period start
+	log.Debug().Msgf("Getting period start block height...")
 	for lastCheckedStartTime > periodStart {
-		estimatedHeight := periodStartHeight - (lastCheckedStartTime-periodStart)/5
+		estimatedHeight := periodStartHeight - (lastCheckedStartTime-periodStart)/5 - 1
 		if estimatedHeight <= 0 {
 			periodStartHeight = 0
 			break
 		}
-
+		log.Debug().Msgf("Estimated height: %d", estimatedHeight)
 		block, err := r.getBlockAtHeight(ctx, estimatedHeight)
 		if err != nil {
 			fmt.Println(err)
 			return 0, 0, err
 		}
-		lastCheckedStartTime, err = convertTimeToTimestamp(block.Header.Time, "")
+
+		log.Debug().Msgf("Block time: %s", block.Header.Time)
+		lastCheckedStartTime, err = convertTimeToTimestamp(block.Header.Time)
 		if err != nil {
 			return 0, 0, err
 		}
 
 		periodStartHeight = estimatedHeight
 	}
+	log.Debug().Msgf("Found period start height: %d", periodStartHeight)
 
 	// do the same for period end
 	periodEndHeight := periodStartHeight
 	lastCheckedEndTime := lastCheckedStartTime
 	// get the block before the period start
 	// repeat until fount height before the period start
+	log.Debug().Msgf("Getting period end block height...")
 	for lastCheckedEndTime < periodEnd {
-		estimatedEndHeight := periodEndHeight + (periodEnd-lastCheckedEndTime)/5
+		estimatedEndHeight := periodEndHeight + (periodEnd-lastCheckedEndTime)/5 + 1
 		if estimatedEndHeight >= currentBlockHeight {
 			periodEndHeight = currentBlockHeight
 			break
 		}
+		log.Debug().Msgf("Estimated height: %d", estimatedEndHeight)
 
 		block, err := r.getBlockAtHeight(ctx, estimatedEndHeight)
 		if err != nil {
 			return 0, 0, err
 		}
 
-		lastCheckedEndTime, err = convertTimeToTimestamp(block.Header.Time, "")
+		log.Debug().Msgf("Block time: %s", block.Header.Time)
+		lastCheckedEndTime, err = convertTimeToTimestamp(block.Header.Time)
 		if err != nil {
 			return 0, 0, err
 		}
 
 		periodEndHeight = estimatedEndHeight
 	}
+	log.Debug().Msgf("Found period end height: %d", periodEndHeight)
 
 	return periodStartHeight, periodEndHeight, nil
 }
@@ -173,30 +181,33 @@ func (r *Requester) getBlockAtHeight(ctx context.Context, height int64) (types.B
 	return blockResponse.Block, nil
 }
 
-// func (r *Requester) getBlocks(ctx context.Context, startHeight, endHeight int64) ([]types.Block, error) {
-// 	query := "%22block.height%3E" + fmt.Sprint(startHeight) + "%20AND%20block.height%3C" + fmt.Sprint(endHeight) + "%22"
-// 	fmt.Printf("%s/block_search?query=%s", r.config.NodeRPCUrl, query)
-// 	request, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/blocks/%s", r.config.NodeRPCUrl, query), nil)
-// 	if err != nil {
-// 		return []types.Block{}, err
-// 	}
+func (r *Requester) GetChainNftMintTimestamp(ctx context.Context, denomId, tokenId string) (int64, error) {
+	marketplaceModuletxs, err := r.getTxsByEvents(ctx, "marketplace_mint_nft.denom_id=%27"+tokenId+"%27%20AND%20marketplace_mint_nft.denom_id=%27"+denomId+"%27")
+	if err != nil {
+		return 0, err
+	}
 
-// 	bytes, err := r.makeRequest(ctx, request)
-// 	if err != nil {
-// 		return []types.Block{}, err
-// 	}
+	if len(marketplaceModuletxs) != 1 {
+		return 0, fmt.Errorf("error! Expected 1 mint tx for token %s, got %d", tokenId, len(marketplaceModuletxs))
+	}
 
-// 	blockResponse := types.BlockSearchResponse{}
-// 	if err := json.Unmarshal(bytes, &blockResponse); err != nil {
-// 		return []types.Block{}, err
-// 	}
-// 	var blocks []types.Block
-// 	for _, blockResponse := range blockResponse.Result.Blocks {
-// 		blocks = append(blocks, blockResponse.Block)
-// 	}
+	parsedHeight, err := strconv.ParseInt(marketplaceModuletxs[0].Height, 10, 64)
+	if err != nil {
+		return 0, err
+	}
 
-// 	return blocks, nil
-// }
+	block, err := r.getBlockAtHeight(ctx, parsedHeight)
+	if err != nil {
+		return 0, err
+	}
+
+	timestamp, err := convertTimeToTimestamp(block.Header.Time)
+	if err != nil {
+		return 0, err
+	}
+
+	return timestamp, nil
+}
 
 func (r *Requester) getTxsByEvents(ctx context.Context, query string) ([]types.Tx, error) {
 	var txs []types.Tx
@@ -245,34 +256,39 @@ func (r *Requester) getTxsByEvents(ctx context.Context, query string) ([]types.T
 
 func (r *Requester) GetDenomNftTransferHistory(ctx context.Context, collectionDenomId string, periodStart, periodEnd int64) ([]types.NftTransferEvent, error) {
 	// estimate block heights
+	log.Debug().Msgf("Getting block borders for period %d - %d", periodStart, periodEnd)
 	periodStartHeight, periodEndHeight, err := r.getPeriodBlockBorders(ctx, periodStart, periodEnd)
 	if err != nil {
 		return []types.NftTransferEvent{}, err
 	}
-
-	// txResponses, err := r.getTxsByEvents(ctx, "buy_nft.denom_id%3D%27"+collectionDenomId+"%27", periodStart, periodEnd)
+	log.Debug().Msgf("Got block borders for period %d - %d: %d - %d", periodStart, periodEnd, periodStartHeight, periodEndHeight)
+	log.Debug().Msgf("Getting buy nft txs for period %d - %d", periodStart, periodEnd)
 	var allTxs []types.Tx
-	txs, err := r.getTxsByEvents(ctx, "message.module=%27nft%27%20AND%20tx.height%3E"+fmt.Sprint(periodStartHeight)+"%20AND%20tx.height%3C"+fmt.Sprint(periodEndHeight))
+	marketplaceModuletxs, err := r.getTxsByEvents(ctx, "buy_nft.denom_id=%27"+collectionDenomId+"%27%20AND%20tx.height%3E"+fmt.Sprint(periodStartHeight)+"%20AND%20tx.height%3C"+fmt.Sprint(periodEndHeight))
 	if err != nil {
 		return []types.NftTransferEvent{}, err
 	}
-	allTxs = append(allTxs, txs...)
-
-	// txs, err = r.getTxsByEvents(ctx, "transfer_nft.denom_id%3D%27"+collectionDenomId+"%27", periodStart, periodEnd)
-	// if err != nil {
-	// 	return []types.NftTransferEvent{}, err
-	// }
-	// allTxs = append(allTxs, txs...)
+	log.Debug().Msgf("Done!")
+	log.Debug().Msgf("Getting buy nft txs for period %d - %d", periodStart, periodEnd)
+	allTxs = append(allTxs, marketplaceModuletxs...)
+	nftModuleTxs, err := r.getTxsByEvents(ctx, "transfer_nft.denom_id=%27"+collectionDenomId+"%27%20AND%20tx.height%3E"+fmt.Sprint(periodStartHeight)+"%20AND%20tx.height%3C"+fmt.Sprint(periodEndHeight))
+	if err != nil {
+		return []types.NftTransferEvent{}, err
+	}
+	log.Debug().Msgf("Done!")
+	allTxs = append(allTxs, nftModuleTxs...)
 
 	var txHashes []string
 	for _, tx := range allTxs {
 		txHashes = append(txHashes, tx.Hash)
 	}
 
+	log.Debug().Msgf("Getting txs from hasura for period %d - %d", periodStart, periodEnd)
 	hasuraTxs, err := r.getTxsFromHasura(ctx, txHashes)
 	if err != nil {
 		return []types.NftTransferEvent{}, err
 	}
+	log.Debug().Msgf("Done!")
 	hasuraTxHashmap := make(map[string]types.HasuraTx)
 	for _, tx := range hasuraTxs {
 		hasuraTxHashmap[tx.Hash] = tx
@@ -293,13 +309,13 @@ func (r *Requester) GetDenomNftTransferHistory(ctx context.Context, collectionDe
 			if err != nil {
 				return []types.NftTransferEvent{}, err
 			}
-			txTimestamp, err = convertTimeToTimestamp(block.Header.Time, "")
+			txTimestamp, err = convertTimeToTimestamp(block.Header.Time)
 			if err != nil {
 				return nil, err
 			}
+			log.Debug().Msgf("Done!")
 		} else {
-			lastInd := strings.LastIndex(hasuraTx.Block.Time, ".")
-			txTimestamp, err = convertTimeToTimestamp(hasuraTx.Block.Time[:lastInd], "2006-01-02T15:04:05")
+			txTimestamp, err = convertTimeToTimestamp(hasuraTx.Block.Time)
 			if err != nil {
 				return nil, err
 			}
@@ -386,15 +402,11 @@ func (r *Requester) makeRequest(ctx context.Context, request *http.Request) ([]b
 	return bytes, nil
 }
 
-func convertTimeToTimestamp(timeString string, layout string) (int64, error) {
-	var timeLayout string
-	if layout == "" {
-		timeLayout = "2006-01-02T15:04:05.000Z"
-	} else {
-		timeLayout = layout
-	}
+func convertTimeToTimestamp(timeString string) (int64, error) {
+	timeLayout := "2006-01-02T15:04:05"
+	lastInd := strings.LastIndex(timeString, ".")
 
-	t, err := time.Parse(timeLayout, timeString)
+	t, err := time.Parse(timeLayout, timeString[:lastInd])
 	if err != nil {
 		return 0, err
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"strconv"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -96,13 +95,13 @@ func (s *PayService) filterExpiredBeforePeriodNFTs(farmCollectionsWithNFTs []typ
 // gets the payout times entries for that nft
 // the period start for the nft is the bigger one from the bigger from the last payout time, or nft mint time
 // the period end is the smaller from the expiration date and the given period end
-func (s *PayService) getNftTimestamps(ctx context.Context, storage Storage, nft types.NFT, nftTransferHistory types.NftTransferHistory, denomId string, periodEnd int64) (int64, int64, error) {
+func (s *PayService) getNftTimestamps(ctx context.Context, storage Storage, nft types.NFT, mintTimestamp int64, nftTransferHistory []types.NftTransferEvent, denomId string, periodEnd int64) (int64, int64, error) {
 	payoutTimes, err := storage.GetPayoutTimesForNFT(ctx, denomId, nft.Id)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	nftPeriodStart, err := s.findCurrentPayoutPeriod(payoutTimes, nftTransferHistory)
+	nftPeriodStart, err := s.findCurrentPayoutPeriod(payoutTimes, mintTimestamp)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -120,20 +119,20 @@ func (s *PayService) getNftTimestamps(ctx context.Context, storage Storage, nft 
 
 // gets the nft transfer history entries from BDJuno
 // sorts them
-func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomId, nftId string) (types.NftTransferHistory, error) {
-	// TODO: This oculd be optimized, why fetching all events everytime
-	nftTransferHistory, err := s.apiRequester.GetNftTransferHistory(ctx, collectionDenomId, nftId, 1) // all transfer events
-	if err != nil {
-		return types.NftTransferHistory{}, err
-	}
+// func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomId, nftId string) (types.NftTransferHistory, error) {
+// 	// TODO: This oculd be optimized, why fetching all events everytime
+// 	nftTransferHistory, err := s.apiRequester.GetNftTransferHistory(ctx, collectionDenomId, nftId, 1) // all transfer events
+// 	if err != nil {
+// 		return types.NftTransferHistory{}, err
+// 	}
 
-	// sort in ascending order by timestamp
-	sort.Slice(nftTransferHistory.Data.NestedData.Events, func(i, j int) bool {
-		return nftTransferHistory.Data.NestedData.Events[i].Timestamp < nftTransferHistory.Data.NestedData.Events[j].Timestamp
-	})
+// 	// sort in ascending order by timestamp
+// 	sort.Slice(nftTransferHistory.Data.NestedData.Events, func(i, j int) bool {
+// 		return nftTransferHistory.Data.NestedData.Events[i].Timestamp < nftTransferHistory.Data.NestedData.Events[j].Timestamp
+// 	})
 
-	return nftTransferHistory, nil
-}
+// 	return nftTransferHistory, nil
+// }
 
 // gets the higher from the last payment timestamp or the mint timestamp
 // if there is any payment it is expected that it was done after the mint timestamp
@@ -141,10 +140,10 @@ func (s *PayService) getNftTransferHistory(ctx context.Context, collectionDenomI
 // otherwise - the mint event timestamp
 // it is expected that the inputs are sorted
 // TODO: do some checks, or get the max from both
-func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, nftTransferHistory types.NftTransferHistory) (int64, error) {
+func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, mintTimestamp int64) (int64, error) {
 	l := len(payoutTimes)
 	if l == 0 { // first time payment - start time is time of minting
-		return nftTransferHistory.Data.NestedData.Events[0].Timestamp, nil
+		return mintTimestamp, nil
 	}
 	return payoutTimes[l-1].PayoutPeriodEnd, nil // last time we paid until now
 }
@@ -275,7 +274,7 @@ func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountIn
 	result := make(map[string]float64)
 	for k, v := range destinationAddressesWithAmount {
 		if v.ThresholdReached {
-			amountString := v.Amount.RoundFloor(8).String()
+			amountString := v.Amount.String()
 			amountFloat, err := strconv.ParseFloat(amountString, 64)
 			if err != nil {
 				return nil, err
@@ -315,21 +314,6 @@ func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]deci
 		destinationAddressesWithAmount[farmDefaultPayoutAddress] = destinationAddressesWithAmount[farmDefaultPayoutAddress].Add(leftoverReward)
 	} else {
 		destinationAddressesWithAmount[farmDefaultPayoutAddress] = leftoverReward
-	}
-}
-
-// distributeRewardsToOwners distributes the NFT payout amount (nftPayoutAmount) to the respective owners based on
-// their percentage of ownership (ownersWithPercentOwned) and updates the destinationAddressesWithAmount map accordingly.
-//
-// Parameters:
-// - ownersWithPercentOwned map[string]float64: A map with the NFT payout addresses as keys and the percentage of ownership as values.
-// - nftPayoutAmount decimal.Decimal: The NFT payout amount to be distributed.
-// - destinationAddressesWithAmount map[string]decimal.Decimal: A map with the destination addresses as keys
-//   and the accumulated amounts as values. This map will be updated with the new payout amounts.
-func distributeRewardsToOwners(ownersWithPercentOwned map[string]float64, nftPayoutAmount decimal.Decimal, destinationAddressesWithAmount map[string]decimal.Decimal) {
-	for nftPayoutAddress, percentFromReward := range ownersWithPercentOwned {
-		payoutAmount := nftPayoutAmount.Mul(decimal.NewFromFloat(percentFromReward / 100))
-		destinationAddressesWithAmount[nftPayoutAddress] = destinationAddressesWithAmount[nftPayoutAddress].Add(payoutAmount)
 	}
 }
 

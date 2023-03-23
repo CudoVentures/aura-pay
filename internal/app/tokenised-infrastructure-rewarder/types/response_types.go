@@ -27,6 +27,17 @@ type NftTransferHistory struct {
 	Data Data `json:"data"`
 }
 
+type HasuraNftMintEvent struct {
+	TokenId   int64 `json:"id"`
+	Timestamp int64 `json:"timestamp"`
+}
+
+type NftMintHistory struct {
+	Data struct {
+		History []HasuraNftMintEvent `json:"nft_transfer_history"`
+	} `json:"data"`
+}
+
 type TxResult struct {
 	Events []sdk.Event `json:"events"`
 }
