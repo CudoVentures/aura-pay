@@ -97,7 +97,6 @@ func (r *Requester) getPeriodBlockBorders(ctx context.Context, periodStart, peri
 		log.Debug().Msgf("Estimated height: %d", estimatedHeight)
 		block, err := r.getBlockAtHeight(ctx, estimatedHeight)
 		if err != nil {
-			fmt.Println(err)
 			return 0, 0, err
 		}
 

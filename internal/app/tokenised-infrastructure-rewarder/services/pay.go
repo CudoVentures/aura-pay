@@ -33,12 +33,7 @@ func (s *PayService) Execute(ctx context.Context, btcClient BtcClient, storage S
 	if err != nil {
 		return err
 	}
-	// a, err := s.apiRequester.GetDenomNftTransferHistory(ctx, "val", int64(1679077855), int64(100000000000000000))
-	// fmt.Println(len(a))
 
-	// if err != nil {
-	// 	return err
-	// }
 	for _, farm := range farms {
 		if err := s.processFarm(ctx, btcClient, storage, farm); err != nil {
 			msg := fmt.Sprintf("processing farm {%s} failed. Error: %s", farm.RewardsFromPoolBtcWalletName, err)
@@ -293,6 +288,7 @@ func (s *PayService) processCollection(
 	log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
 	log.Debug().Msgf("Getting collection transfer events..")
 	nftTransferEvents, err := s.apiRequester.GetDenomNftTransferHistory(ctx, collection.Denom.Id, periodStart, periodEnd)
+
 	if err != nil {
 		return CollectionProcessResult{}, err
 	}
@@ -302,7 +298,6 @@ func (s *PayService) processCollection(
 	for _, nftTransferEvent := range nftTransferEvents {
 		nftTransferEventsMap[nftTransferEvent.TokenId] = append(nftTransferEventsMap[nftTransferEvent.TokenId], nftTransferEvent)
 	}
-
 	log.Debug().Msgf("Getting collection mint history from BDJuno..")
 	hasuraNftMintHistory, err := s.apiRequester.GetHasuraCollectionNftMintEvents(ctx, collection.Denom.Id)
 	if err != nil {

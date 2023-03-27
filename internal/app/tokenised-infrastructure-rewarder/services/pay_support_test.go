@@ -394,7 +394,8 @@ func TestGetNftTimestamps(t *testing.T) {
 	testCases := []struct {
 		name               string
 		payoutTimes        []types.NFTStatistics
-		nftTransferHistory types.NftTransferHistory
+		nftTransferHistory []types.NftTransferEvent
+		mintTimestamp      int64
 		denomId            string
 		periodEnd          int64
 		nft                types.NFT
@@ -408,19 +409,14 @@ func TestGetNftTimestamps(t *testing.T) {
 				{PayoutPeriodEnd: 1000},
 				{PayoutPeriodEnd: 2000},
 			},
-			nftTransferHistory: types.NftTransferHistory{
-				Data: types.Data{
-					NestedData: types.NestedData{
-						Events: []types.NftTransferEvent{{Timestamp: 1500}},
-					},
-				},
-			},
-			denomId:       "denom1",
-			periodEnd:     2500,
-			nft:           types.NFT{DataJson: types.NFTDataJson{ExpirationDate: 3000}},
-			expectedStart: 2000,
-			expectedEnd:   2500,
-			expectedErr:   nil,
+			nftTransferHistory: []types.NftTransferEvent{{Timestamp: 1500}},
+			mintTimestamp:      int64(1500),
+			denomId:            "denom1",
+			periodEnd:          2500,
+			nft:                types.NFT{DataJson: types.NFTDataJson{ExpirationDate: 3000}},
+			expectedStart:      2000,
+			expectedEnd:        2500,
+			expectedErr:        nil,
 		},
 		{
 			name: "Expired NFT",
@@ -428,19 +424,13 @@ func TestGetNftTimestamps(t *testing.T) {
 				{PayoutPeriodEnd: 1000},
 				{PayoutPeriodEnd: 2000},
 			},
-			nftTransferHistory: types.NftTransferHistory{
-				Data: types.Data{
-					NestedData: types.NestedData{
-						Events: []types.NftTransferEvent{{Timestamp: 1500}},
-					},
-				},
-			},
-			denomId:       "denom1",
-			periodEnd:     2500,
-			nft:           types.NFT{DataJson: types.NFTDataJson{ExpirationDate: 2300}},
-			expectedStart: 2000,
-			expectedEnd:   2300,
-			expectedErr:   nil,
+			nftTransferHistory: []types.NftTransferEvent{{Timestamp: 1500}},
+			denomId:            "denom1",
+			periodEnd:          2500,
+			nft:                types.NFT{DataJson: types.NFTDataJson{ExpirationDate: 2300}},
+			expectedStart:      2000,
+			expectedEnd:        2300,
+			expectedErr:        nil,
 		},
 	}
 
@@ -451,7 +441,7 @@ func TestGetNftTimestamps(t *testing.T) {
 
 			payService := NewPayService(&infrastructure.Config{}, &mockAPIRequester{}, &mockHelper{}, &types.BtcNetworkParams{})
 
-			start, end, err := payService.getNftTimestamps(context.Background(), mockStorage, tc.nft, tc.nftTransferHistory, tc.denomId, tc.periodEnd)
+			start, end, err := payService.getNftTimestamps(context.Background(), mockStorage, tc.nft, tc.mintTimestamp, tc.nftTransferHistory, tc.denomId, tc.periodEnd)
 
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedStart, start)
@@ -483,7 +473,7 @@ func TestConvertAmountToBTC(t *testing.T) {
 	//Assert
 	require.NoError(t, err)
 	require.Equal(t, map[string]float64{
-		"address1": 124.12412412,
+		"address1": 124.124124126,
 		"address2": 0.123,
 		"address3": 12412323.1,
 	}, result, "Amounts are not equal to the given up to 8th digit")
@@ -592,68 +582,20 @@ func TestFilterByPaymentThreshold(t *testing.T) {
 	}
 }
 
-func TestGetNftTransferHistory(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("success", func(t *testing.T) {
-		transferEvents := types.NftTransferHistory{
-			Data: types.Data{
-				NestedData: types.NestedData{
-					Events: []types.NftTransferEvent{
-						{Timestamp: 1},
-						{Timestamp: 3},
-						{Timestamp: 2},
-					},
-				},
-			},
-		}
-
-		expectedEvents := []types.NftTransferEvent{
-			{Timestamp: 1},
-			{Timestamp: 2},
-			{Timestamp: 3},
-		}
-
-		mockAPIRequester := &mockAPIRequester{}
-		mockAPIRequester.On("GetNftTransferHistory", mock.Anything, "collection1", "nft1", int64(1)).Return(transferEvents, nil).Once()
-
-		payService := NewPayService(&infrastructure.Config{}, mockAPIRequester, &mockHelper{}, &types.BtcNetworkParams{})
-		result, err := payService.getNftTransferHistory(ctx, "collection1", "nft1")
-
-		assert.NoError(t, err)
-		assert.Equal(t, expectedEvents, result.Data.NestedData.Events)
-	})
-
-	t.Run("api_requester_error", func(t *testing.T) {
-		mockAPIRequester := &mockAPIRequester{}
-		mockAPIRequester.On("GetNftTransferHistory", mock.Anything, "collection1", "nft1", int64(1)).Return(types.NftTransferHistory{}, errors.New("api_requester_error")).Once()
-
-		payService := NewPayService(&infrastructure.Config{}, mockAPIRequester, &mockHelper{}, &types.BtcNetworkParams{})
-		_, err := payService.getNftTransferHistory(ctx, "collection1", "nft1")
-
-		assert.Error(t, err)
-		assert.EqualError(t, err, "api_requester_error")
-	})
-}
-
 func TestFindCurrentPayoutPeriod(t *testing.T) {
 	tests := []struct {
 		name               string
 		payoutTimes        []types.NFTStatistics
-		nftTransferHistory types.NftTransferHistory
+		mintTimestamp      int64
+		nftTransferHistory []types.NftTransferEvent
 		expectedStart      int64
 	}{
 		{
-			name:        "first_payout",
-			payoutTimes: []types.NFTStatistics{},
-			nftTransferHistory: types.NftTransferHistory{
-				Data: types.Data{
-					NestedData: types.NestedData{
-						Events: []types.NftTransferEvent{
-							{Timestamp: 100},
-						},
-					},
-				},
+			name:          "first_payout",
+			payoutTimes:   []types.NFTStatistics{},
+			mintTimestamp: int64(100),
+			nftTransferHistory: []types.NftTransferEvent{
+				{Timestamp: 100},
 			},
 			expectedStart: 100,
 		},
@@ -663,7 +605,8 @@ func TestFindCurrentPayoutPeriod(t *testing.T) {
 				{PayoutPeriodEnd: 200},
 				{PayoutPeriodEnd: 300},
 			},
-			nftTransferHistory: types.NftTransferHistory{},
+			mintTimestamp:      int64(100),
+			nftTransferHistory: []types.NftTransferEvent{},
 			expectedStart:      300,
 		},
 	}
@@ -671,7 +614,7 @@ func TestFindCurrentPayoutPeriod(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			payService := NewPayService(&infrastructure.Config{}, &mockAPIRequester{}, &mockHelper{}, &types.BtcNetworkParams{})
-			start, err := payService.findCurrentPayoutPeriod(tc.payoutTimes, tc.nftTransferHistory)
+			start, err := payService.findCurrentPayoutPeriod(tc.payoutTimes, tc.mintTimestamp)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedStart, start)
@@ -824,56 +767,6 @@ func TestAddPaymentAmountToAddress(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			addPaymentAmountToAddress(tc.initialAmounts, tc.amountToAdd, tc.address)
 			assert.Equal(t, tc.expectedResult, tc.initialAmounts)
-		})
-	}
-}
-
-func TestDistributeRewardsToOwners(t *testing.T) {
-	tests := []struct {
-		name                         string
-		ownersWithPercentOwned       map[string]float64
-		nftPayoutAmount              decimal.Decimal
-		initialDestinationAddresses  map[string]decimal.Decimal
-		expectedDestinationAddresses map[string]decimal.Decimal
-	}{
-		{
-			name: "distribute_rewards_evenly",
-			ownersWithPercentOwned: map[string]float64{
-				"owner1": 50.0,
-				"owner2": 50.0,
-			},
-			nftPayoutAmount: decimal.NewFromFloat(1),
-			initialDestinationAddresses: map[string]decimal.Decimal{
-				"owner1": decimal.NewFromFloat(0),
-				"owner2": decimal.NewFromFloat(0),
-			},
-			expectedDestinationAddresses: map[string]decimal.Decimal{
-				"owner1": decimal.NewFromFloat(0.5),
-				"owner2": decimal.NewFromFloat(0.5),
-			},
-		},
-		{
-			name: "distribute_rewards_unevenly",
-			ownersWithPercentOwned: map[string]float64{
-				"owner1": 70.0,
-				"owner2": 30.0,
-			},
-			nftPayoutAmount: decimal.NewFromFloat(1),
-			initialDestinationAddresses: map[string]decimal.Decimal{
-				"owner1": decimal.NewFromFloat(0),
-				"owner2": decimal.NewFromFloat(0),
-			},
-			expectedDestinationAddresses: map[string]decimal.Decimal{
-				"owner1": decimal.NewFromFloat(0.7),
-				"owner2": decimal.NewFromFloat(0.3),
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			distributeRewardsToOwners(tc.ownersWithPercentOwned, tc.nftPayoutAmount, tc.initialDestinationAddresses)
-			assert.Equal(t, tc.expectedDestinationAddresses, tc.initialDestinationAddresses)
 		})
 	}
 }

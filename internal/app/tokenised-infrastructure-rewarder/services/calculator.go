@@ -40,15 +40,6 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		}
 		ownersWithPercentOwnedTime[nftPayoutAddress] = 100
 
-		statisticsAdditionalData := types.NFTOwnerInformation{}
-		statisticsAdditionalData.TimeOwnedFrom = periodStart
-		statisticsAdditionalData.TimeOwnedTo = periodEnd
-		statisticsAdditionalData.TotalTimeOwned = periodEnd - periodStart
-		statisticsAdditionalData.PayoutAddress = nftPayoutAddress
-		statisticsAdditionalData.PercentOfTimeOwned = 100
-		statisticsAdditionalData.Owner = currentNftOwner
-		statisticsAdditionalData.Reward = rewardForNftAfterFeeBtcDecimal
-
 		return ownersWithPercentOwnedTime,
 			[]types.NFTOwnerInformation{{
 				TimeOwnedFrom:      periodStart,
@@ -80,23 +71,23 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		Timestamp: periodEnd,
 	})
 
-	var totalCalculatedReward decimal.Decimal
+	totalCalculatedReward := decimal.Zero
 	nftOwnersInformation := []types.NFTOwnerInformation{}
 	for i := 0; i < len(transferHistoryForTimePeriod)-1; i++ {
 		timeOwned := transferHistoryForTimePeriod[i+1].Timestamp - transferHistoryForTimePeriod[i].Timestamp
-		percentOfTimeOwned := float64(timeOwned) / float64(totalPeriodTimeInSeconds) * 100
+		percentOfTimeOwned := decimal.NewFromInt(timeOwned).Div(decimal.NewFromInt(totalPeriodTimeInSeconds)).RoundDown(15)
 
 		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, transferHistoryForTimePeriod[i].To, payoutAddrNetwork, nftId, collectionDenomId)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		calculatedReward := rewardForNftAfterFeeBtcDecimal.Mul(decimal.NewFromFloat(percentOfTimeOwned / 100))
+		calculatedReward := rewardForNftAfterFeeBtcDecimal.Mul(percentOfTimeOwned)
 		totalCalculatedReward = totalCalculatedReward.Add(calculatedReward)
-		ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned
+		ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned.InexactFloat64() * 100
 
 		nftOwnersInformation = append(nftOwnersInformation, types.NFTOwnerInformation{
-			PercentOfTimeOwned: percentOfTimeOwned,
+			PercentOfTimeOwned: percentOfTimeOwned.InexactFloat64() * 100,
 			TotalTimeOwned:     timeOwned,
 			TimeOwnedFrom:      transferHistoryForTimePeriod[i].Timestamp,
 			TimeOwnedTo:        transferHistoryForTimePeriod[i+1].Timestamp,
@@ -108,12 +99,14 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 
 	nftRewardDistributionleftovers := rewardForNftAfterFeeBtcDecimal.Sub(totalCalculatedReward)
 
-	if nftRewardDistributionleftovers.LessThan(decimal.Zero) {
-		return nil, nil, fmt.Errorf("calculated NFT reward distribution is greater than the total given. CalculatedForOwnerDistribution: %s, TotalGiventoDistribute: %s", totalCalculatedReward, rewardForNftAfterFeeBtcDecimal)
+	if nftRewardDistributionleftovers.Abs().GreaterThan(decimal.NewFromFloat(0.000000001)) {
+		return nil, nil, fmt.Errorf("calculated NFT reward distribution is too far off the total given. CalculatedForOwnerDistribution: %s, TotalGiventoDistribute: %s", totalCalculatedReward, rewardForNftAfterFeeBtcDecimal)
 	}
 
 	lastOwnerIndex := len(nftOwnersInformation) - 1
-	nftOwnersInformation[lastOwnerIndex].Reward = nftOwnersInformation[lastOwnerIndex].Reward.Add(nftRewardDistributionleftovers)
+	if nftRewardDistributionleftovers.GreaterThan(decimal.Zero) {
+		nftOwnersInformation[lastOwnerIndex].Reward = nftOwnersInformation[lastOwnerIndex].Reward.Add(nftRewardDistributionleftovers)
+	}
 
 	var finalTotalDistribution decimal.Decimal
 	for _, ownerInfo := range nftOwnersInformation {
@@ -121,7 +114,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 	}
 
 	if !finalTotalDistribution.Equal(rewardForNftAfterFeeBtcDecimal) {
-		return nil, nil, fmt.Errorf("calculated NFT reward distribution is not equal to the total given. CalculatedForOwnerDistribution: %s, TotalGiventoDistribute: %s", finalTotalDistribution, rewardForNftAfterFeeBtcDecimal)
+		return nil, nil, fmt.Errorf("calculated NFT reward distribution is not equal to the total given. CalculatedForOwnerDistribution: %s, TotalGivenToDistribute: %s", finalTotalDistribution, rewardForNftAfterFeeBtcDecimal)
 	}
 
 	return ownersWithPercentOwnedTime, nftOwnersInformation, nil
