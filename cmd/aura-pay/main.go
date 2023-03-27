@@ -27,6 +27,7 @@ func runService(ctx context.Context) {
 	config := infrastructure.NewConfig()
 	provider := infrastructure.NewProvider(config)
 	requestClient := requesters.NewRequester(config)
+
 	var btcNetworkParams types.BtcNetworkParams
 	mutex := sync.Mutex{}
 	if config.IsTesting {

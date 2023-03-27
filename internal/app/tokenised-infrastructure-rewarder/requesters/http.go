@@ -29,92 +29,46 @@ const (
 	StatusCodeNotFound = 404
 )
 
-func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error) {
-
-	client := &http.Client{
-		Timeout: 60 * time.Second,
-	}
-
-	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
-	//requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId) // TODO: Use this once this is fixed in the aura platform
-
-	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/aurapool/aurapool", cudosAddress)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	res, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	defer res.Body.Close()
-
-	bytes, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if res.StatusCode == StatusCodeNotFound {
-		return "", fmt.Errorf("address not found in the node addressbook: %s", cudosAddress)
-	}
-
-	if res.StatusCode != StatusCodeOK {
-		return "", fmt.Errorf("error! Request Failed: %s with StatusCode: %d, Error: %s", res.Status, res.StatusCode, string(bytes))
-	}
-
-	okStruct := types.MappedAddress{}
-
-	if err := json.Unmarshal(bytes, &okStruct); err != nil {
-		return "", err
-	}
-
-	return okStruct.Address.Value, nil
-
-}
-
-func (r *Requester) GetNftTransferHistory(ctx context.Context, collectionDenomId, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
+func (r *Requester) GetHasuraCollectionNftMintEvents(ctx context.Context, collectionDenomId string) (types.NftMintHistory, error) {
 	jsonData := map[string]string{
 		"query": fmt.Sprintf(`
 		{
-			action_nft_transfer_events(denom_id: "%s", token_id: %s, from_time: %d, to_time: %d) {
-			  events
-			}
+			nft_transfer_history(where: {denom_id: {_eq: "%s"}, old_owner: {_eq: "0x0"}}) {
+				id
+				timestamp
+			  }
 		}
-        `, collectionDenomId, nftId, fromTimestamp, time.Now().Unix()),
+        `, collectionDenomId),
 	}
 
 	jsonValue, _ := json.Marshal(jsonData)
 	request, err := http.NewRequestWithContext(ctx, "POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
 	if err != nil {
-		return types.NftTransferHistory{}, err
+		return types.NftMintHistory{}, err
 	}
 	client := &http.Client{Timeout: time.Second * 10}
 	response, err := client.Do(request)
 	if err != nil {
 		log.Error().Msgf("The HTTP request failed with error %s\n", err)
-		return types.NftTransferHistory{}, nil
+		return types.NftMintHistory{}, nil
 	}
 	if response.StatusCode != StatusCodeOK {
-		return types.NftTransferHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d", response.Status, response.StatusCode)
+		return types.NftMintHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d", response.Status, response.StatusCode)
 	}
 	defer response.Body.Close()
 	data, err := ioutil.ReadAll(response.Body)
 	if response.StatusCode != StatusCodeOK {
-		return types.NftTransferHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
+		return types.NftMintHistory{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
 	}
 
 	if err != nil {
 		log.Error().Msgf("Could read data [%s] from hasura to the specific type, error is: [%s]", data, err)
-		return types.NftTransferHistory{}, err
+		return types.NftMintHistory{}, err
 	}
-	var res types.NftTransferHistory
+	var res types.NftMintHistory
 	if err := json.Unmarshal(data, &res); err != nil {
 		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
-		return types.NftTransferHistory{}, err
+		return types.NftMintHistory{}, err
 	}
 
 	return res, nil
@@ -177,6 +131,55 @@ func (r *Requester) getFarmDailyDataFromPool(ctx context.Context, farmName, sinc
 	}
 
 	return okStruct, nil
+}
+
+func (r *Requester) getTxsFromHasura(ctx context.Context, txHashes []string) ([]types.HasuraTx, error) {
+	hashesString := ""
+	for _, hash := range txHashes {
+		hashesString += fmt.Sprintf(`"%s",`, hash)
+	}
+	jsonData := map[string]string{
+		"query": fmt.Sprintf(`
+            {
+				transaction(where: {hash: {_in: %s}}) {
+					hash
+					block {
+					  timestamp
+					}
+				}
+            }
+        `, fmt.Sprintf("[%s]", strings.TrimSuffix(hashesString, ","))),
+	}
+
+	jsonValue, _ := json.Marshal(jsonData)
+	request, err := http.NewRequestWithContext(ctx, "POST", r.config.HasuraURL, bytes.NewBuffer(jsonValue))
+	if err != nil {
+		return []types.HasuraTx{}, err
+	}
+	client := &http.Client{Timeout: time.Second * 10}
+	response, err := client.Do(request)
+	if err != nil {
+		log.Error().Msgf("The HTTP request failed with error %s\n", err)
+		return []types.HasuraTx{}, nil
+	}
+	defer response.Body.Close()
+
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return []types.HasuraTx{}, err
+	}
+	if response.StatusCode != StatusCodeOK {
+		return []types.HasuraTx{}, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", response.Status, response.StatusCode, string(data))
+	}
+
+	var res types.HasuraTxResult
+	if err := json.Unmarshal(data, &res); err != nil {
+		log.Error().Msgf("Could not unmarshall data [%s] from hasura to the specific type, error is: [%s]", data, err)
+		return []types.HasuraTx{}, err
+	}
+
+	return res.Data.Transactions, nil
 }
 
 func (r *Requester) GetFarmCollectionsFromHasura(ctx context.Context, farmId int64) (types.CollectionData, error) {

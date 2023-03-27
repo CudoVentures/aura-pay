@@ -85,7 +85,7 @@ func TestCalculatePercent(t *testing.T) {
 
 func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnErrorIfInvalidPeriod(t *testing.T) {
 	s := NewPayService(nil, nil, nil, nil)
-	_, _, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "", "", 1000, 100, "", "", decimal.Zero)
+	_, _, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), []types.NftTransferEvent{}, "", "", 1000, 100, "", "", decimal.Zero)
 	require.Equal(t, errors.New("invalid period, start (1000) end (100)"), err)
 }
 
@@ -99,7 +99,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnHundredPerc
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	percents, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
+	percents, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), []types.NftTransferEvent{}, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
 	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
 	require.NoError(t, err)
@@ -122,23 +122,16 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldReturnHundredPerc
 }
 
 func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTransferEvent(t *testing.T) {
-	history := `
-	{
-		"data": {
-			"action_nft_transfer_events": {
-				"events": [
+	history := `[
 					{
 						"to": "nft_owner_2",
 						"from": "nft_owner_1",
 						"timestamp": 64
 					}
 				]
-			}
-		}
-	}
 	`
 
-	var nftTransferHistory types.NftTransferHistory
+	var nftTransferHistory []types.NftTransferEvent
 	require.NoError(t, json.Unmarshal([]byte(history), &nftTransferHistory))
 
 	apiRequester := &mockAPIRequester{}
@@ -155,8 +148,8 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
 	expectedPercents := map[string]float64{
-		"nft_owner_1_payout_addr": float64(63.63636363636363),
-		"nft_owner_2_payout_addr": float64(36.36363636363637),
+		"nft_owner_1_payout_addr": float64(63.636363636363605),
+		"nft_owner_2_payout_addr": float64(36.363636363636296),
 	}
 
 	require.Equal(t, expectedPercents, percents)
@@ -166,7 +159,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 			TimeOwnedFrom:      periodStart,
 			TimeOwnedTo:        64,
 			TotalTimeOwned:     63,
-			PercentOfTimeOwned: 63.63636363636363,
+			PercentOfTimeOwned: 63.636363636363605,
 			PayoutAddress:      "nft_owner_1_payout_addr",
 			Owner:              "nft_owner_1",
 			Reward:             decimal.Zero,
@@ -175,7 +168,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 			TimeOwnedFrom:      64,
 			TimeOwnedTo:        periodEnd,
 			TotalTimeOwned:     36,
-			PercentOfTimeOwned: 36.36363636363637,
+			PercentOfTimeOwned: 36.363636363636296,
 			PayoutAddress:      "nft_owner_2_payout_addr",
 			Owner:              "nft_owner_2",
 			Reward:             decimal.Zero,
@@ -194,47 +187,41 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithSingleTra
 
 func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleTransferEventsStartingFromMint(t *testing.T) {
 	history := `
-		{
-			"data": {
-				"action_nft_transfer_events": {
-					"events": [
-						{
-							"to": "nft_minter",
-							"from": "0x0",
-							"timestamp": 1
-						},
-						{
-							"to": "nft_owner_1",
-							"from": "nft_minter",
-							"timestamp": 10
-						},
-						{
-							"to": "nft_owner_2",
-							"from": "nft_owner_1",
-							"timestamp": 13
-						},
-						{
-							"to": "nft_owner_3",
-							"from": "nft_owner_2",
-							"timestamp": 50
-						},
-						{
-							"to": "nft_owner_4",
-							"from": "nft_owner_3",
-							"timestamp": 80
-						},
-						{
-							"to": "nft_owner_5",
-							"from": "nft_owner_4",
-							"timestamp": 95
-						}
-					]
-				}
+		[
+			{
+				"to": "nft_minter",
+				"from": "0x0",
+				"timestamp": 1
+			},
+			{
+				"to": "nft_owner_1",
+				"from": "nft_minter",
+				"timestamp": 10
+			},
+			{
+				"to": "nft_owner_2",
+				"from": "nft_owner_1",
+				"timestamp": 13
+			},
+			{
+				"to": "nft_owner_3",
+				"from": "nft_owner_2",
+				"timestamp": 50
+			},
+			{
+				"to": "nft_owner_4",
+				"from": "nft_owner_3",
+				"timestamp": 80
+			},
+			{
+				"to": "nft_owner_5",
+				"from": "nft_owner_4",
+				"timestamp": 95
 			}
-		}
+		]
 	`
 
-	var nftTransferHistory types.NftTransferHistory
+	var nftTransferHistory []types.NftTransferEvent
 	require.NoError(t, json.Unmarshal([]byte(history), &nftTransferHistory))
 
 	apiRequester := &mockAPIRequester{}
@@ -255,12 +242,12 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
 	expectedPercents := map[string]float64{
-		"nft_minter_payout_addr":  float64(9.090909090909092),
-		"nft_owner_1_payout_addr": float64(3.0303030303030303),
-		"nft_owner_2_payout_addr": float64(37.37373737373738),
-		"nft_owner_3_payout_addr": float64(30.303030303030305),
-		"nft_owner_4_payout_addr": float64(15.151515151515152),
-		"nft_owner_5_payout_addr": float64(5.05050505050505),
+		"nft_minter_payout_addr":  float64(9.090909090909),
+		"nft_owner_1_payout_addr": float64(3.030303030303),
+		"nft_owner_2_payout_addr": float64(37.3737373737373),
+		"nft_owner_3_payout_addr": float64(30.303030303030297),
+		"nft_owner_4_payout_addr": float64(15.151515151515099),
+		"nft_owner_5_payout_addr": float64(5.0505050505049995),
 	}
 
 	require.Equal(t, expectedPercents, percents)
@@ -270,7 +257,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      1,
 			TimeOwnedTo:        10,
 			TotalTimeOwned:     9,
-			PercentOfTimeOwned: 9.090909090909092,
+			PercentOfTimeOwned: 9.090909090909,
 			PayoutAddress:      "nft_minter_payout_addr",
 			Owner:              "nft_minter",
 			Reward:             decimal.Zero,
@@ -279,7 +266,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      10,
 			TimeOwnedTo:        13,
 			TotalTimeOwned:     3,
-			PercentOfTimeOwned: 3.0303030303030303,
+			PercentOfTimeOwned: 3.030303030303,
 			PayoutAddress:      "nft_owner_1_payout_addr",
 			Owner:              "nft_owner_1",
 			Reward:             decimal.Zero,
@@ -288,7 +275,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      13,
 			TimeOwnedTo:        50,
 			TotalTimeOwned:     37,
-			PercentOfTimeOwned: 37.37373737373738,
+			PercentOfTimeOwned: 37.3737373737373,
 			PayoutAddress:      "nft_owner_2_payout_addr",
 			Owner:              "nft_owner_2",
 			Reward:             decimal.Zero,
@@ -297,7 +284,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      50,
 			TimeOwnedTo:        80,
 			TotalTimeOwned:     30,
-			PercentOfTimeOwned: 30.303030303030305,
+			PercentOfTimeOwned: 30.303030303030297,
 			PayoutAddress:      "nft_owner_3_payout_addr",
 			Owner:              "nft_owner_3",
 			Reward:             decimal.Zero,
@@ -306,7 +293,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      80,
 			TimeOwnedTo:        95,
 			TotalTimeOwned:     15,
-			PercentOfTimeOwned: 15.151515151515152,
+			PercentOfTimeOwned: 15.151515151515099,
 			PayoutAddress:      "nft_owner_4_payout_addr",
 			Owner:              "nft_owner_4",
 			Reward:             decimal.Zero,
@@ -315,7 +302,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      95,
 			TimeOwnedTo:        100,
 			TotalTimeOwned:     5,
-			PercentOfTimeOwned: 5.05050505050505,
+			PercentOfTimeOwned: 5.0505050505049995,
 			PayoutAddress:      "nft_owner_5_payout_addr",
 			Owner:              "nft_owner_5",
 			Reward:             decimal.Zero,
@@ -334,42 +321,36 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 
 func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleTransferEventsWithoutMintEvent(t *testing.T) {
 	history := `
-		{
-			"data": {
-				"action_nft_transfer_events": {
-					"events": [
-						{
-							"to": "nft_owner_1",
-							"from": "nft_minter",
-							"timestamp": 10
-						},
-						{
-							"to": "nft_owner_2",
-							"from": "nft_owner_1",
-							"timestamp": 13
-						},
-						{
-							"to": "nft_owner_3",
-							"from": "nft_owner_2",
-							"timestamp": 50
-						},
-						{
-							"to": "nft_owner_4",
-							"from": "nft_owner_3",
-							"timestamp": 80
-						},
-						{
-							"to": "nft_owner_5",
-							"from": "nft_owner_4",
-							"timestamp": 95
-						}
-					]
-				}
+		[
+			{
+				"to": "nft_owner_1",
+				"from": "nft_minter",
+				"timestamp": 10
+			},
+			{
+				"to": "nft_owner_2",
+				"from": "nft_owner_1",
+				"timestamp": 13
+			},
+			{
+				"to": "nft_owner_3",
+				"from": "nft_owner_2",
+				"timestamp": 50
+			},
+			{
+				"to": "nft_owner_4",
+				"from": "nft_owner_3",
+				"timestamp": 80
+			},
+			{
+				"to": "nft_owner_5",
+				"from": "nft_owner_4",
+				"timestamp": 95
 			}
-		}
+		]
 	`
 
-	var nftTransferHistory types.NftTransferHistory
+	var nftTransferHistory []types.NftTransferEvent
 	require.NoError(t, json.Unmarshal([]byte(history), &nftTransferHistory))
 
 	apiRequester := &mockAPIRequester{}
@@ -390,12 +371,12 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
 	expectedPercents := map[string]float64{
-		"nft_minter_payout_addr":  float64(9.090909090909092),
-		"nft_owner_1_payout_addr": float64(3.0303030303030303),
-		"nft_owner_2_payout_addr": float64(37.37373737373738),
-		"nft_owner_3_payout_addr": float64(30.303030303030305),
-		"nft_owner_4_payout_addr": float64(15.151515151515152),
-		"nft_owner_5_payout_addr": float64(5.05050505050505),
+		"nft_minter_payout_addr":  float64(9.090909090909),
+		"nft_owner_1_payout_addr": float64(3.030303030303),
+		"nft_owner_2_payout_addr": float64(37.3737373737373),
+		"nft_owner_3_payout_addr": float64(30.303030303030297),
+		"nft_owner_4_payout_addr": float64(15.151515151515099),
+		"nft_owner_5_payout_addr": float64(5.0505050505049995),
 	}
 
 	require.Equal(t, expectedPercents, percents)
@@ -405,7 +386,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      1,
 			TimeOwnedTo:        10,
 			TotalTimeOwned:     9,
-			PercentOfTimeOwned: 9.090909090909092,
+			PercentOfTimeOwned: 9.090909090909,
 			PayoutAddress:      "nft_minter_payout_addr",
 			Owner:              "nft_minter",
 			Reward:             decimal.Zero,
@@ -414,7 +395,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      10,
 			TimeOwnedTo:        13,
 			TotalTimeOwned:     3,
-			PercentOfTimeOwned: 3.0303030303030303,
+			PercentOfTimeOwned: 3.030303030303,
 			PayoutAddress:      "nft_owner_1_payout_addr",
 			Owner:              "nft_owner_1",
 			Reward:             decimal.Zero,
@@ -423,7 +404,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      13,
 			TimeOwnedTo:        50,
 			TotalTimeOwned:     37,
-			PercentOfTimeOwned: 37.37373737373738,
+			PercentOfTimeOwned: 37.3737373737373,
 			PayoutAddress:      "nft_owner_2_payout_addr",
 			Owner:              "nft_owner_2",
 			Reward:             decimal.Zero,
@@ -432,7 +413,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      50,
 			TimeOwnedTo:        80,
 			TotalTimeOwned:     30,
-			PercentOfTimeOwned: 30.303030303030305,
+			PercentOfTimeOwned: 30.303030303030297,
 			PayoutAddress:      "nft_owner_3_payout_addr",
 			Owner:              "nft_owner_3",
 			Reward:             decimal.Zero,
@@ -441,7 +422,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      80,
 			TimeOwnedTo:        95,
 			TotalTimeOwned:     15,
-			PercentOfTimeOwned: 15.151515151515152,
+			PercentOfTimeOwned: 15.151515151515099,
 			PayoutAddress:      "nft_owner_4_payout_addr",
 			Owner:              "nft_owner_4",
 			Reward:             decimal.Zero,
@@ -450,7 +431,7 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldWorkWithMultipleT
 			TimeOwnedFrom:      95,
 			TimeOwnedTo:        100,
 			TotalTimeOwned:     5,
-			PercentOfTimeOwned: 5.05050505050505,
+			PercentOfTimeOwned: 5.0505050505049995,
 			PayoutAddress:      "nft_owner_5_payout_addr",
 			Owner:              "nft_owner_5",
 			Reward:             decimal.Zero,
@@ -475,27 +456,20 @@ func TestCalculateNftOwnersForTimePeriodWithRewardPercentShouldFailIfGetPayoutAd
 	periodStart := int64(1)
 	periodEnd := int64(100)
 	s := NewPayService(nil, apiRequester, nil, nil)
-	_, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), types.NftTransferHistory{}, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
+	_, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), []types.NftTransferEvent{}, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
 	require.Equal(t, failErr, err)
 	statistics.NFTOwnersForPeriod = nftOwnersForPeriod
 
-	history := `
-	{
-		"data": {
-			"action_nft_transfer_events": {
-				"events": [
+	history := `[
 					{
 						"to": "nft_owner_2",
 						"from": "nft_owner_1",
 						"timestamp": 64
 					}
 				]
-			}
-		}
-	}
 	`
 
-	var nftTransferHistory types.NftTransferHistory
+	var nftTransferHistory []types.NftTransferEvent
 	require.NoError(t, json.Unmarshal([]byte(history), &nftTransferHistory))
 
 	_, _, err = s.calculateNftOwnersForTimePeriodWithRewardPercent(context.TODO(), nftTransferHistory, "testdenom", "1", periodStart, periodEnd, currentNftOwner, "BTC", decimal.Zero)
@@ -587,7 +561,8 @@ func TestCalculateMaintenanceFeeForNFT(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			s := NewPayService(&tc.config, &mockAPIRequester{}, &mockHelper{}, nil)
 
-			nftMaintenanceFee, cudoMaintenance, rewardForNft := s.calculateMaintenanceFeeForNFT(tc.periodStart, tc.periodEnd, tc.hourlyFeeInBtcDecimal, tc.rewardForNftBtcDecimal)
+			nftMaintenanceFee, cudoMaintenance, rewardForNft, err := s.calculateMaintenanceFeeForNFT(tc.periodStart, tc.periodEnd, tc.hourlyFeeInBtcDecimal, tc.rewardForNftBtcDecimal)
+			require.NoError(t, err)
 			assert.Equal(t, tc.expectedNftMaintenanceFee.String(), nftMaintenanceFee.String(), "unexpected NFT maintenance fee for %s", tc.desc)
 			assert.Equal(t, tc.expectedCudoMaintenance.String(), cudoMaintenance.String(), "unexpected Cudo maintenance fee for %s", tc.desc)
 			assert.Equal(t, tc.expectedRewardForNft.String(), rewardForNft.String(), "unexpected reward for NFT for %s", tc.desc)
@@ -905,14 +880,24 @@ type mockAPIRequester struct {
 	mock.Mock
 }
 
+func (mar *mockAPIRequester) GetHasuraCollectionNftMintEvents(ctx context.Context, collectionDenomId string) (types.NftMintHistory, error) {
+	args := mar.Called(ctx, collectionDenomId)
+	return args.Get(0).(types.NftMintHistory), args.Error(1)
+}
+
+func (mar *mockAPIRequester) GetDenomNftTransferHistory(ctx context.Context, collectionDenomId string, lastPaymentTimestamp, periodEnd int64) ([]types.NftTransferEvent, error) {
+	args := mar.Called(ctx, collectionDenomId, lastPaymentTimestamp, periodEnd)
+	return args.Get(0).([]types.NftTransferEvent), args.Error(1)
+}
+
 func (mar *mockAPIRequester) GetFarmStartTime(ctx context.Context, farmName string) (int64, error) {
 	args := mar.Called(ctx, farmName)
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (mar *mockAPIRequester) GetNftTransferHistory(ctx context.Context, collectionDenomId, nftId string, fromTimestamp int64) (types.NftTransferHistory, error) {
-	args := mar.Called(ctx, collectionDenomId, nftId, fromTimestamp)
-	return args.Get(0).(types.NftTransferHistory), args.Error(1)
+func (mar *mockAPIRequester) GetChainNftMintTimestamp(ctx context.Context, denomId, tokenId string) (int64, error) {
+	args := mar.Called(ctx, denomId, tokenId)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func (mar *mockAPIRequester) GetFarmTotalHashPowerFromPoolToday(ctx context.Context, farmName, sinceTimestamp string) (float64, error) {

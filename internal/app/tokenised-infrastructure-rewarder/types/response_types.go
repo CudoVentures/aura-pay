@@ -1,5 +1,9 @@
 package types
 
+import (
+	sdk "github.com/cosmos/cosmos-sdk/types"
+)
+
 type MappedAddress struct {
 	Address Address `json:"address"`
 }
@@ -23,7 +27,37 @@ type NftTransferHistory struct {
 	Data Data `json:"data"`
 }
 
+type HasuraNftMintEvent struct {
+	TokenId   int64 `json:"id"`
+	Timestamp int64 `json:"timestamp"`
+}
+
+type NftMintHistory struct {
+	Data struct {
+		History []HasuraNftMintEvent `json:"nft_transfer_history"`
+	} `json:"data"`
+}
+
+type TxResult struct {
+	Events []sdk.Event `json:"events"`
+}
+
+type Tx struct {
+	TxResult TxResult `json:"tx_result"`
+	Hash     string   `json:"hash"`
+	Height   string   `json:"height"`
+}
+
+type TxQueryResponse struct {
+	Result struct {
+		Txs   []Tx   `json:"txs"`
+		Total string `json:"total_count"`
+	} `json:"result"`
+}
+
 type NftTransferEvent struct {
+	DenomId   string `json:"denom_id"`
+	TokenId   string `json:"token_id"`
 	To        string `json:"to"`
 	From      string `json:"from"`
 	Timestamp int64  `json:"timestamp"`
@@ -76,7 +110,39 @@ type CollectionData struct {
 	Data CData `json:"data"`
 }
 
+type HasuraTxResult struct {
+	Data struct {
+		Transactions []HasuraTx `json:"transaction"`
+	} `json:"data"`
+}
+
+type HasuraTx struct {
+	Hash  string `json:"hash"`
+	Block struct {
+		Time string `json:"timestamp"`
+	} `json:"block"`
+}
+
 type DataJsonCollection struct { // hasura response
 	FarmId string `json:"farm_id"`
 	Owner  string `json:"owner"`
+}
+
+type Blockheader struct {
+	Height string `json:"height"`
+	Time   string `json:"time"`
+}
+
+type Block struct {
+	Header Blockheader `json:"header"`
+}
+
+type GetBlockResponse struct {
+	Block Block `json:"block"`
+}
+
+type BlockSearchResponse struct {
+	Result struct {
+		Blocks []GetBlockResponse `json:"blocks"`
+	} `json:"result"`
 }

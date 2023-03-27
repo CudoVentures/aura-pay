@@ -238,6 +238,7 @@ func (s *PayService) processFarmUnspentTx(
 	log.Debug().Msgf("All collections processed. Starting the send process...")
 	if err := s.sendRewards(
 		ctx,
+		btcClient,
 		storage,
 		farm,
 		unspentTxForFarm,
@@ -281,10 +282,33 @@ func (s *PayService) processCollection(
 	rewardForNftOwnersBtcDecimal decimal.Decimal,
 	mintedHashPowerForFarm, currentHashPowerForFarm float64,
 	totalRewardForFarmAfterCudosFeeBtcDecimal, cudosFeeOfTotalRewardBtcDecimal, hourlyMaintenanceFeeInBtcDecimal decimal.Decimal,
-	lastPaymentTimestamp, periodEnd int64,
+	periodStart, periodEnd int64,
 	farmAuraPoolCollectionsMap map[string]types.AuraPoolCollection,
 ) (CollectionProcessResult, error) {
 	log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
+	log.Debug().Msgf("Getting collection transfer events..")
+	nftTransferEvents, err := s.apiRequester.GetDenomNftTransferHistory(ctx, collection.Denom.Id, periodStart, periodEnd)
+
+	if err != nil {
+		return CollectionProcessResult{}, err
+	}
+	log.Debug().Msgf("Done!")
+
+	nftTransferEventsMap := make(map[string][]types.NftTransferEvent)
+	for _, nftTransferEvent := range nftTransferEvents {
+		nftTransferEventsMap[nftTransferEvent.TokenId] = append(nftTransferEventsMap[nftTransferEvent.TokenId], nftTransferEvent)
+	}
+	log.Debug().Msgf("Getting collection mint history from BDJuno..")
+	hasuraNftMintHistory, err := s.apiRequester.GetHasuraCollectionNftMintEvents(ctx, collection.Denom.Id)
+	if err != nil {
+		return CollectionProcessResult{}, err
+	}
+	log.Debug().Msgf("Done!")
+
+	ahsuraNftMintEventsMap := make(map[string]types.HasuraNftMintEvent)
+	for _, hasuraNftMintEvent := range hasuraNftMintHistory.Data.History {
+		ahsuraNftMintEventsMap[fmt.Sprint(hasuraNftMintEvent.TokenId)] = hasuraNftMintEvent
+	}
 
 	var CUDOMaintenanceFeeBtcDecimal decimal.Decimal
 	var farmMaintenanceFeeBtcDecimal decimal.Decimal
@@ -293,17 +317,33 @@ func (s *PayService) processCollection(
 	var nftStatistics []types.NFTStatistics
 
 	for _, nft := range collection.Nfts {
+		nftHasuraMintEvent, ok := ahsuraNftMintEventsMap[nft.Id]
+		var mintTimestamp int64
+		if !ok {
+			log.Debug().Msgf("Mint event for NFT with id {{%s}} was not foun in BDJuno. Getting it from chain..", nft.Id)
+			chainMintEventTimestamp, err := s.apiRequester.GetChainNftMintTimestamp(ctx, collection.Denom.Id, nft.Id)
+			if err != nil {
+				return CollectionProcessResult{}, err
+			}
+			log.Debug().Msgf("Done!")
+			mintTimestamp = chainMintEventTimestamp
+		} else {
+			mintTimestamp = nftHasuraMintEvent.Timestamp
+		}
+
 		nftProcessResult, processed, err := s.processNft(
 			ctx,
 			storage,
 			farm,
 			collection,
 			nft,
+			mintTimestamp,
+			nftTransferEventsMap[nft.Id],
 			destinationAddressesWithAmountBtcDecimal,
 			rewardForNftOwnersBtcDecimal,
 			mintedHashPowerForFarm,
 			hourlyMaintenanceFeeInBtcDecimal,
-			lastPaymentTimestamp,
+			periodStart,
 			periodEnd,
 		)
 		if err != nil {
@@ -338,7 +378,10 @@ func (s *PayService) processCollection(
 		// distribute maintenance fees
 		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftProcessResult.MaintenanceFeeBtcDecimal, farm.MaintenanceFeePayoutAddress)
 		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftProcessResult.CudoPartOfMaintenanceFeeBtcDecimal, s.config.CUDOFeePayoutAddress)
-		distributeRewardsToOwners(nftProcessResult.AllNftOwnersForTimePeriodWithRewardPercent, nftProcessResult.RewardForNftAfterFeeBtcDecimal, destinationAddressesWithAmountBtcDecimal)
+
+		for _, nftOwnersForPeriod := range nftProcessResult.NftOwnersForPeriod {
+			addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftOwnersForPeriod.Reward, nftOwnersForPeriod.PayoutAddress)
+		}
 	}
 
 	// calculate collection's percent of rewards based on hash power
@@ -397,6 +440,8 @@ func (s *PayService) processNft(
 	farm types.Farm,
 	collection types.Collection,
 	nft types.NFT,
+	mintTimestamp int64,
+	nftTransferHistory []types.NftTransferEvent,
 	destinationAddressesWithAmountBtcDecimal map[string]decimal.Decimal,
 	rewardForNftOwnersBtcDecimal decimal.Decimal,
 	mintedHashPowerForFarm float64,
@@ -404,12 +449,7 @@ func (s *PayService) processNft(
 	lastPaymentTimestamp int64,
 	periodEnd int64,
 ) (NftProcessResult, bool, error) {
-	nftTransferHistory, err := s.getNftTransferHistory(ctx, collection.Denom.Id, nft.Id)
-	if err != nil {
-		return NftProcessResult{}, false, err
-	}
-
-	nftPeriodStart, nftPeriodEnd, err := s.getNftTimestamps(ctx, storage, nft, nftTransferHistory, collection.Denom.Id, periodEnd)
+	nftPeriodStart, nftPeriodEnd, err := s.getNftTimestamps(ctx, storage, nft, mintTimestamp, nftTransferHistory, collection.Denom.Id, periodEnd)
 	if err != nil {
 		return NftProcessResult{}, false, err
 	}
@@ -424,12 +464,16 @@ func (s *PayService) processNft(
 	// if nft was minted after the last payment, part of the reward before the mint is still for the farm
 	rewardForNftBtcDecimal := calculatePercentByTime(lastPaymentTimestamp, periodEnd, nftPeriodStart, nftPeriodEnd, totalRewardForNftBtcDecimal)
 
-	maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal := s.calculateMaintenanceFeeForNFT(
+	maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal, err := s.calculateMaintenanceFeeForNFT(
 		nftPeriodStart,
 		nftPeriodEnd,
 		hourlyMaintenanceFeeInBtcDecimal,
 		rewardForNftBtcDecimal,
 	)
+
+	if err != nil {
+		return NftProcessResult{}, false, err
+	}
 
 	allNftOwnersForTimePeriodWithRewardPercent, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
 		ctx,
@@ -484,6 +528,7 @@ func (s *PayService) processNft(
 */
 func (s *PayService) sendRewards(
 	ctx context.Context,
+	btcClient BtcClient,
 	storage Storage,
 	farm types.Farm,
 	unspentTxForFarm btcjson.ListUnspentResult,
@@ -510,8 +555,8 @@ func (s *PayService) sendRewards(
 
 	// check that all of the amount is distributed and no more than it
 	log.Debug().Msgf("Checking if total amount given is the same as distributed...")
-	if checkTotalAmountToDistribute(receivedRewardForFarmBtcDecimal, destinationAddressesWithAmountBtcDecimal) != nil {
-		return fmt.Errorf("total amount given is not the same as distributed for Farm {%s}", farm.RewardsFromPoolBtcWalletName)
+	if err := checkTotalAmountToDistribute(receivedRewardForFarmBtcDecimal, destinationAddressesWithAmountBtcDecimal); err != nil {
+		return err
 	}
 
 	removeAddressesWithZeroReward(destinationAddressesWithAmountBtcDecimal)
@@ -529,6 +574,24 @@ func (s *PayService) sendRewards(
 	}
 
 	log.Debug().Msgf("Addresses above threshold that will be sent for farm {%s}: {%s}", farm.RewardsFromPoolBtcWalletName, fmt.Sprint(addressesToSendBtc))
+
+	// check if total amount to send plus leftovers equals account balance
+	walletBalance, err := btcClient.GetBalance("*")
+	if err != nil {
+		return err
+	}
+
+	var totalBalanceDistributed decimal.Decimal
+	for _, amount := range addressesToSendBtc {
+		totalBalanceDistributed = totalBalanceDistributed.Add(decimal.NewFromFloat(amount))
+	}
+	for _, amount := range addressesWithThresholdToUpdateBtcDecimal {
+		totalBalanceDistributed = totalBalanceDistributed.Add(amount)
+	}
+
+	if !totalBalanceDistributed.LessThanOrEqual(decimal.NewFromFloat(walletBalance.ToBTC())) {
+		return fmt.Errorf("total balance distributed {%s} is not equal to wallet balance {%s}", totalBalanceDistributed, walletBalance)
+	}
 
 	txHash := ""
 	if len(addressesToSendBtc) > 0 {

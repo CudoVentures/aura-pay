@@ -17,6 +17,7 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/assert"
@@ -147,28 +148,26 @@ func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 
 	mockAPIRequester := setupMockApiRequester(t)
 
-	// minted at 1/2 of the period between payments
-	farm1Denom1Nft1TransferHistoryJSON := `
-	{
+	arm1Denom1NftMintEventsJSON := `{
 		"data": {
-			"action_nft_transfer_events": {
-				"events": [
-					{
-						"to": "nft_minter",
-						"from": "0x0",
-						"timestamp": 1665820278
-					}
-				]
-			}
+			"nft_transfer_history": [
+				{
+					"id": 1,
+					"timestamp": 1665820278
+				}
+			]
 		}
-	}`
+	}
+	`
+	var farm1Denom1Nft1MintHistory types.NftMintHistory
+	require.NoError(t, json.Unmarshal([]byte(arm1Denom1NftMintEventsJSON), &farm1Denom1Nft1MintHistory))
 
-	var farm1Denom1Nft1TransferHistory types.NftTransferHistory
-	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Nft1TransferHistoryJSON), &farm1Denom1Nft1TransferHistory))
+	mockAPIRequester.GetHasuraCollectionNftMintEvents(context.Background(), "farm_1_denom_1")
+	mockAPIRequester.On("GetHasuraCollectionNftMintEvents", mock.Anything, "farm_1_denom_1").Return(farm1Denom1Nft1MintHistory, nil).Once()
 
 	// call it once to clear mock
-	mockAPIRequester.GetNftTransferHistory(context.Background(), "farm_1_denom_1", "1", 0)
-	mockAPIRequester.On("GetNftTransferHistory", mock.Anything, "farm_1_denom_1", "1", mock.Anything).Return(farm1Denom1Nft1TransferHistory, nil).Once()
+	mockAPIRequester.GetDenomNftTransferHistory(context.Background(), "farm_1_denom_1", 1664999478, 0)
+	mockAPIRequester.On("GetDenomNftTransferHistory", mock.Anything, "farm_1_denom_1", int64(1664999478), mock.Anything).Return([]types.NftTransferEvent{}, nil).Once()
 
 	collectionAllocationAmount := decimal.NewFromFloat(4)
 	leftoverAmount := decimal.NewFromFloat(3)
@@ -294,28 +293,22 @@ func TestPayService_ProcessPayment_Expiration_Between_Payments(t *testing.T) {
 
 	mockAPIRequester.On("GetFarmCollectionsWithNFTs", mock.Anything, []string{"farm_1_denom_1"}).Return(farm1Denom1CollectionWithNFTs, nil).Once()
 
-	// minted at 1/2 of the period between payments
-	farm1Denom1Nft1TransferHistoryJSON := `
-	{
+	arm1Denom1NftMintEventsJSON := `{
 		"data": {
-			"action_nft_transfer_events": {
-				"events": [
-					{
-						"to": "nft_minter",
-						"from": "0x0",
-						"timestamp": 0
-					}
-				]
-			}
+			"nft_transfer_history": [
+				{
+					"id": 1,
+					"timestamp": 0
+				}
+			]
 		}
-	}`
+	}
+	`
+	var farm1Denom1Nft1MintHistory types.NftMintHistory
+	require.NoError(t, json.Unmarshal([]byte(arm1Denom1NftMintEventsJSON), &farm1Denom1Nft1MintHistory))
 
-	var farm1Denom1Nft1TransferHistory types.NftTransferHistory
-	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Nft1TransferHistoryJSON), &farm1Denom1Nft1TransferHistory))
-
-	// call it once to clear mock
-	mockAPIRequester.GetNftTransferHistory(context.Background(), "farm_1_denom_1", "1", 0)
-	mockAPIRequester.On("GetNftTransferHistory", mock.Anything, "farm_1_denom_1", "1", mock.Anything).Return(farm1Denom1Nft1TransferHistory, nil).Once()
+	mockAPIRequester.GetHasuraCollectionNftMintEvents(context.Background(), "farm_1_denom_1")
+	mockAPIRequester.On("GetHasuraCollectionNftMintEvents", mock.Anything, "farm_1_denom_1").Return(farm1Denom1Nft1MintHistory, nil).Once()
 
 	collectionAllocationAmount := decimal.NewFromFloat(4)
 	leftoverAmount := decimal.NewFromFloat(3)
@@ -440,28 +433,22 @@ func TestPayService_ProcessPayment_NFT_Minted_After_Payment_Period(t *testing.T)
 
 	mockAPIRequester.On("GetFarmCollectionsWithNFTs", mock.Anything, []string{"farm_1_denom_1"}).Return(farm1Denom1CollectionWithNFTs, nil).Once()
 
-	// minted at 1/2 of the period between payments
-	farm1Denom1Nft1TransferHistoryJSON := `
-	{
+	arm1Denom1NftMintEventsJSON := `{
 		"data": {
-			"action_nft_transfer_events": {
-				"events": [
-					{
-						"to": "nft_minter",
-						"from": "0x0",
-						"timestamp": 1964820278
-					}
-				]
-			}
+			"nft_transfer_history": [
+				{
+					"id": 1,
+					"timestamp": 1964820278
+				}
+			]
 		}
-	}`
+	}
+	`
+	var farm1Denom1Nft1MintHistory types.NftMintHistory
+	require.NoError(t, json.Unmarshal([]byte(arm1Denom1NftMintEventsJSON), &farm1Denom1Nft1MintHistory))
 
-	var farm1Denom1Nft1TransferHistory types.NftTransferHistory
-	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Nft1TransferHistoryJSON), &farm1Denom1Nft1TransferHistory))
-
-	// call it once to clear mock
-	mockAPIRequester.GetNftTransferHistory(context.Background(), "farm_1_denom_1", "1", 0)
-	mockAPIRequester.On("GetNftTransferHistory", mock.Anything, "farm_1_denom_1", "1", mock.Anything).Return(farm1Denom1Nft1TransferHistory, nil).Once()
+	mockAPIRequester.GetHasuraCollectionNftMintEvents(context.Background(), "farm_1_denom_1")
+	mockAPIRequester.On("GetHasuraCollectionNftMintEvents", mock.Anything, "farm_1_denom_1").Return(farm1Denom1Nft1MintHistory, nil).Once()
 
 	collectionAllocationAmount := decimal.NewFromFloat(4)
 	leftoverAmount := decimal.NewFromFloat(5)
@@ -857,6 +844,7 @@ func TestSendRewards(t *testing.T) {
 			mockAPIRequester := new(mockAPIRequester)
 
 			mockAPIRequester.On("SendMany", mock.Anything, test.expectedAddressesToSendBtc).Return("", test.sendManyResult).Once()
+
 			mockStorage.On(
 				"UpdateThresholdStatus",
 				mock.Anything,
@@ -899,9 +887,12 @@ func TestSendRewards(t *testing.T) {
 				mockStorage.On("GetCurrentAcummulatedAmountForAddress", mock.Anything, address, mock.Anything).Return(amount, nil).Once()
 			}
 			payService := NewPayService(&infrastructure.Config{GlobalPayoutThresholdInBTC: 1}, mockAPIRequester, &mockHelper{}, &types.BtcNetworkParams{})
+			btcClient := &mockBtcClient{}
+			btcClient.On("GetBalance", mock.Anything).Return(btcutil.NewAmount(1000000000)).Once()
 
 			err := payService.sendRewards(
 				context.Background(),
+				btcClient,
 				mockStorage,
 				types.Farm{},
 				test.unspentTxForFarm,
@@ -1010,6 +1001,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 			"nfts": [
 				{
 					"id": "1",
+					"owner": "nft_minter",
 					"data_json": {
 						"expiration_date": 1919101878,
 						"hash_rate_owned": 960
@@ -1038,12 +1030,8 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 			"action_nft_transfer_events": {
 				"events": [
 					{
-						"to": "nft_minter",
-						"from": "0x0",
-						"timestamp": 1664999478
-					},
-					{
 						"to": "nft_owner_2",
+						"token_id": "1",
 						"from": "nft_minter",
 						"timestamp": 1665431478
 					}
@@ -1055,7 +1043,27 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 	var farm1Denom1Nft1TransferHistory types.NftTransferHistory
 	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Nft1TransferHistoryJSON), &farm1Denom1Nft1TransferHistory))
 
-	apiRequester.On("GetNftTransferHistory", mock.Anything, "farm_1_denom_1", "1", mock.Anything).Return(farm1Denom1Nft1TransferHistory, nil).Once()
+	apiRequester.On("GetDenomNftTransferHistory", mock.Anything, "farm_1_denom_1", int64(1664999478), mock.Anything).Return(farm1Denom1Nft1TransferHistory.Data.NestedData.Events, nil).Once()
+
+	arm1Denom1NftMintEventsJSON := `{
+		"data": {
+			"nft_transfer_history": [
+				{
+					"id": 1,
+					"timestamp": 1664999478
+				},
+				{
+					"id": 2,
+					"timestamp": 1664999478
+				}
+			]
+		}
+	}
+	`
+	var farm1Denom1Nft1MintHistory types.NftMintHistory
+	require.NoError(t, json.Unmarshal([]byte(arm1Denom1NftMintEventsJSON), &farm1Denom1Nft1MintHistory))
+
+	apiRequester.On("GetHasuraCollectionNftMintEvents", mock.Anything, "farm_1_denom_1").Return(farm1Denom1Nft1MintHistory, nil).Once()
 
 	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_minter", "BTC", "1", "farm_1_denom_1").Return("nft_minter_payout_addr", nil)
 	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
@@ -1084,7 +1092,7 @@ func setupMockBtcClient() *mockBtcClient {
 	btcClient.On("WalletPassphrase", mock.Anything, mock.Anything).Return(nil)
 	btcClient.On("WalletLock").Return(nil)
 	btcClient.On("GetRawTransactionVerbose", mock.Anything).Return(&btcjson.TxRawResult{Time: 1666641078}, nil).Once()
-
+	btcClient.On("GetBalance", mock.Anything).Return(btcutil.NewAmount(1000000000)).Once()
 	return btcClient
 }
 
@@ -1117,6 +1125,11 @@ type mockBtcClient struct {
 	mock.Mock
 }
 
+func (mbc *mockBtcClient) GetBalance(account string) (btcutil.Amount, error) {
+	args := mbc.Called()
+	return args.Get(0).(btcutil.Amount), args.Error(1)
+}
+
 func (mbc *mockBtcClient) ListUnspent() ([]btcjson.ListUnspentResult, error) {
 	args := mbc.Called()
 	return args.Get(0).([]btcjson.ListUnspentResult), args.Error(1)
@@ -1126,8 +1139,8 @@ func setupMockStorage() *mockStorage {
 	storage := &mockStorage{}
 
 	leftoverAmount := decimal.NewFromFloat(1)
-	nftMinterAmount, _ := decimal.NewFromString("1.05249717034521640000268817204304")
-	nftOwner2Amount, _ := decimal.NewFromString("2.94699207696660599999731182795696")
+	nftMinterAmount, _ := decimal.NewFromString("1.0524971703452160000537634408608")
+	nftOwner2Amount, _ := decimal.NewFromString("2.9469920769666063999462365591392")
 	cudoPartOfReward, _ := decimal.NewFromString("1.25")
 	cudoPartOfMaintenanceFee, _ := decimal.NewFromString("0.0002553763440888")
 	maintenanceFeeAddress1Amount, _ := decimal.NewFromString("0.0002553763440888")
@@ -1181,7 +1194,7 @@ func setupMockStorage() *mockStorage {
 			nftOwnerStat1Correct := nftOwnerStat1.TimeOwnedFrom == 1664999478 &&
 				nftOwnerStat1.TimeOwnedTo == 1665431478 &&
 				nftOwnerStat1.TotalTimeOwned == 432000 &&
-				nftOwnerStat1.PercentOfTimeOwned == 26.31578947368421 &&
+				nftOwnerStat1.PercentOfTimeOwned == 26.315789473684198 &&
 				nftOwnerStat1.PayoutAddress == "nft_minter_payout_addr" &&
 				nftOwnerStat1.Owner == "nft_minter" &&
 				nftOwnerStat1.Reward.Equals(nftMinterAmount)
@@ -1189,7 +1202,7 @@ func setupMockStorage() *mockStorage {
 			nftOwnerStat2Correct := nftOwnerStat2.TimeOwnedFrom == 1665431478 &&
 				nftOwnerStat2.TimeOwnedTo == 1666641078 &&
 				nftOwnerStat2.TotalTimeOwned == 1209600 &&
-				nftOwnerStat2.PercentOfTimeOwned == 73.68421052631578 &&
+				nftOwnerStat2.PercentOfTimeOwned == 73.6842105263157 &&
 				nftOwnerStat2.PayoutAddress == "nft_owner_2_payout_addr" &&
 				nftOwnerStat2.Owner == "nft_owner_2" &&
 				nftOwnerStat2.Reward.Equals(nftOwner2Amount)
