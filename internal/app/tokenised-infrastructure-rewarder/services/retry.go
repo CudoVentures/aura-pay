@@ -146,7 +146,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return err
 	}
 
-	err = storage.SaveRBFTransactionInformation(ctx, tx.TxHash, types.TransactionReplaced, newRBFtxHash, types.TransactionPending, tx.FarmBtcWalletName, tx.RetryCount+1)
+	err = storage.SaveRBFTransactionInformation(ctx, tx.TxHash, types.TransactionReplaced, newRBFtxHash, types.TransactionPending, tx.FarmBtcWalletName, tx.FarmPaymentId, tx.RetryCount+1)
 
 	return nil
 }

@@ -73,7 +73,7 @@ func (sdb *SqlDB) SaveStatistics(
 		}
 
 		if txHash != "" {
-			if err := saveTxHashWithStatus(ctx, tx, txHash, types.TransactionPending, farmSubAccountName, 0); err != nil {
+			if err := saveTxHashWithStatus(ctx, tx, txHash, types.TransactionPending, farmSubAccountName, farmPaymentId, 0); err != nil {
 				return err
 			}
 		}
@@ -93,7 +93,7 @@ func fundsHaveBeenSent(destinationAddressesWithAmount map[string]types.AmountInf
 	return false
 }
 
-func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, retryCount int) error {
+func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, farmPaymentId int64, retryCount int) error {
 
 	return sdb.ExecuteTx(ctx, func(tx *DbTx) error {
 		// update old tx status
@@ -107,7 +107,7 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, 
 		}
 
 		// save the new tx with status, new timestamp, and retryCount of old one + 1
-		if retErr := saveTxHashWithStatus(ctx, tx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount); retErr != nil {
+		if retErr := saveTxHashWithStatus(ctx, tx, newRBFTxHash, newRBFTXStatus, farmSubAccountName, farmPaymentId, retryCount); retErr != nil {
 			return fmt.Errorf("failed to saveTxHashWithStatus: %s", retErr)
 		}
 

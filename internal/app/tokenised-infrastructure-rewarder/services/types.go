@@ -96,9 +96,9 @@ type Storage interface {
 
 	UpdateTransactionsStatus(ctx context.Context, txHashesToMarkCompleted []string, status string) error
 
-	SaveTxHashWithStatus(ctx context.Context, txHash, status, farmSubAccountName string, retryCount int) error
+	SaveTxHashWithStatus(ctx context.Context, txHash, status, farmSubAccountName string, farmPaymentId int64, retryCount int) error
 
-	SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, retryCount int) error
+	SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, farmPaymentId int64, retryCount int) error
 
 	GetUTXOTransaction(ctx context.Context, txId string) (types.UTXOTransaction, error)
 
