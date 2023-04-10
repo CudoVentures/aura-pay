@@ -453,7 +453,7 @@ func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage 
 	for _, collection := range farmCollectionsWithNFTs {
 		_, ok := farmAuraPoolCollectionsMap[collection.Denom.Id]
 		if !ok {
-			return []types.Collection{}, map[string]types.AuraPoolCollection{}, fmt.Errorf("aura pool collection not found by denom id {%s}", collection.Denom.Id)
+			return []types.Collection{}, map[string]types.AuraPoolCollection{}, fmt.Errorf("CUDOS Markets collection not found by denom id {%s}", collection.Denom.Id)
 		}
 	}
 

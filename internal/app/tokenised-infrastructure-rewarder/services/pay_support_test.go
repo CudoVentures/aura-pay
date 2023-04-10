@@ -1033,7 +1033,7 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			desc: "failed case: missing aura pool collection",
+			desc: "failed case: missing CUDOS Markets collection",
 			farm: types.Farm{
 				Id: 1,
 			},
@@ -1051,7 +1051,7 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 			expectedResultAuraCollectionsMap: map[string]types.AuraPoolCollection{},
 			verifiedDenomIds:                 []string{"denom1"},
 			auraPoolCollections:              []types.AuraPoolCollection{},
-			expectedError:                    fmt.Errorf("aura pool collection not found by denom id {denom1}"),
+			expectedError:                    fmt.Errorf("CUDOS Markets collection not found by denom id {denom1}"),
 		},
 	}
 	for _, tc := range testCases {
