@@ -374,14 +374,6 @@ func (s *PayService) processCollection(
 		log.Debug().Msgf("Reward for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, nftProcessResult.RewardForNftAfterFeeBtcDecimal)
 		log.Debug().Msgf("Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", collection.Denom.Id, nft.Id, nftProcessResult.MaintenanceFeeBtcDecimal)
 		log.Debug().Msgf("CUDO part (%.2f) of Maintenance fee for nft with denomId {%s} and tokenId {%s} is %s", s.config.CUDOMaintenanceFeePercent, collection.Denom.Id, nft.Id, nftProcessResult.CudoPartOfMaintenanceFeeBtcDecimal)
-
-		// distribute maintenance fees
-		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftProcessResult.MaintenanceFeeBtcDecimal, farm.MaintenanceFeePayoutAddress)
-		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftProcessResult.CudoPartOfMaintenanceFeeBtcDecimal, s.config.CUDOFeePayoutAddress)
-
-		for _, nftOwnersForPeriod := range nftProcessResult.NftOwnersForPeriod {
-			addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftOwnersForPeriod.Reward, nftOwnersForPeriod.PayoutAddress)
-		}
 	}
 
 	// calculate collection's percent of rewards based on hash power
@@ -475,7 +467,7 @@ func (s *PayService) processNft(
 		return NftProcessResult{}, false, err
 	}
 
-	allNftOwnersForTimePeriodWithRewardPercent, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
+	ownersCudosAddressWithPercentOwnedTime, nftOwnersForPeriod, err := s.calculateNftOwnersForTimePeriodWithRewardPercent(
 		ctx,
 		nftTransferHistory,
 		collection.Denom.Id,
@@ -495,7 +487,7 @@ func (s *PayService) processNft(
 		CudoPartOfMaintenanceFeeBtcDecimal:         cudoPartOfMaintenanceFeeBtcDecimal,
 		MaintenanceFeeBtcDecimal:                   maintenanceFeeBtcDecimal,
 		RewardForNftAfterFeeBtcDecimal:             rewardForNftAfterFeeBtcDecimal,
-		AllNftOwnersForTimePeriodWithRewardPercent: allNftOwnersForTimePeriodWithRewardPercent,
+		AllNftOwnersForTimePeriodWithRewardPercent: ownersCudosAddressWithPercentOwnedTime,
 		NftOwnersForPeriod:                         nftOwnersForPeriod,
 		NftPeriodStart:                             nftPeriodStart,
 		NftPeriodEnd:                               nftPeriodEnd,
@@ -538,6 +530,20 @@ func (s *PayService) sendRewards(
 	statistics []types.NFTStatistics,
 	collectionPaymentAllocationsStatistics []types.CollectionPaymentAllocation,
 ) error {
+	// distributing nft owners rewards
+	for _, nftStatistics := range statistics {
+		// distribute maintenance fees
+		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftStatistics.MaintenanceFee, farm.MaintenanceFeePayoutAddress)
+		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftStatistics.CUDOPartOfMaintenanceFee, s.config.CUDOFeePayoutAddress)
+
+		// add cudos addresses to payout addresses so they can be saved in the db with the cudos address
+		// on send the btc address will be gotten if possible
+		for _, nftOwnersForPeriod := range nftStatistics.NFTOwnersForPeriod {
+			addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftOwnersForPeriod.Reward, nftOwnersForPeriod.Owner)
+		}
+
+	}
+
 	log.Debug().Msgf("Calculating leftover rewards...")
 	// return to the farm owner whatever is left
 	leftoverNftRewardDistribution, err := calculateLeftoverNftRewardDistribution(rewardForNftOwnersBtcDecimal, statistics)
@@ -562,9 +568,19 @@ func (s *PayService) sendRewards(
 	removeAddressesWithZeroReward(destinationAddressesWithAmountBtcDecimal)
 
 	log.Debug().Msgf("Filtering payments by payment threshold...")
-	addressesWithThresholdToUpdateBtcDecimal, addressesWithAmountInfo, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmountBtcDecimal, storage, farm.Id)
+	addressesWithThresholdToUpdateBtcDecimal, addressesWithAmountInfo, cudosBtcAddressMap, err := s.filterByPaymentThreshold(ctx, destinationAddressesWithAmountBtcDecimal, storage, farm.Id)
 	if err != nil {
 		return err
+	}
+
+	// add btc addresses to owner infos
+	for i := 0; i < len(statistics); i++ {
+		stat := statistics[i]
+		for j := 0; j < len(stat.NFTOwnersForPeriod); j++ {
+			if btcAddress, ok := cudosBtcAddressMap[stat.NFTOwnersForPeriod[j].Owner]; ok {
+				stat.NFTOwnersForPeriod[j].PayoutAddress = btcAddress
+			}
+		}
 	}
 
 	log.Debug().Msgf("Destination addresses with amount for farm {%s}: {%s}", farm.RewardsFromPoolBtcWalletName, fmt.Sprint(destinationAddressesWithAmountBtcDecimal))

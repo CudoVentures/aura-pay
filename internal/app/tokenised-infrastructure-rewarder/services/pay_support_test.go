@@ -214,12 +214,14 @@ func TestGetUnspentTxsForFarm_EmptyUnspentTransactions(t *testing.T) {
 func TestVerifyCollectionIds(t *testing.T) {
 	ctx := context.Background()
 
-	collections := types.CollectionData{
-		Data: types.CData{
-			DenomsByDataProperty: []types.DenomsByDataProperty{
-				{Id: "collection1"},
-				{Id: "collection2"},
-			},
+	collections := []types.AuraPoolCollection{
+		{
+			Id:      1,
+			DenomId: "collection1",
+		},
+		{
+			Id:      2,
+			DenomId: "collection2",
 		},
 	}
 
@@ -239,12 +241,14 @@ func TestVerifyCollectionIds(t *testing.T) {
 func TestVerifyCollectionIds_ErrorDuringVerification(t *testing.T) {
 	ctx := context.Background()
 
-	collections := types.CollectionData{
-		Data: types.CData{
-			DenomsByDataProperty: []types.DenomsByDataProperty{
-				{Id: "collection1"},
-				{Id: "collection2"},
-			},
+	collections := []types.AuraPoolCollection{
+		{
+			Id:      1,
+			DenomId: "collection1",
+		},
+		{
+			Id:      2,
+			DenomId: "collection2",
 		},
 	}
 
@@ -569,7 +573,7 @@ func TestFilterByPaymentThreshold(t *testing.T) {
 			}
 			payService := NewPayService(&config, &mockAPIRequester{}, &mockHelper{}, &types.BtcNetworkParams{})
 
-			_, addressesToSend, err := payService.filterByPaymentThreshold(ctx, tC.destinationAddressesWithAmountsBtcDecimal, &mockStorage, tC.farmId)
+			_, addressesToSend, _, err := payService.filterByPaymentThreshold(ctx, tC.destinationAddressesWithAmountsBtcDecimal, &mockStorage, tC.farmId)
 
 			if (err == nil && tC.expectedError != nil) || (err != nil && tC.expectedError == nil) || (err != nil && tC.expectedError != nil && err.Error() != tC.expectedError.Error()) {
 				t.Errorf("Expected error %v, but got %v", tC.expectedError, err)
@@ -1049,7 +1053,7 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 			},
 			expectedResultCollections:        []types.Collection{},
 			expectedResultAuraCollectionsMap: map[string]types.AuraPoolCollection{},
-			verifiedDenomIds:                 []string{"denom1"},
+			verifiedDenomIds:                 nil,
 			auraPoolCollections:              []types.AuraPoolCollection{},
 			expectedError:                    fmt.Errorf("CUDOS Markets collection not found by denom id {denom1}"),
 		},
@@ -1060,7 +1064,7 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 			ctx := context.Background()
 			mockAPIRequester := mockAPIRequester{}
 			mockStorage := mockStorage{}
-			mockAPIRequester.On("GetFarmCollectionsFromHasura", ctx, tc.farm.Id).Return(tc.collectionsData, nil).Once()
+			// mockAPIRequester.On("GetFarmCollectionsFromHasura", ctx, tc.farm.Id).Return(tc.collectionsData, nil).Once()
 			mockAPIRequester.On("GetFarmCollectionsWithNFTs", ctx, tc.verifiedDenomIds).Return(tc.collections, nil).Once()
 
 			for _, denomId := range tc.verifiedDenomIds {

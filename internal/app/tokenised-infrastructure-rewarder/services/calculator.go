@@ -31,21 +31,18 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		}
 	}
 
-	ownersWithPercentOwnedTime := make(map[string]float64)
+	ownersCudosAddressWithPercentOwnedTime := make(map[string]float64)
 	// no transfers for this period, we give the current owner 100%
 	if len(transferHistoryForTimePeriod) == 0 {
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, currentNftOwner, payoutAddrNetwork, nftId, collectionDenomId)
-		if err != nil {
-			return nil, nil, err
-		}
-		ownersWithPercentOwnedTime[nftPayoutAddress] = 100
 
-		return ownersWithPercentOwnedTime,
+		ownersCudosAddressWithPercentOwnedTime[currentNftOwner] = 100
+
+		return ownersCudosAddressWithPercentOwnedTime,
 			[]types.NFTOwnerInformation{{
 				TimeOwnedFrom:      periodStart,
 				TimeOwnedTo:        periodEnd,
 				TotalTimeOwned:     periodEnd - periodStart,
-				PayoutAddress:      nftPayoutAddress,
+				PayoutAddress:      "",
 				PercentOfTimeOwned: 100,
 				Owner:              currentNftOwner,
 				Reward:             rewardForNftAfterFeeBtcDecimal,
@@ -77,21 +74,16 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		timeOwned := transferHistoryForTimePeriod[i+1].Timestamp - transferHistoryForTimePeriod[i].Timestamp
 		percentOfTimeOwned := decimal.NewFromInt(timeOwned).Div(decimal.NewFromInt(totalPeriodTimeInSeconds)).RoundDown(15)
 
-		nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, transferHistoryForTimePeriod[i].To, payoutAddrNetwork, nftId, collectionDenomId)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		calculatedReward := rewardForNftAfterFeeBtcDecimal.Mul(percentOfTimeOwned)
 		totalCalculatedReward = totalCalculatedReward.Add(calculatedReward)
-		ownersWithPercentOwnedTime[nftPayoutAddress] += percentOfTimeOwned.InexactFloat64() * 100
+		ownersCudosAddressWithPercentOwnedTime[transferHistoryForTimePeriod[i].To] += percentOfTimeOwned.InexactFloat64() * 100
 
 		nftOwnersInformation = append(nftOwnersInformation, types.NFTOwnerInformation{
 			PercentOfTimeOwned: percentOfTimeOwned.InexactFloat64() * 100,
 			TotalTimeOwned:     timeOwned,
 			TimeOwnedFrom:      transferHistoryForTimePeriod[i].Timestamp,
 			TimeOwnedTo:        transferHistoryForTimePeriod[i+1].Timestamp,
-			PayoutAddress:      nftPayoutAddress,
+			PayoutAddress:      "",
 			Owner:              transferHistoryForTimePeriod[i].To,
 			Reward:             calculatedReward,
 		})
@@ -117,7 +109,7 @@ func (s *PayService) calculateNftOwnersForTimePeriodWithRewardPercent(ctx contex
 		return nil, nil, fmt.Errorf("calculated NFT reward distribution is not equal to the total given. CalculatedForOwnerDistribution: %s, TotalGivenToDistribute: %s", finalTotalDistribution, rewardForNftAfterFeeBtcDecimal)
 	}
 
-	return ownersWithPercentOwnedTime, nftOwnersInformation, nil
+	return ownersCudosAddressWithPercentOwnedTime, nftOwnersInformation, nil
 }
 
 // calculateHourlyMaintenanceFee calculates the hourly maintenance fee for a farm

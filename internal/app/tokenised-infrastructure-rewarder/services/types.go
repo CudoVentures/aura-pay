@@ -44,7 +44,7 @@ type PayService struct {
 type ApiRequester interface {
 	GetChainNftMintTimestamp(ctx context.Context, denomId, tokenId string) (int64, error)
 
-	GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error)
+	GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network string) (string, error)
 
 	GetDenomNftTransferHistory(ctx context.Context, collectionDenomId string, lastPaymentTimestamp, periodEnd int64) ([]types.NftTransferEvent, error)
 
