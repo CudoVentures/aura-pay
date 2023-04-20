@@ -157,7 +157,7 @@ const (
 	   VALUES (:tx_hash, :processed, :createdAt, :updatedAt, :farm_id, :payment_timestamp)`
 
 	insertTxHashWithStatus = `INSERT INTO statistics_tx_hash_status
-	(tx_hash, status, time_sent, farm_btc_wallet_name, retry_count, "createdAt", "updatedAt", 'farm_payment_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	(tx_hash, status, time_sent, farm_btc_wallet_name, retry_count, "createdAt", "updatedAt", farm_payment_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	insertRBFTransactionHistory = `INSERT INTO rbf_transaction_history
 	(old_tx_hash, new_tx_hash, farm_btc_wallet_name, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5)`

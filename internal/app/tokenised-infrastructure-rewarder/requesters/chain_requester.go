@@ -16,14 +16,11 @@ import (
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 )
 
-func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network, tokenId, denomId string) (string, error) {
+func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, network string) (string, error) {
 
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
-
-	// cudos1tr9jp0eqza9tvdvqzgyff9n3kdfew8uzhcyuwq/BTC/1@test
-	//requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/%s/%s@%s", cudosAddress, network, tokenId, denomId) // TODO: Use this once this is fixed in the aura platform
 
 	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/aurapool/aurapool", cudosAddress)
 

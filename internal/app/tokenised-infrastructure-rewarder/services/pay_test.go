@@ -230,7 +230,7 @@ func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 				nftOwnerStat1.TotalTimeOwned == 820800 &&
 				nftOwnerStat1.PercentOfTimeOwned == 100 &&
 				nftOwnerStat1.PayoutAddress == "nft_minter_payout_addr" &&
-				nftOwnerStat1.Owner == "nft_minter" &&
+				nftOwnerStat1.Owner == "cudos1_nft_minter" &&
 				nftOwnerStat1.Reward.Equals(nftMinterAmount)
 
 			return nftStatisticCorrect && nftOwnerStat1Correct
@@ -370,7 +370,7 @@ func TestPayService_ProcessPayment_Expiration_Between_Payments(t *testing.T) {
 				nftOwnerStat1.TotalTimeOwned == 820800 &&
 				nftOwnerStat1.PercentOfTimeOwned == 100 &&
 				nftOwnerStat1.PayoutAddress == "nft_minter_payout_addr" &&
-				nftOwnerStat1.Owner == "nft_minter" &&
+				nftOwnerStat1.Owner == "cudos1_nft_minter" &&
 				nftOwnerStat1.Reward.Equals(nftMinterAmount)
 
 			return nftStatisticCorrect && nftOwnerStat1Correct
@@ -547,7 +547,7 @@ func TestProcessFarmUnspentTx_HappyPath(t *testing.T) {
 
 	txHash, _ := chainhash.NewHashFromStr("1")
 	mockBtcClient.AssertCalled(t, "GetRawTransactionVerbose", txHash)
-	mockApiRequester.AssertCalled(t, "GetFarmCollectionsFromHasura", testCtx, int64(1))
+	// mockApiRequester.AssertCalled(t, "GetFarmCollectionsFromHasura", testCtx, int64(1))
 	mockApiRequester.AssertCalled(t, "GetFarmCollectionsWithNFTs", testCtx, []string{"farm_1_denom_1"})
 	mockStorage.AssertCalled(t, "GetFarmAuraPoolCollections", testCtx, int64(1))
 }
@@ -607,60 +607,6 @@ func TestProcessFarmUnspentTx_FailedToGetTxDetails(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestProcessFarmUnspentTx_FailedToCollections(t *testing.T) {
-	// Arrange
-	// Create mock implementations
-	mockBtcClient := setupMockBtcClient()
-	mockStorage := setupMockStorage()
-	mockApiRequester := setupMockApiRequester(t)
-
-	testCtx := context.Background()
-
-	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            2,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
-		DbDriverName:               "postgres",
-		DbUser:                     "postgresUser",
-		DbPassword:                 "mysecretpassword",
-		DbHost:                     "127.0.0.1",
-		DbPort:                     "5432",
-		DbName:                     "aura-pay-test-db",
-	}
-
-	btcNetworkParams := &types.BtcNetworkParams{
-		ChainParams:      &chaincfg.MainNetParams,
-		MinConfirmations: 6,
-	}
-
-	testLastPaymentTimestamp := int64(1666641078)
-	testFarm := types.Farm{
-		Id:                                 1,
-		SubAccountName:                     "farm_1",
-		RewardsFromPoolBtcWalletName:       "farm_1",
-		AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
-		LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
-		MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
-		MaintenanceFeeInBtc:                1,
-		TotalHashPower:                     1200,
-	}
-
-	testUnspentTx := btcjson.ListUnspentResult{TxID: "1", Amount: 6.25, Address: "address_for_receiving_reward_from_pool_1"}
-
-	mockApiRequester.GetFarmCollectionsFromHasura(testCtx, int64(1))
-	mockApiRequester.On("GetFarmCollectionsFromHasura", testCtx, int64(1)).Return(types.CollectionData{}, fmt.Errorf("error")).Once()
-
-	s := NewPayService(config, mockApiRequester, &mockHelper{}, btcNetworkParams)
-
-	// Act
-	_, err := s.processFarmUnspentTx(testCtx, mockBtcClient, mockStorage, testFarm, testUnspentTx, testLastPaymentTimestamp)
-
-	// Check if the function returns no error and the correct period end
-	require.Error(t, err)
-}
-
 func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
 	// Arrange
 	// Create mock implementations
@@ -703,10 +649,10 @@ func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
 
 	testUnspentTx := btcjson.ListUnspentResult{TxID: "1", Amount: 6.25, Address: "address_for_receiving_reward_from_pool_1"}
 
-	var myslice []string
-	mockApiRequester.GetFarmCollectionsFromHasura(testCtx, int64(1))
-	mockApiRequester.On("GetFarmCollectionsFromHasura", testCtx, int64(1)).Return(types.CollectionData{}, nil).Once()
-	mockApiRequester.On("GetFarmCollectionsWithNFTs", testCtx, myslice).Return([]types.Collection{}, nil).Once()
+	// var myslice []string
+	mockStorage.GetFarmAuraPoolCollections(testCtx, int64(1))
+	mockStorage.On("GetFarmAuraPoolCollections", mock.Anything, int64(1)).Return([]types.AuraPoolCollection{}, nil).Once()
+	mockApiRequester.On("GetFarmCollectionsWithNFTs", mock.Anything, []string(nil)).Return([]types.Collection{}, nil).Once()
 
 	s := NewPayService(config, mockApiRequester, &mockHelper{}, btcNetworkParams)
 
@@ -720,8 +666,6 @@ func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
 	// Check if the mocked methods were called with the expected arguments
 	txHash, _ := chainhash.NewHashFromStr("1")
 	mockBtcClient.AssertCalled(t, "GetRawTransactionVerbose", txHash)
-	mockApiRequester.AssertCalled(t, "GetFarmCollectionsFromHasura", testCtx, int64(1))
-	mockApiRequester.AssertCalled(t, "GetFarmCollectionsWithNFTs", testCtx, myslice)
 }
 
 func TestSendRewards(t *testing.T) {
@@ -1001,7 +945,7 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 			"nfts": [
 				{
 					"id": "1",
-					"owner": "nft_minter",
+					"owner": "cudos1_nft_minter",
 					"data_json": {
 						"expiration_date": 1919101878,
 						"hash_rate_owned": 960
@@ -1030,9 +974,9 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 			"action_nft_transfer_events": {
 				"events": [
 					{
-						"to": "nft_owner_2",
+						"to": "cudos1_nft_owner_2",
 						"token_id": "1",
-						"from": "nft_minter",
+						"from": "cudos1_nft_minter",
 						"timestamp": 1665431478
 					}
 				]
@@ -1065,8 +1009,8 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	apiRequester.On("GetHasuraCollectionNftMintEvents", mock.Anything, "farm_1_denom_1").Return(farm1Denom1Nft1MintHistory, nil).Once()
 
-	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_minter", "BTC", "1", "farm_1_denom_1").Return("nft_minter_payout_addr", nil)
-	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
+	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "cudos1_nft_minter", "BTC").Return("nft_minter_payout_addr", nil)
+	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "cudos1_nft_owner_2", "BTC").Return("nft_owner_2_payout_addr", nil)
 
 	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
 	apiRequester.On("SendMany", mock.Anything, map[string]float64{
@@ -1196,7 +1140,7 @@ func setupMockStorage() *mockStorage {
 				nftOwnerStat1.TotalTimeOwned == 432000 &&
 				nftOwnerStat1.PercentOfTimeOwned == 26.315789473684198 &&
 				nftOwnerStat1.PayoutAddress == "nft_minter_payout_addr" &&
-				nftOwnerStat1.Owner == "nft_minter" &&
+				nftOwnerStat1.Owner == "cudos1_nft_minter" &&
 				nftOwnerStat1.Reward.Equals(nftMinterAmount)
 
 			nftOwnerStat2Correct := nftOwnerStat2.TimeOwnedFrom == 1665431478 &&
@@ -1204,7 +1148,7 @@ func setupMockStorage() *mockStorage {
 				nftOwnerStat2.TotalTimeOwned == 1209600 &&
 				nftOwnerStat2.PercentOfTimeOwned == 73.6842105263157 &&
 				nftOwnerStat2.PayoutAddress == "nft_owner_2_payout_addr" &&
-				nftOwnerStat2.Owner == "nft_owner_2" &&
+				nftOwnerStat2.Owner == "cudos1_nft_owner_2" &&
 				nftOwnerStat2.Reward.Equals(nftOwner2Amount)
 
 			return nftStatisticCorrect && nftOwnerStat1Correct && nftOwnerStat2Correct
@@ -1252,7 +1196,7 @@ func setupMockStorage() *mockStorage {
 				DenomId:      "farm_1_denom_1",
 				HashingPower: 960,
 			},
-		}, nil)
+		}, nil).Once()
 
 	storage.On("GetLastUTXOTransactionByFarmId", mock.Anything, int64(1)).Return(
 		types.UTXOTransaction{
@@ -1292,8 +1236,8 @@ func (ms *mockStorage) UpdateTransactionsStatus(ctx context.Context, txHashesToM
 	return args.Error(0)
 }
 
-func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, txHash, status, farmSubAccountName string, retryCount int) error {
-	args := ms.Called(ctx, txHash, status, farmSubAccountName, retryCount)
+func (ms *mockStorage) SaveTxHashWithStatus(ctx context.Context, txHash, status, farmSubAccountName string, farmPaymentId int64, retryCount int) error {
+	args := ms.Called(ctx, txHash, status, farmSubAccountName, farmPaymentId, retryCount)
 	return args.Error(0)
 }
 
@@ -1302,8 +1246,8 @@ func (ms *mockStorage) GetTxHashesByStatus(ctx context.Context, status string) (
 	return args.Get(0).([]types.TransactionHashWithStatus), args.Error(1)
 }
 
-func (ms *mockStorage) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, retryCount int) error {
-	args := ms.Called(ctx, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName, retryCount)
+func (ms *mockStorage) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName string, farmPaymentId int64, retryCount int) error {
+	args := ms.Called(ctx, oldTxHash, oldTxStatus, newRBFTxHash, newRBFTXStatus, farmSubAccountName, farmPaymentId, retryCount)
 	return args.Error(0)
 }
 

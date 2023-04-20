@@ -129,32 +129,32 @@ func TestRetryService_Execute_With_Database(t *testing.T) {
 
 func seedDatabase(dbStorage Storage) {
 	err := dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f881",
-		types.TransactionPending, "farm_sub_account_name_1", 0)
+		types.TransactionPending, "farm_sub_account_name_1", 1, 0)
 	if err != nil {
 		panic(err)
 	}
 	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f882",
-		types.TransactionPending, "farm_sub_account_name_1", 0)
+		types.TransactionPending, "farm_sub_account_name_1", 1, 0)
 	if err != nil {
 		panic(err)
 	}
 	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f883",
-		types.TransactionPending, "farm_sub_account_name_1", 2)
+		types.TransactionPending, "farm_sub_account_name_1", 2, 2)
 	if err != nil {
 		panic(err)
 	}
 	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884",
-		types.TransactionPending, "farm_sub_account_name_1", 0)
+		types.TransactionPending, "farm_sub_account_name_1", 1, 0)
 	if err != nil {
 		panic(err)
 	}
 	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f886",
-		types.TransactionPending, "farm_sub_account_name_1", 2)
+		types.TransactionPending, "farm_sub_account_name_1", 1, 2)
 	if err != nil {
 		panic(err)
 	}
 	err = dbStorage.SaveTxHashWithStatus(context.Background(), "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887",
-		types.TransactionPending, "farm_sub_account_name_1", 0)
+		types.TransactionPending, "farm_sub_account_name_1", 1, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -163,7 +163,7 @@ func seedDatabase(dbStorage Storage) {
 func setupMockApiRequesterRetryService() *mockAPIRequester {
 	apiRequester := &mockAPIRequester{}
 
-	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC", "1", "farm_1_denom_1").Return("nft_owner_2_payout_addr", nil)
+	apiRequester.On("GetPayoutAddressFromNode", mock.Anything, "nft_owner_2", "BTC").Return("nft_owner_2_payout_addr", nil)
 	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f884").Return(
 		"b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f885", nil)
 	apiRequester.On("BumpFee", mock.Anything, "b58d7705c8980ad58e9ee981760bdb45f28adad898266b58ebde6dedfc93f887").Return(
@@ -258,7 +258,7 @@ func setupMockStorageRetryService() *mockStorage {
 	storage.On("GetTxHashesByStatus", mock.Anything, types.TransactionPending).Return(uncomfirmedTransactions, nil)
 	storage.On("UpdateTransactionsStatus", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	storage.On("SaveTxHashWithStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	storage.On("SaveRBFTransactionInformation", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	storage.On("SaveRBFTransactionInformation", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	storage.On("GetApprovedFarms", mock.Anything).Return(nil, nil)
 
 	return storage

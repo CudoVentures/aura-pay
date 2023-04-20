@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
@@ -157,15 +158,17 @@ func (s *PayService) findCurrentPayoutPeriod(payoutTimes []types.NFTStatistics, 
 // - map[string]decimal.Decimal: A map with the destination addresses as keys and the updated accumulated amounts as values.
 // - map[string]types.AmountInfo: A map with the destination addresses as keys and the amount to send and thresholdReached flag as values.
 // - error: An error encountered during the function execution, if any.
-func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmountsBtcDecimal map[string]decimal.Decimal, storage Storage, farmId int64) (map[string]decimal.Decimal, map[string]types.AmountInfo, error) {
+func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAddressesWithAmountsBtcDecimal map[string]decimal.Decimal, storage Storage, farmId int64) (map[string]decimal.Decimal, map[string]types.AmountInfo, map[string]string, error) {
 	thresholdInBtcDecimal := decimal.NewFromFloat(s.config.GlobalPayoutThresholdInBTC)
 
 	addressesWithThresholdToUpdateBtcDecimal := make(map[string]decimal.Decimal)
 
 	addressesToSend := make(map[string]types.AmountInfo)
 
-	for address := range destinationAddressesWithAmountsBtcDecimal {
+	var cudosBtcAddressMap = make(map[string]string)
 
+	for address := range destinationAddressesWithAmountsBtcDecimal {
+		// get accumulation for cudos address and add it to current
 		amountAccumulatedBtcDecimal, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, address, farmId)
 
 		if err != nil {
@@ -174,28 +177,56 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 				log.Info().Msgf("No threshold found, inserting...")
 				err = storage.SetInitialAccumulatedAmountForAddress(ctx, address, farmId, 0)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, nil, err
 				}
 			default:
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 		}
 
+		addressToSend := address
+
+		// find btc address if it exists
+		if isCudosAddress(address) {
+			nftPayoutAddress, err := s.apiRequester.GetPayoutAddressFromNode(ctx, address, s.config.Network)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			cudosBtcAddressMap[address] = nftPayoutAddress
+
+			if nftPayoutAddress != "" {
+				addressToSend = nftPayoutAddress
+				btcAddressAmount, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, address, farmId)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+
+				amountAccumulatedBtcDecimal = amountAccumulatedBtcDecimal.Add(btcAddressAmount)
+
+				addressesWithThresholdToUpdateBtcDecimal[nftPayoutAddress] = decimal.Zero
+			}
+		}
+
+		// get accumulation for btc address as well and add it to current
 		totalAmountAccumulatedForAddressBtcDecimal := destinationAddressesWithAmountsBtcDecimal[address].Add(amountAccumulatedBtcDecimal)
 		amountToSendBtcDecimal := totalAmountAccumulatedForAddressBtcDecimal.RoundFloor(8) // up to 1 satoshi
 
-		if totalAmountAccumulatedForAddressBtcDecimal.GreaterThanOrEqual(thresholdInBtcDecimal) {
+		// if the address was cudos and there is registered btc address for it
+		// addressToSend should be set to the btc address and used
+		// if not, cudos address will be used
+		if totalAmountAccumulatedForAddressBtcDecimal.GreaterThanOrEqual(thresholdInBtcDecimal) && !isCudosAddress(addressToSend) {
 			// threshold reached, get amount to send up to 1 satoshi accuracy
 			// subtract it from the total amount to reset the threshold with w/e is left
-			addressesWithThresholdToUpdateBtcDecimal[address] = totalAmountAccumulatedForAddressBtcDecimal.Sub(amountToSendBtcDecimal)
-			addressesToSend[address] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: true}
+			addressesWithThresholdToUpdateBtcDecimal[addressToSend] = totalAmountAccumulatedForAddressBtcDecimal.Sub(amountToSendBtcDecimal)
+			addressesToSend[addressToSend] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: true}
 		} else {
-			addressesWithThresholdToUpdateBtcDecimal[address] = totalAmountAccumulatedForAddressBtcDecimal
-			addressesToSend[address] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: false}
+			addressesWithThresholdToUpdateBtcDecimal[addressToSend] = totalAmountAccumulatedForAddressBtcDecimal
+			addressesToSend[addressToSend] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: false}
 		}
 	}
 
-	return addressesWithThresholdToUpdateBtcDecimal, addressesToSend, nil
+	return addressesWithThresholdToUpdateBtcDecimal, addressesToSend, cudosBtcAddressMap, nil
 }
 
 // filterUnspentTransactions filters the given list of unspent transactions by removing transactions that
@@ -296,6 +327,10 @@ func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountIn
 // - address string: The address to which the amount will be added.
 func addPaymentAmountToAddress(destinationAddressesWithAmount map[string]decimal.Decimal, amountToAdd decimal.Decimal, address string) {
 	destinationAddressesWithAmount[address] = destinationAddressesWithAmount[address].Add(amountToAdd)
+}
+
+func isCudosAddress(address string) bool {
+	return strings.HasPrefix(address, "cudos1")
 }
 
 // addLeftoverRewardToFarmOwner adds the leftover reward amount (leftoverReward) to the farm owner's default
