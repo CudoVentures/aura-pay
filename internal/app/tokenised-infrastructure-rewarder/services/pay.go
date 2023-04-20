@@ -575,10 +575,9 @@ func (s *PayService) sendRewards(
 
 	// add btc addresses to owner infos
 	for i := 0; i < len(statistics); i++ {
-		stat := statistics[i]
-		for j := 0; j < len(stat.NFTOwnersForPeriod); j++ {
-			if btcAddress, ok := cudosBtcAddressMap[stat.NFTOwnersForPeriod[j].Owner]; ok {
-				stat.NFTOwnersForPeriod[j].PayoutAddress = btcAddress
+		for j := 0; j < len(statistics[i].NFTOwnersForPeriod); j++ {
+			if btcAddress, ok := cudosBtcAddressMap[statistics[i].NFTOwnersForPeriod[j].Owner]; ok {
+				statistics[i].NFTOwnersForPeriod[j].PayoutAddress = btcAddress
 			}
 		}
 	}
