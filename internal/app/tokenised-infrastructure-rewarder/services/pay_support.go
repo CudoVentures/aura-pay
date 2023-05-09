@@ -295,8 +295,8 @@ func removeAddressesWithZeroReward(destinationAddressesWithAmount map[string]dec
 // The returned map contains the destination addresses as keys and the amounts in BTC as float64 values.
 //
 // Parameters:
-// - destinationAddressesWithAmount map[string]types.AmountInfo: A map with the destination addresses as keys
-//   and the amount and thresholdReached flag as values.
+//   - destinationAddressesWithAmount map[string]types.AmountInfo: A map with the destination addresses as keys
+//     and the amount and thresholdReached flag as values.
 //
 // Returns:
 // - map[string]float64: A map with the destination addresses as keys and the amounts in BTC as float64 values.
@@ -321,10 +321,10 @@ func convertAmountToBTC(destinationAddressesWithAmount map[string]types.AmountIn
 // destinationAddressesWithAmount map.
 //
 // Parameters:
-// - destinationAddressesWithAmount map[string]decimal.Decimal: A map with the destination addresses as keys
-//   and the accumulated amounts as values.
-// - amountToAdd decimal.Decimal: The amount to be added to the specified address.
-// - address string: The address to which the amount will be added.
+//   - destinationAddressesWithAmount map[string]decimal.Decimal: A map with the destination addresses as keys
+//     and the accumulated amounts as values.
+//   - amountToAdd decimal.Decimal: The amount to be added to the specified address.
+//   - address string: The address to which the amount will be added.
 func addPaymentAmountToAddress(destinationAddressesWithAmount map[string]decimal.Decimal, amountToAdd decimal.Decimal, address string) {
 	destinationAddressesWithAmount[address] = destinationAddressesWithAmount[address].Add(amountToAdd)
 }
@@ -339,10 +339,10 @@ func isCudosAddress(address string) bool {
 // Otherwise, a new entry is created with the farm owner's default payout address and the leftover reward as the value.
 //
 // Parameters:
-// - destinationAddressesWithAmount map[string]decimal.Decimal: A map with the destination addresses as keys
-//   and the accumulated amounts as values.
-// - leftoverReward decimal.Decimal: The leftover reward amount to be added.
-// - farmDefaultPayoutAddress string: The farm owner's default payout address.
+//   - destinationAddressesWithAmount map[string]decimal.Decimal: A map with the destination addresses as keys
+//     and the accumulated amounts as values.
+//   - leftoverReward decimal.Decimal: The leftover reward amount to be added.
+//   - farmDefaultPayoutAddress string: The farm owner's default payout address.
 func addLeftoverRewardToFarmOwner(destinationAddressesWithAmount map[string]decimal.Decimal, leftoverReward decimal.Decimal, farmDefaultPayoutAddress string) {
 	if _, ok := destinationAddressesWithAmount[farmDefaultPayoutAddress]; ok {
 		// log to statistics here if we are doing accumulation send for an nft
@@ -446,7 +446,7 @@ func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storag
 	// no payment found, so this is the first one. Get the one from foundry
 	if lastUTXOTransaction.PaymentTimestamp == 0 {
 		if s.config.IsTesting {
-			return 0, nil
+			return farm.CreatedAt.Unix(), nil
 		} else {
 			return s.apiRequester.GetFarmStartTime(ctx, farm.SubAccountName)
 		}

@@ -88,10 +88,10 @@ func (tx *DbTx) saveNFTInformationHistory(
 	return id, nil
 }
 
-func (tx *DbTx) saveNFTOwnersForPeriodHistory(ctx context.Context, timedOwnedFrom int64, timedOwnedTo int64, totalTimeOwned int64, percentOfTimeOwned float64, owner string, payoutAddress string, reward decimal.Decimal, nftPayoutHistoryId int, sent bool) error {
+func (tx *DbTx) saveNFTOwnersForPeriodHistory(ctx context.Context, timedOwnedFrom int64, timedOwnedTo int64, totalTimeOwned int64, percentOfTimeOwned float64, owner string, payoutAddress string, reward decimal.Decimal, nftPayoutHistoryId int, farmPaymentId int64, sent bool) error {
 	now := time.Now()
 	_, err := tx.ExecContext(ctx, insertNFTOnwersForPeriodHistory,
-		timedOwnedFrom, timedOwnedTo, totalTimeOwned, percentOfTimeOwned, owner, payoutAddress, reward.String(), nftPayoutHistoryId, sent, now.UTC(), now.UTC())
+		timedOwnedFrom, timedOwnedTo, totalTimeOwned, percentOfTimeOwned, owner, payoutAddress, reward.String(), nftPayoutHistoryId, sent, now.UTC(), now.UTC(), farmPaymentId)
 	return err
 }
 
@@ -170,8 +170,8 @@ const (
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`
 
 	insertNFTOnwersForPeriodHistory = `INSERT INTO statistics_nft_owners_payout_history (time_owned_from, time_owned_to,
-		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, nft_payout_history_id, sent, "createdAt", "updatedAt")
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+		total_time_owned, percent_of_time_owned ,owner, payout_address, reward, nft_payout_history_id, sent, "createdAt", "updatedAt", farm_payment_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
 
 	updateTxHashesWithStatusQuery = `UPDATE statistics_tx_hash_status SET status=$1 where tx_hash=$2`
 

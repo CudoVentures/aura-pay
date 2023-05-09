@@ -66,7 +66,7 @@ func (sdb *SqlDB) SaveStatistics(
 				isSent := fundsHaveBeenSent(destinationAddressesWithAmount, ownerForPeriod)
 				if err := tx.saveNFTOwnersForPeriodHistory(ctx,
 					ownerForPeriod.TimeOwnedFrom, ownerForPeriod.TimeOwnedTo, ownerForPeriod.TotalTimeOwned,
-					ownerForPeriod.PercentOfTimeOwned, ownerForPeriod.Owner, ownerForPeriod.PayoutAddress, ownerForPeriod.Reward, nftPayoutHistoryId, isSent); err != nil {
+					ownerForPeriod.PercentOfTimeOwned, ownerForPeriod.Owner, ownerForPeriod.PayoutAddress, ownerForPeriod.Reward, nftPayoutHistoryId, farmPaymentId, isSent); err != nil {
 					return err
 				}
 			}

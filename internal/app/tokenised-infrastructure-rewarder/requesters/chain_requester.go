@@ -43,7 +43,7 @@ func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, 
 	}
 
 	if res.StatusCode == StatusCodeNotFound {
-		return "", fmt.Errorf("address not found in the node addressbook: %s", cudosAddress)
+		return "", nil
 	}
 
 	if res.StatusCode != StatusCodeOK {

@@ -29,7 +29,7 @@ type Farm struct {
 	// PrimaryAccountOwnerEmail           string  `db:"primary_account_owner_email"`
 	// CreatorId                          int     `db:"creator_id"`
 	// DeletedAt                          int64   `db:"deleted_at"`
-	// CreatedAt                          int64   `db:"created_at"`
+	CreatedAt time.Time `db:"created_at"`
 	// UpdatedAt                          int64   `db:"updated_at"`
 	// ResaleFarmRoyaltiesCudosAddress    string  `db:"resale_farm_royalties_cudos_address"`
 	// CudosMintNftRoyaltiesPercent       float64 `db:"cudos_mint_nft_royalties_percent"`
