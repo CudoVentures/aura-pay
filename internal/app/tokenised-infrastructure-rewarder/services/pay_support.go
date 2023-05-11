@@ -167,7 +167,7 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 
 	var cudosBtcAddressMap = make(map[string]string)
 
-	for address := range destinationAddressesWithAmountsBtcDecimal {
+	for address, amountForAddress := range destinationAddressesWithAmountsBtcDecimal {
 		// get accumulation for cudos address and add it to current
 		amountAccumulatedBtcDecimal, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, address, farmId)
 
@@ -197,7 +197,7 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 
 			if nftPayoutAddress != "" {
 				addressToSend = nftPayoutAddress
-				btcAddressAmount, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, address, farmId)
+				btcAddressAmount, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, nftPayoutAddress, farmId)
 				if err != nil {
 					return nil, nil, nil, err
 				}
@@ -209,7 +209,7 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 		}
 
 		// get accumulation for btc address as well and add it to current
-		totalAmountAccumulatedForAddressBtcDecimal := destinationAddressesWithAmountsBtcDecimal[address].Add(amountAccumulatedBtcDecimal)
+		totalAmountAccumulatedForAddressBtcDecimal := amountAccumulatedBtcDecimal.Add(amountForAddress)
 		amountToSendBtcDecimal := totalAmountAccumulatedForAddressBtcDecimal.RoundFloor(8) // up to 1 satoshi
 
 		// if the address was cudos and there is registered btc address for it
@@ -218,11 +218,12 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 		if totalAmountAccumulatedForAddressBtcDecimal.GreaterThanOrEqual(thresholdInBtcDecimal) && !isCudosAddress(addressToSend) {
 			// threshold reached, get amount to send up to 1 satoshi accuracy
 			// subtract it from the total amount to reset the threshold with w/e is left
-			addressesWithThresholdToUpdateBtcDecimal[addressToSend] = totalAmountAccumulatedForAddressBtcDecimal.Sub(amountToSendBtcDecimal)
+			addressesWithThresholdToUpdateBtcDecimal[address] = totalAmountAccumulatedForAddressBtcDecimal.Sub(amountToSendBtcDecimal)
+			// if going to send for this address, use the btc one
 			addressesToSend[addressToSend] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: true}
 		} else {
-			addressesWithThresholdToUpdateBtcDecimal[addressToSend] = totalAmountAccumulatedForAddressBtcDecimal
-			addressesToSend[addressToSend] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: false}
+			addressesWithThresholdToUpdateBtcDecimal[address] = totalAmountAccumulatedForAddressBtcDecimal
+			addressesToSend[address] = types.AmountInfo{Amount: amountToSendBtcDecimal, ThresholdReached: false}
 		}
 	}
 
