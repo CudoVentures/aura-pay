@@ -199,7 +199,16 @@ func (s *PayService) filterByPaymentThreshold(ctx context.Context, destinationAd
 				addressToSend = nftPayoutAddress
 				btcAddressAmount, err := storage.GetCurrentAcummulatedAmountForAddress(ctx, nftPayoutAddress, farmId)
 				if err != nil {
-					return nil, nil, nil, err
+					switch err {
+					case sql.ErrNoRows:
+						log.Info().Msgf("No threshold found, inserting...")
+						err = storage.SetInitialAccumulatedAmountForAddress(ctx, nftPayoutAddress, farmId, 0)
+						if err != nil {
+							return nil, nil, nil, err
+						}
+					default:
+						return nil, nil, nil, err
+					}
 				}
 
 				amountAccumulatedBtcDecimal = amountAccumulatedBtcDecimal.Add(btcAddressAmount)
