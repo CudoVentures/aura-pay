@@ -533,7 +533,7 @@ func (s *PayService) sendRewards(
 	for _, nftStatistics := range statistics {
 		// distribute maintenance fees
 		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftStatistics.MaintenanceFee, farm.MaintenanceFeePayoutAddress)
-		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftStatistics.CUDOPartOfMaintenanceFee, s.config.CUDOFeePayoutAddress)
+		addPaymentAmountToAddress(destinationAddressesWithAmountBtcDecimal, nftStatistics.CUDOPartOfMaintenanceFee, s.config.CUDOMaintenanceFeePayoutAddress)
 
 		// add cudos addresses to payout addresses so they can be saved in the db with the cudos address
 		// on send the btc address will be gotten if possible
