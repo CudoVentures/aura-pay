@@ -33,8 +33,8 @@ func (h *Helper) Date() (year int, month time.Month, day int) {
 }
 
 func (h *Helper) SendMail(message string) error {
-	from := mail.NewEmail("Aura Pay Service", h.config.MailFromAddress)
-	subject := "Automatic email from Aura Pay Service"
+	from := mail.NewEmail("Cudos Markets Service", h.config.MailFromAddress)
+	subject := "Automatic email from Cudos Markets Service"
 	to := mail.NewEmail("User", h.config.MailToAddress)
 	plainTextContent := message
 	htmlContent := fmt.Sprintf("<strong>%s</strong>", message)

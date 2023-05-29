@@ -134,8 +134,8 @@ func (sdb *SqlDB) GetLastUTXOTransactionByFarmId(ctx context.Context, farmId int
 	return result[0], nil
 }
 
-func (sdb *SqlDB) GetFarmAuraPoolCollections(ctx context.Context, farmId int64) ([]types.AuraPoolCollection, error) {
-	collections := []types.AuraPoolCollection{}
+func (sdb *SqlDB) GetFarmCudosMarketsCollections(ctx context.Context, farmId int64) ([]types.CudosMarketsCollection, error) {
+	collections := []types.CudosMarketsCollection{}
 	if err := sdb.SelectContext(ctx, &collections, selectFarmCollections, farmId); err != nil {
 		return nil, err
 	}

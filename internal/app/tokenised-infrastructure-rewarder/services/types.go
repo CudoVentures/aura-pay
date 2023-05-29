@@ -110,7 +110,7 @@ type Storage interface {
 
 	SetInitialAccumulatedAmountForAddress(ctx context.Context, address string, farmId int64, amount int) error
 
-	GetFarmAuraPoolCollections(ctx context.Context, farmId int64) ([]types.AuraPoolCollection, error)
+	GetFarmCudosMarketsCollections(ctx context.Context, farmId int64) ([]types.CudosMarketsCollection, error)
 }
 
 type Helper interface {

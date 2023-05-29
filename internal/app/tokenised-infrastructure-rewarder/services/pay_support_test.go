@@ -214,7 +214,7 @@ func TestGetUnspentTxsForFarm_EmptyUnspentTransactions(t *testing.T) {
 func TestVerifyCollectionIds(t *testing.T) {
 	ctx := context.Background()
 
-	collections := []types.AuraPoolCollection{
+	collections := []types.CudosMarketsCollection{
 		{
 			Id:      1,
 			DenomId: "collection1",
@@ -241,7 +241,7 @@ func TestVerifyCollectionIds(t *testing.T) {
 func TestVerifyCollectionIds_ErrorDuringVerification(t *testing.T) {
 	ctx := context.Background()
 
-	collections := []types.AuraPoolCollection{
+	collections := []types.CudosMarketsCollection{
 		{
 			Id:      1,
 			DenomId: "collection1",
@@ -994,15 +994,15 @@ func TestGetLastUTXOTransactionTimestamp(t *testing.T) {
 
 func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 	testCases := []struct {
-		desc                             string
-		farm                             types.Farm
-		collectionsData                  types.CollectionData
-		collections                      []types.Collection
-		verifiedDenomIds                 []string
-		auraPoolCollections              []types.AuraPoolCollection
-		expectedResultCollections        []types.Collection
-		expectedResultAuraCollectionsMap map[string]types.AuraPoolCollection
-		expectedError                    error
+		desc                                     string
+		farm                                     types.Farm
+		collectionsData                          types.CollectionData
+		collections                              []types.Collection
+		verifiedDenomIds                         []string
+		CudosMarketsCollections                  []types.CudosMarketsCollection
+		expectedResultCollections                []types.Collection
+		expectedResultCudosMarketsCollectionsMap map[string]types.CudosMarketsCollection
+		expectedError                            error
 	}{
 		{
 			desc: "successful case",
@@ -1022,7 +1022,7 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 				{Denom: types.Denom{Id: "denom2"}},
 			},
 			verifiedDenomIds: []string{"denom1", "denom2"},
-			auraPoolCollections: []types.AuraPoolCollection{
+			CudosMarketsCollections: []types.CudosMarketsCollection{
 				{Id: 1, DenomId: "denom1"},
 				{Id: 2, DenomId: "denom2"},
 			},
@@ -1030,7 +1030,7 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 				{Denom: types.Denom{Id: "denom1"}},
 				{Denom: types.Denom{Id: "denom2"}},
 			},
-			expectedResultAuraCollectionsMap: map[string]types.AuraPoolCollection{
+			expectedResultCudosMarketsCollectionsMap: map[string]types.CudosMarketsCollection{
 				"denom1": {Id: 1, DenomId: "denom1"},
 				"denom2": {Id: 2, DenomId: "denom2"},
 			},
@@ -1051,11 +1051,11 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 			collections: []types.Collection{
 				{Denom: types.Denom{Id: "denom1"}},
 			},
-			expectedResultCollections:        []types.Collection{},
-			expectedResultAuraCollectionsMap: map[string]types.AuraPoolCollection{},
-			verifiedDenomIds:                 nil,
-			auraPoolCollections:              []types.AuraPoolCollection{},
-			expectedError:                    fmt.Errorf("CUDOS Markets collection not found by denom id {denom1}"),
+			expectedResultCollections:                []types.Collection{},
+			expectedResultCudosMarketsCollectionsMap: map[string]types.CudosMarketsCollection{},
+			verifiedDenomIds:                         nil,
+			CudosMarketsCollections:                  []types.CudosMarketsCollection{},
+			expectedError:                            fmt.Errorf("CUDOS Markets collection not found by denom id {denom1}"),
 		},
 	}
 	for _, tc := range testCases {
@@ -1071,14 +1071,14 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 				mockAPIRequester.On("VerifyCollection", ctx, denomId).Return(true, nil).Once()
 			}
 
-			mockStorage.On("GetFarmAuraPoolCollections", ctx, tc.farm.Id).Return(tc.auraPoolCollections, nil).Once()
+			mockStorage.On("CudosMarketsCollections", ctx, tc.farm.Id).Return(tc.CudosMarketsCollections, nil).Once()
 
 			payService := NewPayService(&infrastructure.Config{}, &mockAPIRequester, &mockHelper{}, &types.BtcNetworkParams{})
 
 			resultCollections, resultMap, err := payService.getCollectionsWithNftsForFarm(ctx, &mockStorage, tc.farm)
 
 			assert.Equal(t, tc.expectedResultCollections, resultCollections)
-			assert.Equal(t, tc.expectedResultAuraCollectionsMap, resultMap)
+			assert.Equal(t, tc.expectedResultCudosMarketsCollectionsMap, resultMap)
 			assert.Equal(t, tc.expectedError, err)
 
 			mockAPIRequester.AssertExpectations(t)

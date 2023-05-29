@@ -11,9 +11,9 @@ RUN make build
 FROM amd64/golang:1.18-buster
 USER root
 
-WORKDIR /aura-pay
+WORKDIR /cudos-markets-pay
 COPY ./.env ./.env
 
-COPY --from=builder /go/src/github.com/CudoVentures/aura-pay/build/aura-pay /usr/bin/aura-pay
+COPY --from=builder /go/src/github.com/CudoVentures/aura-pay/build/cudos-markets-pay /usr/bin/cudos-markets-pay
 
-CMD ["/bin/bash", "-c", "aura-pay"]
+CMD ["/bin/bash", "-c", "cudos-markets-pay"]

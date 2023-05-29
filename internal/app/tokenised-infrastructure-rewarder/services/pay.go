@@ -98,7 +98,7 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	}
 
 	log.Debug().Msgf("Unlocking farm wallet...")
-	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
+	err = btcClient.WalletPassphrase(s.config.CudosMarketsTestFarmWalletPassword, 60)
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (s *PayService) processFarmUnspentTx(
 	log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.RewardsFromPoolBtcWalletName, currentHashPowerForFarm)
 	hourlyMaintenanceFeeInBtcDecimal := s.calculateHourlyMaintenanceFee(farm, currentHashPowerForFarm)
 
-	farmCollectionsWithNFTs, farmAuraPoolCollectionsMap, err := s.getCollectionsWithNftsForFarm(ctx, storage, farm)
+	farmCollectionsWithNFTs, farmCudosMarketsCollectionsMap, err := s.getCollectionsWithNftsForFarm(ctx, storage, farm)
 	if err != nil {
 		return 0, err
 	}
@@ -225,7 +225,7 @@ func (s *PayService) processFarmUnspentTx(
 			hourlyMaintenanceFeeInBtcDecimal,
 			lastPaymentTimestamp,
 			periodEnd,
-			farmAuraPoolCollectionsMap,
+			farmCudosMarketsCollectionsMap,
 		)
 		if err != nil {
 			return 0, err
@@ -283,7 +283,7 @@ func (s *PayService) processCollection(
 	mintedHashPowerForFarm, currentHashPowerForFarm float64,
 	totalRewardForFarmAfterCudosFeeBtcDecimal, cudosFeeOfTotalRewardBtcDecimal, hourlyMaintenanceFeeInBtcDecimal decimal.Decimal,
 	periodStart, periodEnd int64,
-	farmAuraPoolCollectionsMap map[string]types.AuraPoolCollection,
+	farmCudosMarketsCollectionsMap map[string]types.CudosMarketsCollection,
 ) (CollectionProcessResult, error) {
 	log.Debug().Msgf("Processing collection with denomId {{%s}}..", collection.Denom.Id)
 	log.Debug().Msgf("Getting collection transfer events..")
@@ -377,8 +377,8 @@ func (s *PayService) processCollection(
 	}
 
 	// calculate collection's percent of rewards based on hash power
-	auraPoolCollection := farmAuraPoolCollectionsMap[collection.Denom.Id]
-	collectionPartOfFarmDecimal := decimal.NewFromFloat(auraPoolCollection.HashingPower / currentHashPowerForFarm)
+	CudosMarketsCollection := farmCudosMarketsCollectionsMap[collection.Denom.Id]
+	collectionPartOfFarmDecimal := decimal.NewFromFloat(CudosMarketsCollection.HashingPower / currentHashPowerForFarm)
 
 	collectionAwardAllocation := totalRewardForFarmAfterCudosFeeBtcDecimal.Mul(collectionPartOfFarmDecimal)
 	cudoGeneralFeeForCollection := cudosFeeOfTotalRewardBtcDecimal.Mul(collectionPartOfFarmDecimal)
@@ -388,7 +388,7 @@ func (s *PayService) processCollection(
 
 	collectionPaymentAllocation := types.CollectionPaymentAllocation{
 		FarmId:                     farm.Id,
-		CollectionId:               auraPoolCollection.Id,
+		CollectionId:               CudosMarketsCollection.Id,
 		CollectionAllocationAmount: collectionAwardAllocation,
 		CUDOGeneralFee:             cudoGeneralFeeForCollection,
 		CUDOMaintenanceFee:         CUDOMaintenanceFeeBtcDecimalForCollection,
@@ -396,7 +396,7 @@ func (s *PayService) processCollection(
 		FarmMaintenanceFee:         farmMaintenanceFeeBtcDecimalForCollection,
 	}
 
-	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn from collection: %s, farm: {%s}, collection: {%d}", nftRewardsAfterFeesBtcDecimal, farmLeftoverForCollection, farm.RewardsFromPoolBtcWalletName, auraPoolCollection.Id)
+	log.Debug().Msgf("rewardForNftOwners : %s, rewardToReturn from collection: %s, farm: {%s}, collection: {%d}", nftRewardsAfterFeesBtcDecimal, farmLeftoverForCollection, farm.RewardsFromPoolBtcWalletName, CudosMarketsCollection.Id)
 
 	return CollectionProcessResult{
 		CUDOMaintenanceFeeBtcDecimal:  CUDOMaintenanceFeeBtcDecimal,

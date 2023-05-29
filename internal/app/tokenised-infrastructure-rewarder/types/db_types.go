@@ -155,7 +155,7 @@ type CollectionPaymentAllocation struct {
 	UpdatedAt                  time.Time       `db:"updatedAt"`
 }
 
-type AuraPoolCollection struct {
+type CudosMarketsCollection struct {
 	Id           int64   `db:"id"`
 	DenomId      string  `db:"denom_id"`
 	HashingPower float64 `db:"hashing_power"`

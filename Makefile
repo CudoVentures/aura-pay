@@ -24,11 +24,11 @@ BUILD_FLAGS :=  -ldflags '$(LD_FLAGS)'
 
 build: go.sum
 ifeq ($(OS),Windows_NT)
-	@echo "building aura-pay binary..."
-	@go build -mod=readonly $(BUILD_FLAGS) -o build/aura-pay.exe ./cmd/aura-pay
+	@echo "building cudos-markets-pay binary..."
+	@go build -mod=readonly $(BUILD_FLAGS) -o build/cudos-markets-pay.exe ./cmd/cudos-markets-pay
 else
-	@echo "building aura-pay binary..."
-	@go build -mod=readonly $(BUILD_FLAGS) -o build/aura-pay ./cmd/aura-pay
+	@echo "building cudos-markets-pay binary..."
+	@go build -mod=readonly $(BUILD_FLAGS) -o build/cudos-markets-pay ./cmd/cudos-markets-pay
 endif
 .PHONY: build
 
@@ -37,6 +37,6 @@ endif
 ###############################################################################
 
 install: go.sum
-	@echo "installing aura-pay binary..."
-	@go install -mod=readonly $(BUILD_FLAGS) ./cmd/aura-pay
+	@echo "installing cudos-markets-pay binary..."
+	@go install -mod=readonly $(BUILD_FLAGS) ./cmd/cudos-markets-pay
 .PHONY: install

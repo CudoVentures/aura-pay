@@ -1,10 +1,10 @@
 # initialise postgres test db
-docker stop aura-pay-test-postgres || true
-docker rm aura-pay-test-postgres || true
-docker run --name aura-pay-test-postgres  -e POSTGRES_USER=postgresUser -e POSTGRES_PASSWORD=mysecretpassword  -e POSTGRES_DB=aura-pay-test-db -d -p 5432:5432 postgres:14
+docker stop cudos-markets-pay-test-postgres || true
+docker rm cudos-markets-pay-test-postgres || true
+docker run --name cudos-markets-pay-test-postgres  -e POSTGRES_USER=postgresUser -e POSTGRES_PASSWORD=mysecretpassword  -e POSTGRES_DB=cudos-markets-pay-test-db -d -p 5432:5432 postgres:14
 # clone the repo and scaffold the DB
-git clone -b dev https://github.com/CudoVentures/cudos-aura-pool-platform.git aura-pay-platform
-cd ./aura-pay-platform || return 1
+git clone -b dev https://github.com/CudoVentures/cudos-aura-pool-platform.git cudos-markets-pay-platform
+cd ./cudos-markets-pay-platform || return 1
 # Create env file
 cd  ./config || return 1
 cat <<EOF > .env
@@ -15,7 +15,7 @@ App_Port='3001'
 App_Database_Host='host.docker.internal'
 App_Database_User='postgresUser'
 App_Database_Pass='mysecretpassword'
-App_Database_Db_Name='aura-pay-test-db'
+App_Database_Db_Name='cudos-markets-pay-test-db'
 App_Hasura_Url='http://127.0.01:8080/v1/graphql'
 
 # LOCAL
@@ -40,16 +40,16 @@ DOCKER_PORT="3001"
 
 POSTGRES_PASSWORD="mysecretpassword"
 POSTGRES_HOST_AUTH_METHOD=""
-POSTGRES_DB=aura-pay-test-db
+POSTGRES_DB=cudos-markets-pay-test-db
 EOF
 
 # Remove the old container if there is one
-docker stop cudos-aura-platform-prod || true
-docker rm cudos-aura-platform-prod || true
+docker stop cudos-markets-platform-prod || true
+docker rm cudos-markets-platform-prod || true
 
 # Install the app
-docker-compose --env-file ./prod.arg -f ./prod.yml -p cudos-aura-platform-prod up --build -d
-rm -rf ../../aura-pay-platform
+docker-compose --env-file ./prod.arg -f ./prod.yml -p cudos-markets-platform-prod up --build -d
+rm -rf ../../cudos-markets-pay-platform
 
 EXECUTE_DB_TEST=true
 

@@ -84,7 +84,7 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 		DbPassword:                 "mysecretpassword",
 		DbHost:                     "127.0.0.1",
 		DbPort:                     "5432",
-		DbName:                     "aura-pay-test-db",
+		DbName:                     "cudos-markets-pay-test-db",
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -549,7 +549,7 @@ func TestProcessFarmUnspentTx_HappyPath(t *testing.T) {
 	mockBtcClient.AssertCalled(t, "GetRawTransactionVerbose", txHash)
 	// mockApiRequester.AssertCalled(t, "GetFarmCollectionsFromHasura", testCtx, int64(1))
 	mockApiRequester.AssertCalled(t, "GetFarmCollectionsWithNFTs", testCtx, []string{"farm_1_denom_1"})
-	mockStorage.AssertCalled(t, "GetFarmAuraPoolCollections", testCtx, int64(1))
+	mockStorage.AssertCalled(t, "GetFarmCudosMarketsCollections", testCtx, int64(1))
 }
 
 func TestProcessFarmUnspentTx_FailedToGetTxDetails(t *testing.T) {
@@ -572,7 +572,7 @@ func TestProcessFarmUnspentTx_FailedToGetTxDetails(t *testing.T) {
 		DbPassword:                 "mysecretpassword",
 		DbHost:                     "127.0.0.1",
 		DbPort:                     "5432",
-		DbName:                     "aura-pay-test-db",
+		DbName:                     "cudos-markets-pay-test-db",
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -627,7 +627,7 @@ func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
 		DbPassword:                 "mysecretpassword",
 		DbHost:                     "127.0.0.1",
 		DbPort:                     "5432",
-		DbName:                     "aura-pay-test-db",
+		DbName:                     "cudos-markets-pay-test-db",
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -650,8 +650,8 @@ func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
 	testUnspentTx := btcjson.ListUnspentResult{TxID: "1", Amount: 6.25, Address: "address_for_receiving_reward_from_pool_1"}
 
 	// var myslice []string
-	mockStorage.GetFarmAuraPoolCollections(testCtx, int64(1))
-	mockStorage.On("GetFarmAuraPoolCollections", mock.Anything, int64(1)).Return([]types.AuraPoolCollection{}, nil).Once()
+	mockStorage.GetFarmCudosMarketsCollections(testCtx, int64(1))
+	mockStorage.On("GetFarmCudosMarketsCollections", mock.Anything, int64(1)).Return([]types.CudosMarketsCollection{}, nil).Once()
 	mockApiRequester.On("GetFarmCollectionsWithNFTs", mock.Anything, []string(nil)).Return([]types.Collection{}, nil).Once()
 
 	s := NewPayService(config, mockApiRequester, &mockHelper{}, btcNetworkParams)
@@ -1189,8 +1189,8 @@ func setupMockStorage() *mockStorage {
 		},
 	}, nil)
 
-	storage.On("GetFarmAuraPoolCollections", mock.Anything, int64(1)).Return(
-		[]types.AuraPoolCollection{
+	storage.On("GetFarmCudosMarketsCollections", mock.Anything, int64(1)).Return(
+		[]types.CudosMarketsCollection{
 			{
 				Id:           1,
 				DenomId:      "farm_1_denom_1",
@@ -1260,9 +1260,9 @@ func (ms *mockStorage) GetLastUTXOTransactionByFarmId(ctx context.Context, farmI
 	return args.Get(0).(types.UTXOTransaction), args.Error(1)
 }
 
-func (ms *mockStorage) GetFarmAuraPoolCollections(ctx context.Context, farmId int64) ([]types.AuraPoolCollection, error) {
+func (ms *mockStorage) GetFarmCudosMarketsCollections(ctx context.Context, farmId int64) ([]types.CudosMarketsCollection, error) {
 	args := ms.Called(ctx, farmId)
-	return args.Get(0).([]types.AuraPoolCollection), args.Error(1)
+	return args.Get(0).([]types.CudosMarketsCollection), args.Error(1)
 }
 
 func (ms *mockStorage) GetApprovedFarms(ctx context.Context) ([]types.Farm, error) {

@@ -49,7 +49,7 @@ func (s *PayService) getUnspentTxsForFarm(ctx context.Context, btcClient BtcClie
 // tries to get the collection from BDJuno
 // it also check there if it is verified
 // basically if a collection is not verified (minted), it does not exist on the chain
-func (s *PayService) verifyCollectionIds(ctx context.Context, collections []types.AuraPoolCollection) ([]string, error) {
+func (s *PayService) verifyCollectionIds(ctx context.Context, collections []types.CudosMarketsCollection) ([]string, error) {
 	var verifiedCollectionIds []string
 	for _, collection := range collections {
 		isVerified, err := s.apiRequester.VerifyCollection(ctx, collection.DenomId)
@@ -458,40 +458,40 @@ func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storag
 
 // getCollectionsWithNftsForFarm retrieves the collections and their respective NFTs for the specified farm.
 // The function fetches the collections from BDJUno and verifies them. It then retrieves the NFTs associated with
-// the verified collections and the farm's AuraPoolCollections from the storage.
+// the verified collections and the farm's CudosMarketsCollections from the storage.
 // Returns:
 // - []types.Collection: A slice of the collections from the chain (BDJUno) with their associated NFTs.
-// - map[string]types.AuraPoolCollection: A map of AuraPoolCollections keyed by their Denom IDs taken from the storage.
+// - map[string]types.CudosMarketsCollection: A map of CudosMarketsCollections keyed by their Denom IDs taken from the storage.
 // - error: An error encountered during the function execution, if any.
-func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage Storage, farm types.Farm) ([]types.Collection, map[string]types.AuraPoolCollection, error) {
-	farmAuraPoolCollections, err := storage.GetFarmAuraPoolCollections(ctx, farm.Id)
+func (s *PayService) getCollectionsWithNftsForFarm(ctx context.Context, storage Storage, farm types.Farm) ([]types.Collection, map[string]types.CudosMarketsCollection, error) {
+	farmCudosMarketsCollections, err := storage.GetFarmCudosMarketsCollections(ctx, farm.Id)
 	if err != nil {
-		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
+		return []types.Collection{}, map[string]types.CudosMarketsCollection{}, err
 	}
 
-	verifiedDenomIds, err := s.verifyCollectionIds(ctx, farmAuraPoolCollections)
+	verifiedDenomIds, err := s.verifyCollectionIds(ctx, farmCudosMarketsCollections)
 	if err != nil {
-		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
+		return []types.Collection{}, map[string]types.CudosMarketsCollection{}, err
 	}
 
 	log.Debug().Msgf("Verified collections for farm %s: %s", farm.RewardsFromPoolBtcWalletName, fmt.Sprintf("%v", verifiedDenomIds))
 	farmCollectionsWithNFTs, err := s.apiRequester.GetFarmCollectionsWithNFTs(ctx, verifiedDenomIds)
 	if err != nil {
-		return []types.Collection{}, map[string]types.AuraPoolCollection{}, err
+		return []types.Collection{}, map[string]types.CudosMarketsCollection{}, err
 	}
 
 	// make a map for faster getting
-	farmAuraPoolCollectionsMap := map[string]types.AuraPoolCollection{}
-	for _, farmAuraPoolCollection := range farmAuraPoolCollections {
-		farmAuraPoolCollectionsMap[farmAuraPoolCollection.DenomId] = farmAuraPoolCollection
+	farmCudosMarketsCollectionsMap := map[string]types.CudosMarketsCollection{}
+	for _, farmCudosMarketsCollection := range farmCudosMarketsCollections {
+		farmCudosMarketsCollectionsMap[farmCudosMarketsCollection.DenomId] = farmCudosMarketsCollection
 	}
 
 	for _, collection := range farmCollectionsWithNFTs {
-		_, ok := farmAuraPoolCollectionsMap[collection.Denom.Id]
+		_, ok := farmCudosMarketsCollectionsMap[collection.Denom.Id]
 		if !ok {
-			return []types.Collection{}, map[string]types.AuraPoolCollection{}, fmt.Errorf("CUDOS Markets collection not found by denom id {%s}", collection.Denom.Id)
+			return []types.Collection{}, map[string]types.CudosMarketsCollection{}, fmt.Errorf("CUDOS Markets collection not found by denom id {%s}", collection.Denom.Id)
 		}
 	}
 
-	return farmCollectionsWithNFTs, farmAuraPoolCollectionsMap, nil
+	return farmCollectionsWithNFTs, farmCudosMarketsCollectionsMap, nil
 }

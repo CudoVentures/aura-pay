@@ -132,7 +132,7 @@ func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashP
 // calculate fee based on the hourly fee multiplied by the period hours
 // if the fee is bigger than the nft reward, reduce it to the nft reward and set the reward to zero
 // else reduce the nft reward by the fee
-// finally distribute the maintenance fee between aura and farm
+// finally distribute the maintenance fee between cudos markets and farm
 func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	periodEnd int64,
 	hourlyFeeInBtcDecimal decimal.Decimal,
@@ -159,7 +159,7 @@ func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	return nftMaintenanceFeeForPayoutPeriodBtcDecimal, partOfMaintenanceFeeForCudoBtcDecimal, rewardForNftAfterFeesBtcDecimal, nil
 }
 
-// calculates the cudos/aura fee from the total farm payment before maintenance fees
+// calculates the cudos/markets fee from the total farm payment before maintenance fees
 // the fee is taken from the payment service env
 func (s *PayService) calculateCudosFeeOfTotalFarmIncome(totalFarmIncomeBtcDecimal decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
 

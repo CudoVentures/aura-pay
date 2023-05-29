@@ -72,8 +72,8 @@ func getSubAccountHashrateDayHandler() func(http.ResponseWriter, *http.Request) 
 var farms = []types.Farm{
 	{
 		Id:                                 1,
-		SubAccountName:                     "aura_pool_test_wallet_1",
-		RewardsFromPoolBtcWalletName:       "aura_pool_test_wallet_1",
+		SubAccountName:                     "cudos_markets_test_wallet_1",
+		RewardsFromPoolBtcWalletName:       "cudos_markets_test_wallet_1",
 		AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
 		LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
 		MaintenanceFeePayoutAddress:        "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
@@ -81,8 +81,8 @@ var farms = []types.Farm{
 	},
 	{
 		Id:                                 2,
-		SubAccountName:                     "aura_pool_test_wallet_2",
-		RewardsFromPoolBtcWalletName:       "aura_pool_test_wallet_2",
+		SubAccountName:                     "cudos_markets_test_wallet_2",
+		RewardsFromPoolBtcWalletName:       "cudos_markets_test_wallet_2",
 		AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
 		LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
 		MaintenanceFeePayoutAddress:        "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
@@ -90,8 +90,8 @@ var farms = []types.Farm{
 	},
 	{
 		Id:                                 3,
-		SubAccountName:                     "aura_pool_test_wallet_3",
-		RewardsFromPoolBtcWalletName:       "aura_pool_test_wallet_3",
+		SubAccountName:                     "cudos_markets_test_wallet_3",
+		RewardsFromPoolBtcWalletName:       "cudos_markets_test_wallet_3",
 		AddressForReceivingRewardsFromPool: "tb1qlglum94l090lr73xjmeu97dcmclyut6x5kvmcs",
 		LeftoverRewardPayoutAddress:        "tb1qp2erqptyzj5nj42n55vdhdat9h8qk7khjk6ryc",
 		MaintenanceFeePayoutAddress:        "tb1qw6ssuxe3jp8sjwn5yt9rkun26sxu54yjm62fz8",
@@ -100,9 +100,9 @@ var farms = []types.Farm{
 }
 
 var farmsHashrates = map[string]float64{
-	"aura_pool_test_wallet_1": 1200.1,
-	"aura_pool_test_wallet_2": 0,
-	"aura_pool_test_wallet_3": 99999.9999,
+	"cudos_markets_test_wallet_1": 1200.1,
+	"cudos_markets_test_wallet_2": 0,
+	"cudos_markets_test_wallet_3": 99999.9999,
 }
 
 const listeningPort = 8080

@@ -73,7 +73,7 @@ func TestRetryService_Execute_With_Database(t *testing.T) {
 		DbPassword:                  "mysecretpassword",
 		DbHost:                      "127.0.0.1",
 		DbPort:                      "5432",
-		DbName:                      "aura-pay-test-db",
+		DbName:                      "cudos-markets-pay-test-db",
 		RBFTransactionRetryMaxCount: 2,
 	}
 
