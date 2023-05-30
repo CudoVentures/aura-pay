@@ -1071,7 +1071,7 @@ func TestGetCollectionsWithNftsForFarm(t *testing.T) {
 				mockAPIRequester.On("VerifyCollection", ctx, denomId).Return(true, nil).Once()
 			}
 
-			mockStorage.On("CudosMarketsCollections", ctx, tc.farm.Id).Return(tc.CudosMarketsCollections, nil).Once()
+			mockStorage.On("GetFarmCudosMarketsCollections", ctx, tc.farm.Id).Return(tc.CudosMarketsCollections, nil).Once()
 
 			payService := NewPayService(&infrastructure.Config{}, &mockAPIRequester, &mockHelper{}, &types.BtcNetworkParams{})
 

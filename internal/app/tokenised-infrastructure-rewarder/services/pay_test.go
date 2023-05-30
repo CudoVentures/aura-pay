@@ -32,11 +32,12 @@ func TestMain(m *testing.M) {
 
 func TestProcessPayment(t *testing.T) {
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            20,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 20,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -50,11 +51,12 @@ func TestProcessPayment(t *testing.T) {
 
 func TestProcessFarm(t *testing.T) {
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            20,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 20,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -74,17 +76,18 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 	skipDBTests(t)
 
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            2,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
-		DbDriverName:               "postgres",
-		DbUser:                     "postgresUser",
-		DbPassword:                 "mysecretpassword",
-		DbHost:                     "127.0.0.1",
-		DbPort:                     "5432",
-		DbName:                     "cudos-markets-pay-test-db",
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 2,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
+		DbDriverName:                    "postgres",
+		DbUser:                          "postgresUser",
+		DbPassword:                      "mysecretpassword",
+		DbHost:                          "127.0.0.1",
+		DbPort:                          "5432",
+		DbName:                          "cudos-markets-pay-test-db",
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -122,7 +125,7 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 
 	amountAccumulatedBTC, _ := dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "maintenance_fee_payout_address_1", 1)
 	require.Equal(t, float64(5928), amountAccumulatedBTC)
-	amountAccumulatedBTC, _ = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "cudo_maintenance_fee_payout_address_1", 1)
+	amountAccumulatedBTC, _ = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "cudo_fee_payout_address_1", 1)
 	require.Equal(t, float64(10210010), amountAccumulatedBTC)
 	amountAccumulatedBTC, _ = dbStorage.GetCurrentAcummulatedAmountForAddress(context.Background(), "nft_minter_payout_addr", 1)
 	require.Equal(t, float64(0), amountAccumulatedBTC)
@@ -134,11 +137,12 @@ func TestPayService_ProcessPayment_Threshold(t *testing.T) {
 
 func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            20,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 20,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -171,17 +175,18 @@ func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 
 	collectionAllocationAmount := decimal.NewFromFloat(4)
 	leftoverAmount := decimal.NewFromFloat(3)
-	cudoMaintenanceFee := decimal.NewFromFloat(1.25012768)
+	cudoFee := decimal.NewFromFloat(1.25)
 	nftMinterAmount, _ := decimal.NewFromString("1.9997446236559112")
 	cudoPartOfReward := decimal.NewFromFloat(1.25)
 	cudoPartOfMaintenanceFee, _ := decimal.NewFromString("0.0001276881720444")
 	maintenanceFeeAddress1Amount, _ := decimal.NewFromString("0.0001276881720444")
 
 	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
+	// call it once to clear mock
 	mockAPIRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1":      leftoverAmount.InexactFloat64(),
-		"cudo_maintenance_fee_payout_address_1": cudoMaintenanceFee.InexactFloat64(),
-		"nft_minter_payout_addr":                nftMinterAmount.RoundFloor(8).InexactFloat64(),
+		"leftover_reward_payout_address_1": leftoverAmount.InexactFloat64(),
+		"cudo_fee_payout_address_1":        cudoFee.InexactFloat64(),
+		"nft_minter_payout_addr":           nftMinterAmount.RoundFloor(8).InexactFloat64(),
 	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	storage := setupMockStorage()
@@ -204,12 +209,12 @@ func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
 				amountInfoMap["nft_minter_payout_addr"].ThresholdReached == true &&
-				amountInfoMap["cudo_maintenance_fee_payout_address_1"].ThresholdReached == true &&
+				amountInfoMap["cudo_fee_payout_address_1"].ThresholdReached == true &&
 				amountInfoMap["maintenance_fee_payout_address_1"].ThresholdReached == false &&
 
 				amountInfoMap["leftover_reward_payout_address_1"].Amount.Equals(leftoverAmount.RoundFloor(8)) &&
 				amountInfoMap["nft_minter_payout_addr"].Amount.Equals(nftMinterAmount.RoundFloor(8)) &&
-				amountInfoMap["cudo_maintenance_fee_payout_address_1"].Amount.Equals(cudoMaintenanceFee.RoundFloor(8)) &&
+				amountInfoMap["cudo_fee_payout_address_1"].Amount.Equals(cudoFee.RoundFloor(8)) &&
 				amountInfoMap["maintenance_fee_payout_address_1"].Amount.Equals(maintenanceFeeAddress1Amount.RoundFloor(8))
 		}),
 
@@ -246,11 +251,12 @@ func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 
 func TestPayService_ProcessPayment_Expiration_Between_Payments(t *testing.T) {
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            20,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 20,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -320,9 +326,9 @@ func TestPayService_ProcessPayment_Expiration_Between_Payments(t *testing.T) {
 
 	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
 	mockAPIRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1":      leftoverAmount.InexactFloat64(),
-		"cudo_maintenance_fee_payout_address_1": cudoMaintenanceFee.InexactFloat64(),
-		"nft_minter_payout_addr":                nftMinterAmount.RoundFloor(8).InexactFloat64(),
+		"leftover_reward_payout_address_1": leftoverAmount.InexactFloat64(),
+		"cudo_fee_payout_address_1":        cudoMaintenanceFee.InexactFloat64(),
+		"nft_minter_payout_addr":           nftMinterAmount.RoundFloor(8).InexactFloat64(),
 	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	storage := setupMockStorage()
@@ -334,12 +340,12 @@ func TestPayService_ProcessPayment_Expiration_Between_Payments(t *testing.T) {
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
 				amountInfoMap["nft_minter_payout_addr"].ThresholdReached == true &&
-				amountInfoMap["cudo_maintenance_fee_payout_address_1"].ThresholdReached == true &&
+				amountInfoMap["cudo_fee_payout_address_1"].ThresholdReached == true &&
 				amountInfoMap["maintenance_fee_payout_address_1"].ThresholdReached == false &&
 
 				amountInfoMap["leftover_reward_payout_address_1"].Amount.Equals(leftoverAmount.RoundFloor(8)) &&
 				amountInfoMap["nft_minter_payout_addr"].Amount.Equals(nftMinterAmount.RoundFloor(8)) &&
-				amountInfoMap["cudo_maintenance_fee_payout_address_1"].Amount.Equals(cudoMaintenanceFee.RoundFloor(8)) &&
+				amountInfoMap["cudo_fee_payout_address_1"].Amount.Equals(cudoMaintenanceFee.RoundFloor(8)) &&
 				amountInfoMap["maintenance_fee_payout_address_1"].Amount.Equals(maintenanceFeeAddress1Amount.RoundFloor(8))
 		}),
 		mock.MatchedBy(func(collectionAllocations []types.CollectionPaymentAllocation) bool {
@@ -386,11 +392,12 @@ func TestPayService_ProcessPayment_Expiration_Between_Payments(t *testing.T) {
 
 func TestPayService_ProcessPayment_NFT_Minted_After_Payment_Period(t *testing.T) {
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            20,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 20,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -459,8 +466,8 @@ func TestPayService_ProcessPayment_NFT_Minted_After_Payment_Period(t *testing.T)
 
 	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
 	mockAPIRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1":      5,
-		"cudo_maintenance_fee_payout_address_1": 1.25,
+		"leftover_reward_payout_address_1": 5,
+		"cudo_fee_payout_address_1":        1.25,
 	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	storage := setupMockStorage()
@@ -482,9 +489,9 @@ func TestPayService_ProcessPayment_NFT_Minted_After_Payment_Period(t *testing.T)
 		}),
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
-				amountInfoMap["cudo_maintenance_fee_payout_address_1"].ThresholdReached == true &&
+				amountInfoMap["cudo_fee_payout_address_1"].ThresholdReached == true &&
 				amountInfoMap["leftover_reward_payout_address_1"].Amount.Equals(leftoverAmount) &&
-				amountInfoMap["cudo_maintenance_fee_payout_address_1"].Amount.Equals(cudoMaintenanceFee)
+				amountInfoMap["cudo_fee_payout_address_1"].Amount.Equals(cudoMaintenanceFee)
 		}),
 
 		mock.MatchedBy(func(nftStatistics []types.NFTStatistics) bool {
@@ -508,11 +515,12 @@ func TestProcessFarmUnspentTx_HappyPath(t *testing.T) {
 	mockApiRequester := setupMockApiRequester(t)
 
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            20,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 20,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -562,17 +570,18 @@ func TestProcessFarmUnspentTx_FailedToGetTxDetails(t *testing.T) {
 	testCtx := context.Background()
 
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            2,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
-		DbDriverName:               "postgres",
-		DbUser:                     "postgresUser",
-		DbPassword:                 "mysecretpassword",
-		DbHost:                     "127.0.0.1",
-		DbPort:                     "5432",
-		DbName:                     "cudos-markets-pay-test-db",
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 2,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
+		DbDriverName:                    "postgres",
+		DbUser:                          "postgresUser",
+		DbPassword:                      "mysecretpassword",
+		DbHost:                          "127.0.0.1",
+		DbPort:                          "5432",
+		DbName:                          "cudos-markets-pay-test-db",
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -617,17 +626,18 @@ func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
 	testCtx := context.Background()
 
 	config := &infrastructure.Config{
-		Network:                    "BTC",
-		CUDOMaintenanceFeePercent:  50,
-		CUDOFeeOnAllBTC:            2,
-		CUDOFeePayoutAddress:       "cudo_maintenance_fee_payout_address_1",
-		GlobalPayoutThresholdInBTC: 0.01,
-		DbDriverName:               "postgres",
-		DbUser:                     "postgresUser",
-		DbPassword:                 "mysecretpassword",
-		DbHost:                     "127.0.0.1",
-		DbPort:                     "5432",
-		DbName:                     "cudos-markets-pay-test-db",
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 2,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
+		DbDriverName:                    "postgres",
+		DbUser:                          "postgresUser",
+		DbPassword:                      "mysecretpassword",
+		DbHost:                          "127.0.0.1",
+		DbPort:                          "5432",
+		DbName:                          "cudos-markets-pay-test-db",
 	}
 
 	btcNetworkParams := &types.BtcNetworkParams{
@@ -735,7 +745,7 @@ func TestSendRewards(t *testing.T) {
 			expectError:                 nil,
 		},
 		{
-			name: "happy path",
+			name: "send_many_error",
 			unspentTxForFarm: btcjson.ListUnspentResult{
 				TxID:    "1",
 				Amount:  6.25,
@@ -1014,10 +1024,10 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
 	apiRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1":      1,
-		"cudo_maintenance_fee_payout_address_1": 1.25025537,
-		"nft_minter_payout_addr":                1.05249717,
-		"nft_owner_2_payout_addr":               2.94699207,
+		"leftover_reward_payout_address_1": 1,
+		"cudo_fee_payout_address_1":        1.25,
+		"nft_minter_payout_addr":           1.05249717,
+		"nft_owner_2_payout_addr":          2.94699207,
 	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	return apiRequester
@@ -1108,17 +1118,16 @@ func setupMockStorage() *mockStorage {
 				collectionAllocations[0].FarmMaintenanceFee.Equals(maintenanceFeeAddress1Amount)
 		}),
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
-
 			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
 				amountInfoMap["nft_minter_payout_addr"].ThresholdReached == true &&
 				amountInfoMap["nft_owner_2_payout_addr"].ThresholdReached == true &&
-				amountInfoMap["cudo_maintenance_fee_payout_address_1"].ThresholdReached == true &&
+				amountInfoMap["cudo_fee_payout_address_1"].ThresholdReached == true &&
 				amountInfoMap["maintenance_fee_payout_address_1"].ThresholdReached == false &&
 
 				amountInfoMap["leftover_reward_payout_address_1"].Amount.Equals(leftoverAmount.RoundFloor(8)) &&
 				amountInfoMap["nft_minter_payout_addr"].Amount.Equals(nftMinterAmount.RoundFloor(8)) &&
 				amountInfoMap["nft_owner_2_payout_addr"].Amount.Equals(nftOwner2Amount.RoundFloor(8)) &&
-				amountInfoMap["cudo_maintenance_fee_payout_address_1"].Amount.Equals(cudoPartOfMaintenanceFee.Add(cudoPartOfReward).RoundFloor(8)) &&
+				amountInfoMap["cudo_fee_payout_address_1"].Amount.Equals(cudoPartOfReward.RoundFloor(8)) &&
 				amountInfoMap["maintenance_fee_payout_address_1"].Amount.Equals(maintenanceFeeAddress1Amount.RoundFloor(8))
 		}),
 
