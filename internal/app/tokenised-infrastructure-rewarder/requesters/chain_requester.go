@@ -22,7 +22,7 @@ func (r *Requester) GetPayoutAddressFromNode(ctx context.Context, cudosAddress, 
 		Timeout: 60 * time.Second,
 	}
 
-	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/aurapool/aurapool", cudosAddress)
+	requestString := fmt.Sprintf("/CudoVentures/cudos-node/addressbook/address/%s/cudosmarkets/cudosmarkets", cudosAddress)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+requestString, nil)
 	if err != nil {
