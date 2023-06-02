@@ -449,7 +449,7 @@ func (s *PayService) getLastUTXOTransactionTimestamp(ctx context.Context, storag
 		if s.config.IsTesting {
 			return farm.CreatedAt.Unix(), nil
 		} else {
-			return s.apiRequester.GetFarmStartTime(ctx, farm.SubAccountName)
+			return farm.FarmStartTime.Unix(), nil
 		}
 	} else {
 		return lastUTXOTransaction.PaymentTimestamp, nil
