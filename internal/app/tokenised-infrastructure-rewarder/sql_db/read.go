@@ -144,7 +144,7 @@ func (sdb *SqlDB) GetFarmCudosMarketsCollections(ctx context.Context, farmId int
 
 const selectNFTPayoutHistory = `SELECT * FROM statistics_nft_payout_history WHERE denom_id=$1 and token_id=$2 ORDER BY payout_period_end ASC`
 const selectTxHashStatus = `SELECT * FROM statistics_tx_hash_status WHERE status=$1 ORDER BY time_sent ASC`
-const selectApprovedFarms = `SELECT id, name, description, sub_account_name, rewards_from_pool_btc_wallet_name, total_farm_hashrate, address_for_receiving_rewards_from_pool, leftover_reward_payout_address, maintenance_fee_payout_address, maintenance_fee_in_btc, created_at FROM farms WHERE status='approved'`
+const selectApprovedFarms = `SELECT id, name, description, sub_account_name, rewards_from_pool_btc_wallet_name, total_farm_hashrate, address_for_receiving_rewards_from_pool, leftover_reward_payout_address, maintenance_fee_payout_address, maintenance_fee_in_btc, created_at, farm_start_time FROM farms WHERE status='approved'`
 const selectThresholdByAddress = `SELECT * FROM threshold_amounts WHERE btc_address=$1 AND farm_id=$2`
 const selectUTXOById = `SELECT * FROM utxo_transactions WHERE tx_hash=$1`
 const selectUTXOByFarmId = `SELECT id, farm_id, tx_hash, payment_timestamp, processed FROM utxo_transactions WHERE farm_id=$1 ORDER BY payment_timestamp DESC`

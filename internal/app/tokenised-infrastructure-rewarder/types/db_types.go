@@ -34,6 +34,7 @@ type Farm struct {
 	// ResaleFarmRoyaltiesCudosAddress    string  `db:"resale_farm_royalties_cudos_address"`
 	// CudosMintNftRoyaltiesPercent       float64 `db:"cudos_mint_nft_royalties_percent"`
 	// CudosResaleNftRoyaltiesPercent     float64 `db:"cudos_resale_nft_royalties_percent"`
+	FarmStartTime time.Time `db:"farm_start_time"`
 }
 
 type NFTStatistics struct {

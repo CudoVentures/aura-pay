@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
@@ -927,6 +929,14 @@ func TestLoadWallet(t *testing.T) {
 
 func TestGetLastUTXOTransactionTimestamp(t *testing.T) {
 	ctx := context.Background()
+	i, err := strconv.ParseInt("1628923421", 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	farmStartTime := time.Unix(i, 0)
+
+	farm := types.Farm{Id: 1, SubAccountName: "test_farm", FarmStartTime: farmStartTime}
+
 	tests := []struct {
 		name                                       string
 		farm                                       types.Farm
@@ -940,7 +950,7 @@ func TestGetLastUTXOTransactionTimestamp(t *testing.T) {
 	}{
 		{
 			name: "get_last_utxo_transaction_timestamp_success",
-			farm: types.Farm{Id: 1, SubAccountName: "test_farm"},
+			farm: farm,
 			mockGetLastUTXOTransactionByFarmIdResponse: types.UTXOTransaction{PaymentTimestamp: 1628923421},
 			mockGetLastUTXOTransactionByFarmIdError:    nil,
 			expectedResult:                             1628923421,
@@ -949,7 +959,7 @@ func TestGetLastUTXOTransactionTimestamp(t *testing.T) {
 		},
 		{
 			name: "get_farm_start_time_success",
-			farm: types.Farm{Id: 1, SubAccountName: "test_farm"},
+			farm: farm,
 			mockGetLastUTXOTransactionByFarmIdResponse: types.UTXOTransaction{PaymentTimestamp: 0},
 			mockGetLastUTXOTransactionByFarmIdError:    nil,
 			mockGetFarmStartTimeResponse:               1628923421,
@@ -960,7 +970,7 @@ func TestGetLastUTXOTransactionTimestamp(t *testing.T) {
 		},
 		{
 			name: "storage_error",
-			farm: types.Farm{Id: 1, SubAccountName: "test_farm"},
+			farm: farm,
 			mockGetLastUTXOTransactionByFarmIdResponse: types.UTXOTransaction{},
 			mockGetLastUTXOTransactionByFarmIdError:    errors.New("storage_error"),
 			expectedResult:                             0,
@@ -975,7 +985,6 @@ func TestGetLastUTXOTransactionTimestamp(t *testing.T) {
 			mockAPIRequester := &mockAPIRequester{}
 
 			mockStorage.On("GetLastUTXOTransactionByFarmId", ctx, tc.farm.Id).Return(tc.mockGetLastUTXOTransactionByFarmIdResponse, tc.mockGetLastUTXOTransactionByFarmIdError)
-			mockAPIRequester.On("GetFarmStartTime", ctx, tc.farm.SubAccountName).Return(tc.mockGetFarmStartTimeResponse, tc.mockGetFarmStartTimeError)
 
 			payService := NewPayService(&infrastructure.Config{}, mockAPIRequester, &mockHelper{}, &types.BtcNetworkParams{})
 
