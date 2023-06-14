@@ -1047,7 +1047,14 @@ func setupMockBtcClient() *mockBtcClient {
 	btcClient.On("WalletLock").Return(nil)
 	btcClient.On("GetRawTransactionVerbose", mock.Anything).Return(&btcjson.TxRawResult{Time: 1666641078}, nil).Once()
 	btcClient.On("GetBalance", mock.Anything).Return(btcutil.NewAmount(1000000000)).Once()
+
+	btcClient.On("RawRequest", mock.Anything, mock.Anything).Return(json.RawMessage(`[]`), nil)
+
 	return btcClient
+}
+
+type mockBtcClient struct {
+	mock.Mock
 }
 
 func (mbc *mockBtcClient) LoadWallet(walletName string) (*btcjson.LoadWalletResult, error) {
@@ -1075,13 +1082,14 @@ func (mbc *mockBtcClient) GetRawTransactionVerbose(txHash *chainhash.Hash) (*btc
 	return args.Get(0).(*btcjson.TxRawResult), args.Error(1)
 }
 
-type mockBtcClient struct {
-	mock.Mock
-}
-
 func (mbc *mockBtcClient) GetBalance(account string) (btcutil.Amount, error) {
 	args := mbc.Called()
 	return args.Get(0).(btcutil.Amount), args.Error(1)
+}
+
+func (mbc *mockBtcClient) RawRequest(method string, params []json.RawMessage) (json.RawMessage, error) {
+	args := mbc.Called()
+	return args.Get(0).(json.RawMessage), args.Error(1)
 }
 
 func (mbc *mockBtcClient) ListUnspent() ([]btcjson.ListUnspentResult, error) {
