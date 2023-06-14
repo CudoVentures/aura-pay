@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -66,6 +67,25 @@ func (s *PayService) processFarm(ctx context.Context, btcClient BtcClient, stora
 	err := validateFarm(farm)
 	if err != nil {
 		return err
+	}
+
+	log.Debug().Msgf("Check for loaded wallets...")
+	rawMessage, err := btcClient.RawRequest("listwallets", []json.RawMessage{})
+	if err != nil {
+		return err
+	}
+
+	loadedWalletsNames := []string{}
+	err = json.Unmarshal(rawMessage, &loadedWalletsNames)
+	if err != nil {
+		return err
+	}
+
+	if len(loadedWalletsNames) > 0 {
+		log.Debug().Msgf("Loaded wallets found. Unloading...")
+		for _, loadedWalletName := range loadedWalletsNames {
+			unloadWallet(btcClient, loadedWalletName)
+		}
 	}
 
 	log.Debug().Msgf("Loading farm wallet...")
