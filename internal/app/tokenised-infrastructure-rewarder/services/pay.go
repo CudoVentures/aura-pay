@@ -456,6 +456,10 @@ func (s *PayService) processNft(
 	// if nft was minted after the last payment, part of the reward before the mint is still for the farm
 	rewardForNftBtcDecimal := calculatePercentByTime(lastPaymentTimestamp, periodEnd, nftPeriodStart, nftPeriodEnd, totalRewardForNftBtcDecimal)
 
+	if nftPeriodStart < lastPaymentTimestamp {
+		nftPeriodStart = lastPaymentTimestamp
+	}
+
 	maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal, err := s.calculateMaintenanceFeeForNFT(
 		nftPeriodStart,
 		nftPeriodEnd,
