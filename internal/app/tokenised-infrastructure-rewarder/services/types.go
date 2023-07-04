@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
@@ -82,7 +83,10 @@ type BtcClient interface {
 	GetRawTransactionVerbose(txHash *chainhash.Hash) (*btcjson.TxRawResult, error)
 
 	ListUnspent() ([]btcjson.ListUnspentResult, error)
+
 	GetBalance(account string) (btcutil.Amount, error)
+
+	RawRequest(method string, params []json.RawMessage) (json.RawMessage, error)
 }
 
 type Storage interface {
