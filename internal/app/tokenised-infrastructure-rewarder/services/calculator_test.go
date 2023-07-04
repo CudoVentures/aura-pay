@@ -477,22 +477,24 @@ func TestCalculateHourlyMaintenanceFee(t *testing.T) {
 
 func TestCalculateMaintenanceFeeForNFT(t *testing.T) {
 	testCases := []struct {
-		desc                      string
-		periodStart               int64
-		periodEnd                 int64
-		hourlyFeeInBtcDecimal     decimal.Decimal
-		rewardForNftBtcDecimal    decimal.Decimal
-		config                    infrastructure.Config
-		expectedNftMaintenanceFee decimal.Decimal
-		expectedCudoMaintenance   decimal.Decimal
-		expectedRewardForNft      decimal.Decimal
+		desc                       string
+		periodStart                int64
+		periodEnd                  int64
+		nftHashPower               float64
+		hourlyFeePerThInBtcDecimal decimal.Decimal
+		rewardForNftBtcDecimal     decimal.Decimal
+		config                     infrastructure.Config
+		expectedNftMaintenanceFee  decimal.Decimal
+		expectedCudoMaintenance    decimal.Decimal
+		expectedRewardForNft       decimal.Decimal
 	}{
 		{
-			desc:                   "successful case",
-			periodStart:            0,
-			periodEnd:              3600,
-			hourlyFeeInBtcDecimal:  decimal.NewFromFloat(0.0001),
-			rewardForNftBtcDecimal: decimal.NewFromFloat(0.001),
+			desc:                       "successful case",
+			periodStart:                0,
+			periodEnd:                  3600,
+			nftHashPower:               1,
+			hourlyFeePerThInBtcDecimal: decimal.NewFromFloat(0.0001),
+			rewardForNftBtcDecimal:     decimal.NewFromFloat(0.001),
 			config: infrastructure.Config{
 				CUDOMaintenanceFeePercent: 10,
 			},
@@ -500,11 +502,12 @@ func TestCalculateMaintenanceFeeForNFT(t *testing.T) {
 			expectedCudoMaintenance:   decimal.NewFromFloat(0.00001),
 			expectedRewardForNft:      decimal.NewFromFloat(0.0009),
 		}, {
-			desc:                   "zero reward",
-			periodStart:            0,
-			periodEnd:              3600,
-			hourlyFeeInBtcDecimal:  decimal.NewFromFloat(0.0001),
-			rewardForNftBtcDecimal: decimal.Zero,
+			desc:                       "zero reward",
+			periodStart:                0,
+			periodEnd:                  3600,
+			nftHashPower:               1,
+			hourlyFeePerThInBtcDecimal: decimal.NewFromFloat(0.0001),
+			rewardForNftBtcDecimal:     decimal.Zero,
 			config: infrastructure.Config{
 				CUDOMaintenanceFeePercent: 10,
 			},
@@ -513,11 +516,12 @@ func TestCalculateMaintenanceFeeForNFT(t *testing.T) {
 			expectedRewardForNft:      decimal.Zero,
 		},
 		{
-			desc:                   "zero maintenance fee",
-			periodStart:            0,
-			periodEnd:              3600,
-			hourlyFeeInBtcDecimal:  decimal.Zero,
-			rewardForNftBtcDecimal: decimal.NewFromFloat(0.001),
+			desc:                       "zero maintenance fee",
+			periodStart:                0,
+			periodEnd:                  3600,
+			nftHashPower:               1,
+			hourlyFeePerThInBtcDecimal: decimal.Zero,
+			rewardForNftBtcDecimal:     decimal.NewFromFloat(0.001),
 			config: infrastructure.Config{
 				CUDOMaintenanceFeePercent: 10,
 			},
@@ -531,7 +535,7 @@ func TestCalculateMaintenanceFeeForNFT(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			s := NewPayService(&tc.config, &mockAPIRequester{}, &mockHelper{}, nil)
 
-			nftMaintenanceFee, cudoMaintenance, rewardForNft, err := s.calculateMaintenanceFeeForNFT(tc.periodStart, tc.periodEnd, tc.hourlyFeeInBtcDecimal, tc.rewardForNftBtcDecimal)
+			nftMaintenanceFee, cudoMaintenance, rewardForNft, err := s.calculateMaintenanceFeeForNFT(tc.periodStart, tc.periodEnd, tc.hourlyFeePerThInBtcDecimal, tc.nftHashPower, tc.rewardForNftBtcDecimal)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedNftMaintenanceFee.String(), nftMaintenanceFee.String(), "unexpected NFT maintenance fee for %s", tc.desc)
 			assert.Equal(t, tc.expectedCudoMaintenance.String(), cudoMaintenance.String(), "unexpected Cudo maintenance fee for %s", tc.desc)

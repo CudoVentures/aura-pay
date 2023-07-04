@@ -176,17 +176,19 @@ func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 	collectionAllocationAmount := decimal.NewFromFloat(4)
 	leftoverAmount := decimal.NewFromFloat(3)
 	cudoFee := decimal.NewFromFloat(1.25)
-	nftMinterAmount, _ := decimal.NewFromString("1.9997446236559112")
+	nftMinterAmount, _ := decimal.NewFromString("1.754838709674752")
 	cudoPartOfReward := decimal.NewFromFloat(1.25)
-	cudoPartOfMaintenanceFee, _ := decimal.NewFromString("0.0001276881720444")
-	maintenanceFeeAddress1Amount, _ := decimal.NewFromString("0.0001276881720444")
+	cudoPartOfMaintenanceFee, _ := decimal.NewFromString("0.122580645162624")
+	maintenanceFeeAddress1Amount, _ := decimal.NewFromString("0.122580645162624")
 
 	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
 	// call it once to clear mock
 	mockAPIRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1": leftoverAmount.InexactFloat64(),
-		"cudo_fee_payout_address_1":        cudoFee.InexactFloat64(),
-		"nft_minter_payout_addr":           nftMinterAmount.RoundFloor(8).InexactFloat64(),
+		"leftover_reward_payout_address_1":      leftoverAmount.InexactFloat64(),
+		"cudo_fee_payout_address_1":             cudoFee.InexactFloat64(),
+		"cudo_maintenance_fee_payout_address_1": 0.12258064,
+		"maintenance_fee_payout_address_1":      0.12258064,
+		"nft_minter_payout_addr":                nftMinterAmount.RoundFloor(8).InexactFloat64(),
 	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	storage := setupMockStorage()
@@ -204,13 +206,13 @@ func TestPayService_ProcessPayment_Mint_Between_Payments(t *testing.T) {
 				collectionAllocations[0].CUDOGeneralFee.Equals(cudoPartOfReward.Mul(collectionPartOfFarm)) &&
 				collectionAllocations[0].CUDOMaintenanceFee.Equals(cudoPartOfMaintenanceFee) &&
 				collectionAllocations[0].FarmMaintenanceFee.Equals(maintenanceFeeAddress1Amount) &&
-				collectionAllocations[0].FarmUnsoldLeftovers.Equals(collectionAllocationAmount.Sub(nftMinterAmount).Sub(cudoPartOfMaintenanceFee).Sub(maintenanceFeeAddress1Amount))
+				collectionAllocations[0].FarmUnsoldLeftovers.Equals(decimal.NewFromFloat(2))
 		}),
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
 			return amountInfoMap["leftover_reward_payout_address_1"].ThresholdReached == true &&
 				amountInfoMap["nft_minter_payout_addr"].ThresholdReached == true &&
 				amountInfoMap["cudo_fee_payout_address_1"].ThresholdReached == true &&
-				amountInfoMap["maintenance_fee_payout_address_1"].ThresholdReached == false &&
+				amountInfoMap["maintenance_fee_payout_address_1"].ThresholdReached == true &&
 
 				amountInfoMap["leftover_reward_payout_address_1"].Amount.Equals(leftoverAmount.RoundFloor(8)) &&
 				amountInfoMap["nft_minter_payout_addr"].Amount.Equals(nftMinterAmount.RoundFloor(8)) &&
@@ -1024,10 +1026,12 @@ func setupMockApiRequester(t *testing.T) *mockAPIRequester {
 
 	// maintenance_fee_payout_address_1 is below threshold of 0.01 with values 5.928e-05
 	apiRequester.On("SendMany", mock.Anything, map[string]float64{
-		"leftover_reward_payout_address_1": 1,
-		"cudo_fee_payout_address_1":        1.25,
-		"nft_minter_payout_addr":           1.05249717,
-		"nft_owner_2_payout_addr":          2.94699207,
+		"leftover_reward_payout_address_1":      1,
+		"cudo_fee_payout_address_1":             1.25,
+		"cudo_maintenance_fee_payout_address_1": 0.24516129,
+		"maintenance_fee_payout_address_1":      0.24516129,
+		"nft_minter_payout_addr":                0.92359932,
+		"nft_owner_2_payout_addr":               2.58607809,
 	}).Return("farm_1_denom_1_nft_owner_2_tx_hash", nil).Once()
 
 	return apiRequester
@@ -1093,13 +1097,13 @@ func setupMockStorage() *mockStorage {
 	storage := &mockStorage{}
 
 	leftoverAmount := decimal.NewFromFloat(1)
-	nftMinterAmount, _ := decimal.NewFromString("1.0524971703452160000537634408608")
-	nftOwner2Amount, _ := decimal.NewFromString("2.9469920769666063999462365591392")
+	nftMinterAmount, _ := decimal.NewFromString("0.923599320881448051612903226368")
+	nftOwner2Amount, _ := decimal.NewFromString("2.586078098468055948387096773632")
 	cudoPartOfReward, _ := decimal.NewFromString("1.25")
-	cudoPartOfMaintenanceFee, _ := decimal.NewFromString("0.0002553763440888")
-	maintenanceFeeAddress1Amount, _ := decimal.NewFromString("0.0002553763440888")
+	cudoPartOfMaintenanceFee, _ := decimal.NewFromString("0.245161290325248")
+	maintenanceFeeAddress1Amount, _ := decimal.NewFromString("0.245161290325248")
 
-	amount, _ := decimal.NewFromString("3.9994892473118224")
+	amount, _ := decimal.NewFromString("3.509677419349504")
 
 	storage.On("GetPayoutTimesForNFT", mock.Anything, mock.Anything, mock.Anything).Return([]types.NFTStatistics{}, nil)
 	storage.On("SaveStatistics", mock.Anything,
@@ -1114,7 +1118,7 @@ func setupMockStorage() *mockStorage {
 				collectionAllocations[0].CollectionAllocationAmount.Equals(decimal.NewFromFloat(4)) &&
 				collectionAllocations[0].CUDOGeneralFee.Equals(cudoPartOfReward.Mul(collectionPartOfFarm)) &&
 				collectionAllocations[0].CUDOMaintenanceFee.Equals(cudoPartOfMaintenanceFee) &&
-				collectionAllocations[0].FarmUnsoldLeftovers.Equals(collectionAllocations[0].CollectionAllocationAmount.Sub(nftMinterAmount).Sub(nftOwner2Amount).Sub(cudoPartOfMaintenanceFee).Sub(maintenanceFeeAddress1Amount)) &&
+				collectionAllocations[0].FarmUnsoldLeftovers.Equals(decimal.NewFromFloat(0)) &&
 				collectionAllocations[0].FarmMaintenanceFee.Equals(maintenanceFeeAddress1Amount)
 		}),
 		mock.MatchedBy(func(amountInfoMap map[string]types.AmountInfo) bool {
@@ -1122,7 +1126,7 @@ func setupMockStorage() *mockStorage {
 				amountInfoMap["nft_minter_payout_addr"].ThresholdReached == true &&
 				amountInfoMap["nft_owner_2_payout_addr"].ThresholdReached == true &&
 				amountInfoMap["cudo_fee_payout_address_1"].ThresholdReached == true &&
-				amountInfoMap["maintenance_fee_payout_address_1"].ThresholdReached == false &&
+				amountInfoMap["maintenance_fee_payout_address_1"].ThresholdReached == true &&
 
 				amountInfoMap["leftover_reward_payout_address_1"].Amount.Equals(leftoverAmount.RoundFloor(8)) &&
 				amountInfoMap["nft_minter_payout_addr"].Amount.Equals(nftMinterAmount.RoundFloor(8)) &&

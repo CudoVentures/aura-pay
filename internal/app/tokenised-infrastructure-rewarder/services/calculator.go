@@ -122,10 +122,10 @@ func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashP
 	mtFeeInBtc := decimal.NewFromFloat(farm.MaintenanceFeeInBtc)
 
 	btcFeePerOneHashPowerBtcDecimal := mtFeeInBtc.Div(decimal.NewFromFloat(currentHashPowerForFarm))
-	dailyFeeInBtcDecimal := btcFeePerOneHashPowerBtcDecimal.Div(decimal.NewFromInt(int64(periodLength)))
-	hourlyFeeInBtcDecimal := dailyFeeInBtcDecimal.Div(decimal.NewFromInt(24))
+	dailyFeeInBtcDecimalPerTh := btcFeePerOneHashPowerBtcDecimal.Div(decimal.NewFromInt(int64(periodLength)))
+	hourlyFeeInBtcDecimalPerTh := dailyFeeInBtcDecimalPerTh.Div(decimal.NewFromInt(24))
 
-	return hourlyFeeInBtcDecimal
+	return hourlyFeeInBtcDecimalPerTh
 }
 
 // calculate the hours that the period consists of
@@ -135,13 +135,15 @@ func (s *PayService) calculateHourlyMaintenanceFee(farm types.Farm, currentHashP
 // finally distribute the maintenance fee between aura and farm
 func (s *PayService) calculateMaintenanceFeeForNFT(periodStart int64,
 	periodEnd int64,
-	hourlyFeeInBtcDecimal decimal.Decimal,
+	hourlyFeePerThInBtcDecimal decimal.Decimal,
+	nftHashRateInTh float64,
 	rewardForNftBtcDecimal decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, error) {
 	periodInHoursToPayFor := float64(periodEnd-periodStart) / float64(3600) // period for which we are paying the MT fee
+	hourlyFeeForNftInBtcDecimal := hourlyFeePerThInBtcDecimal.Mul(decimal.NewFromFloat(nftHashRateInTh))
 
 	var rewardForNftAfterFeesBtcDecimal decimal.Decimal
-	nftMaintenanceFeeForPayoutPeriodBtcDecimal := hourlyFeeInBtcDecimal.Mul(decimal.NewFromFloat(periodInHoursToPayFor)) // the fee for the period
-	if nftMaintenanceFeeForPayoutPeriodBtcDecimal.GreaterThan(rewardForNftBtcDecimal) {                                  // if the fee is greater - it has higher priority then the users reward
+	nftMaintenanceFeeForPayoutPeriodBtcDecimal := hourlyFeeForNftInBtcDecimal.Mul(decimal.NewFromFloat(periodInHoursToPayFor)) // the fee for the period
+	if nftMaintenanceFeeForPayoutPeriodBtcDecimal.GreaterThan(rewardForNftBtcDecimal) {                                        // if the fee is greater - it has higher priority then the users reward
 		nftMaintenanceFeeForPayoutPeriodBtcDecimal = rewardForNftBtcDecimal
 		rewardForNftAfterFeesBtcDecimal = decimal.Zero
 	} else {

@@ -167,7 +167,7 @@ func (s *PayService) processFarmUnspentTx(
 
 	currentHashPowerForFarm := farm.TotalHashPower
 	log.Debug().Msgf("Total hash power for farm %s: %.6f", farm.RewardsFromPoolBtcWalletName, currentHashPowerForFarm)
-	hourlyMaintenanceFeeInBtcDecimal := s.calculateHourlyMaintenanceFee(farm, currentHashPowerForFarm)
+	hourlyMaintenanceFeePerThInBtcDecimal := s.calculateHourlyMaintenanceFee(farm, currentHashPowerForFarm)
 
 	farmCollectionsWithNFTs, farmAuraPoolCollectionsMap, err := s.getCollectionsWithNftsForFarm(ctx, storage, farm)
 	if err != nil {
@@ -222,7 +222,7 @@ func (s *PayService) processFarmUnspentTx(
 			currentHashPowerForFarm,
 			totalRewardForFarmAfterCudosFeeBtcDecimal,
 			cudosFeeOfTotalRewardBtcDecimal,
-			hourlyMaintenanceFeeInBtcDecimal,
+			hourlyMaintenanceFeePerThInBtcDecimal,
 			lastPaymentTimestamp,
 			periodEnd,
 			farmAuraPoolCollectionsMap,
@@ -281,7 +281,7 @@ func (s *PayService) processCollection(
 	destinationAddressesWithAmountBtcDecimal map[string]decimal.Decimal,
 	rewardForNftOwnersBtcDecimal decimal.Decimal,
 	mintedHashPowerForFarm, currentHashPowerForFarm float64,
-	totalRewardForFarmAfterCudosFeeBtcDecimal, cudosFeeOfTotalRewardBtcDecimal, hourlyMaintenanceFeeInBtcDecimal decimal.Decimal,
+	totalRewardForFarmAfterCudosFeeBtcDecimal, cudosFeeOfTotalRewardBtcDecimal, hourlyMaintenanceFeePerThInBtcDecimal decimal.Decimal,
 	periodStart, periodEnd int64,
 	farmAuraPoolCollectionsMap map[string]types.AuraPoolCollection,
 ) (CollectionProcessResult, error) {
@@ -342,7 +342,7 @@ func (s *PayService) processCollection(
 			destinationAddressesWithAmountBtcDecimal,
 			rewardForNftOwnersBtcDecimal,
 			mintedHashPowerForFarm,
-			hourlyMaintenanceFeeInBtcDecimal,
+			hourlyMaintenanceFeePerThInBtcDecimal,
 			periodStart,
 			periodEnd,
 		)
@@ -437,7 +437,7 @@ func (s *PayService) processNft(
 	destinationAddressesWithAmountBtcDecimal map[string]decimal.Decimal,
 	rewardForNftOwnersBtcDecimal decimal.Decimal,
 	mintedHashPowerForFarm float64,
-	hourlyMaintenanceFeeInBtcDecimal decimal.Decimal,
+	hourlyMaintenanceFeePerThInBtcDecimal decimal.Decimal,
 	lastPaymentTimestamp int64,
 	periodEnd int64,
 ) (NftProcessResult, bool, error) {
@@ -463,7 +463,8 @@ func (s *PayService) processNft(
 	maintenanceFeeBtcDecimal, cudoPartOfMaintenanceFeeBtcDecimal, rewardForNftAfterFeeBtcDecimal, err := s.calculateMaintenanceFeeForNFT(
 		nftPeriodStart,
 		nftPeriodEnd,
-		hourlyMaintenanceFeeInBtcDecimal,
+		hourlyMaintenanceFeePerThInBtcDecimal,
+		nft.DataJson.HashRateOwned,
 		rewardForNftBtcDecimal,
 	)
 
