@@ -680,6 +680,221 @@ func TestProcessFarmUnspentTx_EmptyCollectionList(t *testing.T) {
 	mockBtcClient.AssertCalled(t, "GetRawTransactionVerbose", txHash)
 }
 
+func TestProcessCollection_Rounding(t *testing.T) {
+	btcNetworkParams := &types.BtcNetworkParams{
+		ChainParams:      &chaincfg.MainNetParams,
+		MinConfirmations: 6,
+	}
+
+	mockApiRequester := setupMockApiRequester(t)
+	mockStorage := setupMockStorage()
+
+	config := &infrastructure.Config{
+		Network:                         "BTC",
+		CUDOMaintenanceFeePercent:       50,
+		CUDOFeeOnAllBTC:                 50,
+		CUDOFeePayoutAddress:            "cudo_fee_payout_address_1",
+		CUDOMaintenanceFeePayoutAddress: "cudo_maintenance_fee_payout_address_1",
+		GlobalPayoutThresholdInBTC:      0.01,
+		DbDriverName:                    "postgres",
+		DbUser:                          "postgresUser",
+		DbPassword:                      "mysecretpassword",
+		DbHost:                          "127.0.0.1",
+		DbPort:                          "5432",
+		DbName:                          "aura-pay-test-db",
+	}
+
+	testCtx := context.Background()
+
+	testFarm := types.Farm{
+		Id:                                 1,
+		SubAccountName:                     "farm_1",
+		RewardsFromPoolBtcWalletName:       "farm_1",
+		AddressForReceivingRewardsFromPool: "address_for_receiving_reward_from_pool_1",
+		LeftoverRewardPayoutAddress:        "leftover_reward_payout_address_1",
+		MaintenanceFeePayoutAddress:        "maintenance_fee_payout_address_1",
+		MaintenanceFeeInBtc:                0,
+		TotalHashPower:                     18,
+	}
+
+	testCollection := types.Collection{
+		Denom: types.Denom{
+			Id:          "col1",
+			Name:        "name1",
+			Schema:      "",
+			Creator:     "",
+			Symbol:      "",
+			Traits:      "",
+			Minter:      "",
+			Description: "",
+			Data:        "",
+		},
+		Nfts: []types.NFT{
+			{
+				Id:   "1",
+				Name: "nft1",
+				Uri:  "",
+				Data: "",
+				DataJson: types.NFTDataJson{
+					ExpirationDate: int64(999999999999999),
+					HashRateOwned:  float64(1),
+				},
+				Owner: "",
+			}, {
+				Id:   "2",
+				Name: "nft2",
+				Uri:  "",
+				Data: "",
+				DataJson: types.NFTDataJson{
+					ExpirationDate: int64(999999999999999),
+					HashRateOwned:  float64(1),
+				},
+				Owner: "",
+			}, {
+				Id:   "3",
+				Name: "nft3",
+				Uri:  "",
+				Data: "",
+				DataJson: types.NFTDataJson{
+					ExpirationDate: int64(999999999999999),
+					HashRateOwned:  float64(1),
+				},
+				Owner: "",
+			}, {
+				Id:   "4",
+				Name: "nft4",
+				Uri:  "",
+				Data: "",
+				DataJson: types.NFTDataJson{
+					ExpirationDate: int64(999999999999999),
+					HashRateOwned:  float64(1),
+				},
+				Owner: "",
+			}, {
+				Id:   "5",
+				Name: "nft5",
+				Uri:  "",
+				Data: "",
+				DataJson: types.NFTDataJson{
+					ExpirationDate: int64(999999999999999),
+					HashRateOwned:  float64(1),
+				},
+				Owner: "",
+			}, {
+				Id:   "6",
+				Name: "nft6",
+				Uri:  "",
+				Data: "",
+				DataJson: types.NFTDataJson{
+					ExpirationDate: int64(999999999999999),
+					HashRateOwned:  float64(1),
+				},
+				Owner: "",
+			},
+		},
+	}
+
+	testAuraCollection := types.AuraPoolCollection{
+		Id:           int64(1),
+		DenomId:      "col1",
+		HashingPower: float64(6),
+	}
+
+	farm1Denom1Nft1TransferHistoryJSON := `
+	{
+		"data": {
+			"action_nft_transfer_events": {
+				"events": []
+			}
+		}
+	}`
+
+	var farm1Denom1Nft1TransferHistory types.NftTransferHistory
+	require.NoError(t, json.Unmarshal([]byte(farm1Denom1Nft1TransferHistoryJSON), &farm1Denom1Nft1TransferHistory))
+	mockApiRequester.On("GetDenomNftTransferHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(farm1Denom1Nft1TransferHistory.Data.NestedData.Events, nil).Times(3)
+
+	arm1Denom1NftMintEventsJSON := `{
+		"data": {
+			"nft_transfer_history": [
+				{
+					"id": 1,
+					"timestamp": 1664999478
+				},
+				{
+					"id": 2,
+					"timestamp": 1664999478
+				},
+				{
+					"id": 3,
+					"timestamp": 1664999478
+				},
+				{
+					"id": 4,
+					"timestamp": 1664999478
+				},
+				{
+					"id": 5,
+					"timestamp": 1664999478
+				},
+				{
+					"id": 6,
+					"timestamp": 1664999478
+				}
+			]
+		}
+	}
+	`
+	var farm1Denom1Nft1MintHistory types.NftMintHistory
+	require.NoError(t, json.Unmarshal([]byte(arm1Denom1NftMintEventsJSON), &farm1Denom1Nft1MintHistory))
+	mockApiRequester.On("GetHasuraCollectionNftMintEvents", mock.Anything, mock.Anything).Return(farm1Denom1Nft1MintHistory, nil).Once()
+
+	s := NewPayService(config, mockApiRequester, &mockHelper{}, btcNetworkParams)
+
+	periodEnd := int64(1688462183)
+	lastPaymentTimestamp := int64(1688395493)
+
+	receivedRewardForFarmBtcDecimal := decimal.NewFromFloat(200)
+	totalRewardForFarmAfterCudosFeeBtcDecimal, cudosFeeOfTotalRewardBtcDecimal := s.calculateCudosFeeOfTotalFarmIncome(receivedRewardForFarmBtcDecimal)
+
+	currentHashPowerForFarm := testFarm.TotalHashPower
+	hourlyMaintenanceFeePerThInBtcDecimal := s.calculateHourlyMaintenanceFee(testFarm, currentHashPowerForFarm)
+
+	farmAuraPoolCollectionsMap := map[string]types.AuraPoolCollection{}
+	farmAuraPoolCollectionsMap[testCollection.Denom.Id] = testAuraCollection
+
+	mintedHashPowerForFarm := float64(6)
+	rewardForNftOwnersBtcDecimal := calculateRewardByPercent(currentHashPowerForFarm, mintedHashPowerForFarm, totalRewardForFarmAfterCudosFeeBtcDecimal)
+	destinationAddressesWithAmountBtcDecimal := make(map[string]decimal.Decimal)
+	currentHashPowerForFarm = testFarm.TotalHashPower
+
+	collectionProcessResult, _ := s.processCollection(
+		testCtx,
+		mockStorage,
+		testFarm,
+		testCollection,
+		destinationAddressesWithAmountBtcDecimal,
+		rewardForNftOwnersBtcDecimal,
+		mintedHashPowerForFarm,
+		currentHashPowerForFarm,
+		totalRewardForFarmAfterCudosFeeBtcDecimal,
+		cudosFeeOfTotalRewardBtcDecimal,
+		hourlyMaintenanceFeePerThInBtcDecimal,
+		lastPaymentTimestamp,
+		periodEnd,
+		farmAuraPoolCollectionsMap,
+	)
+
+	// fmt.Println(currentHashPowerForFarm)
+	// fmt.Println(mintedHashPowerForFarm)
+	// fmt.Println(totalRewardForFarmAfterCudosFeeBtcDecimal)
+	// fmt.Println(rewardForNftOwnersBtcDecimal)
+	// fmt.Println(collectionProcessResult.NftStatistics[0].Reward)
+	// fmt.Println(collectionProcessResult.NftStatistics[1].Reward)
+
+	_, err := calculateLeftoverNftRewardDistribution(rewardForNftOwnersBtcDecimal, collectionProcessResult.NftStatistics)
+	require.NoError(t, err, "Rounding error")
+}
+
 func TestSendRewards(t *testing.T) {
 	tests := []struct {
 		name                                             string

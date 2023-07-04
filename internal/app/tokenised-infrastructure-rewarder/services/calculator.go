@@ -202,7 +202,7 @@ func calculateRewardByPercent(availableHashPower float64, actualHashPower float6
 		return decimal.Zero
 	}
 
-	payoutRewardPercent := decimal.NewFromFloat(actualHashPower).Div(decimal.NewFromFloat(availableHashPower))
+	payoutRewardPercent := decimal.NewFromFloat(actualHashPower).Div(decimal.NewFromFloat(availableHashPower)).RoundDown(15)
 	calculatedReward := reward.Mul(payoutRewardPercent)
 
 	// btcutil.Amount is int64 because satoshi is the lowest possible unit (1 satoshi = 0.00000001 bitcoin) and is an int64 in btc core code
@@ -223,7 +223,7 @@ func calculatePercentByTime(timestampPrevPayment, timestampCurrentPayment, nftSt
 
 	timeMinted := nftEndTime - nftStartTime
 	wholePeriod := timestampCurrentPayment - timestampPrevPayment
-	percentOfPeriodMitned := decimal.NewFromInt(timeMinted).Div(decimal.NewFromInt(wholePeriod))
+	percentOfPeriodMitned := decimal.NewFromInt(timeMinted).Div(decimal.NewFromInt(wholePeriod)).RoundDown(15)
 
 	return totalRewardForPeriod.Mul(percentOfPeriodMitned)
 }
