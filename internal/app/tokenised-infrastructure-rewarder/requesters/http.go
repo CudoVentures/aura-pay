@@ -407,6 +407,8 @@ func (r *Requester) BumpFee(ctx context.Context, txId string) (string, error) {
 
 	body := strings.NewReader(formatedString)
 	endPointToCall := fmt.Sprintf("http://%s:%s", r.config.BitcoinNodeUrl, r.config.BitcoinNodePort)
+	log.Debug().Msgf("Trying to bump fee with request %s", endPointToCall)
+
 	req, err := http.NewRequestWithContext(ctx, "POST", endPointToCall, body)
 	if err != nil {
 		return "", err
