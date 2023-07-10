@@ -403,11 +403,11 @@ func (r *Requester) BumpFee(ctx context.Context, txId string) (string, error) {
 	}
 
 	optionals := "{\"replaceable\": true}" // marks the tx as BIP-125 once again
-	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"bumpfee\", \"params\": [%s, %s]}", txId, optionals)
+	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"bumpfee\", \"params\": [\"%s\", %s]}", txId, optionals)
 
 	body := strings.NewReader(formatedString)
 	endPointToCall := fmt.Sprintf("http://%s:%s", r.config.BitcoinNodeUrl, r.config.BitcoinNodePort)
-	log.Debug().Msgf("Trying to bump fee with request %s", endPointToCall)
+	log.Debug().Msgf("Trying to bump fee with request %s and params %s", endPointToCall, formatedString)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", endPointToCall, body)
 	if err != nil {
