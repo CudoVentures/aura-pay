@@ -56,7 +56,6 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 		return err
 	}
 
-	var confirmations int64
 	var txToConfirm []string
 	var txToRetry []types.TransactionHashWithStatus
 
@@ -68,16 +67,23 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 
 		decodedRawTx, err := btcClient.GetRawTransactionVerbose(txHash)
 		if err != nil {
-			decodedWalletTx, err := s.getWalletTransaction(ctx, btcClient, tx)
-			if err != nil {
-				return err
-			}
-			confirmations = decodedWalletTx.Confirmations
-		} else {
-			confirmations = int64(decodedRawTx.Confirmations)
+			return err
 		}
 
-		if confirmations > 0 {
+		// This code check for nested wallet tx. The service is supposed to work without it
+
+		// decodedRawTx, err := btcClient.GetRawTransactionVerbose(txHash)
+		// if err != nil {
+		// 	decodedWalletTx, err := s.getLatestBumpedTransaction(ctx, btcClient, tx)
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// 	confirmations = decodedWalletTx.Confirmations
+		// } else {
+		// 	confirmations = int64(decodedRawTx.Confirmations)
+		// }
+
+		if decodedRawTx.Confirmations > 0 {
 			txToConfirm = append(txToConfirm, tx.TxHash)
 		} else {
 			txToRetry = append(txToRetry, tx)
@@ -99,6 +105,7 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -151,9 +158,7 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, stor
 		return err
 	}
 
-	err = storage.SaveRBFTransactionInformation(ctx, tx.TxHash, types.TransactionReplaced, newRBFtxHash, types.TransactionPending, tx.FarmBtcWalletName, tx.FarmPaymentId, tx.RetryCount+1)
-
-	return nil
+	return storage.SaveRBFTransactionInformation(ctx, tx.TxHash, types.TransactionReplaced, newRBFtxHash, types.TransactionPending, tx.FarmBtcWalletName, tx.FarmPaymentId, tx.RetryCount+1)
 }
 
 /*

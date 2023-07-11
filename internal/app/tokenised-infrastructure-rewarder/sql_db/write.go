@@ -95,9 +95,9 @@ func (tx *DbTx) saveNFTOwnersForPeriodHistory(ctx context.Context, timedOwnedFro
 	return err
 }
 
-func (tx *DbTx) saveRBFTransactionHistory(ctx context.Context, oldTxHash string, newTxHash string, farmSubAccountName string) error {
+func (tx *DbTx) saveRBFTransactionHistory(ctx context.Context, oldTxHash string, newTxHash string) error {
 	now := time.Now()
-	_, err := tx.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash, farmSubAccountName, now.UTC(), now.UTC())
+	_, err := tx.ExecContext(ctx, insertRBFTransactionHistory, oldTxHash, newTxHash, now.UTC(), now.UTC())
 	return err
 }
 
@@ -160,7 +160,7 @@ const (
 	(tx_hash, status, time_sent, farm_btc_wallet_name, retry_count, "createdAt", "updatedAt", farm_payment_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	insertRBFTransactionHistory = `INSERT INTO rbf_transaction_history
-	(old_tx_hash, new_tx_hash, farm_btc_wallet_name, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5)`
+	(old_tx_hash, new_tx_hash, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4)`
 
 	insertDestinationAddressesWithAmountHistory = `INSERT INTO statistics_destination_addresses_with_amount
 		(address, amount_btc, tx_hash, farm_id, farm_payment_id, payout_time, threshold_reached, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`

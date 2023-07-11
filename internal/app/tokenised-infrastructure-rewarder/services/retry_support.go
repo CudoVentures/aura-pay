@@ -1,27 +1,41 @@
 package services
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/rs/zerolog/log"
 )
 
-func (s *RetryService) getWalletTransaction(ctx context.Context, btcClient BtcClient, tx types.TransactionHashWithStatus) (*types.BtcWalletTransaction, error) {
-	loaded, err := s.loadWallet(btcClient, tx.FarmBtcWalletName)
-	if err != nil || !loaded {
-		return nil, err
-	}
-	defer unloadWallet(btcClient, tx.FarmBtcWalletName)
+// import (
+// 	"context"
+// 	"fmt"
 
-	decodedTx, err := s.apiRequester.GetWalletTransaction(ctx, tx.TxHash)
-	if err != nil {
-		return nil, err
-	}
+// 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
+// 	"github.com/rs/zerolog/log"
+// )
 
-	return decodedTx, nil
-}
+// func (s *RetryService) getLatestBumpedTransaction(ctx context.Context, btcClient BtcClient, tx types.TransactionHashWithStatus) (*types.BtcWalletTransaction, error) {
+// 	loaded, err := s.loadWallet(btcClient, tx.FarmBtcWalletName)
+// 	if err != nil || !loaded {
+// 		return nil, err
+// 	}
+// 	defer unloadWallet(btcClient, tx.FarmBtcWalletName)
+
+// 	return s.getLatestBumpedTransactionByHash(ctx, btcClient, tx.TxHash)
+// }
+
+// func (s *RetryService) getLatestBumpedTransactionByHash(ctx context.Context, btcClient BtcClient, txHash string) (*types.BtcWalletTransaction, error) {
+// 	decodedWalletTx, err := s.apiRequester.GetWalletTransaction(ctx, txHash)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	if decodedWalletTx.ReplacedByTxid == "" {
+// 		return decodedWalletTx, nil
+// 	}
+
+// 	return s.getLatestBumpedTransactionByHash(ctx, btcClient, decodedWalletTx.ReplacedByTxid)
+// }
 
 // loadWallet attempts to load the specified Bitcoin wallet using the given BTC client.
 // If the wallet fails to load for 15 consecutive attempts, the function returns an error.

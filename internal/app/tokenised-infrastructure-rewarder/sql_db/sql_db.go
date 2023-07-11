@@ -102,7 +102,7 @@ func (sdb *SqlDB) SaveRBFTransactionInformation(ctx context.Context, oldTxHash, 
 		}
 
 		// link replaced transaction with the tx that replaced it
-		if retErr := tx.saveRBFTransactionHistory(ctx, oldTxHash, newRBFTxHash, farmSubAccountName); retErr != nil {
+		if retErr := tx.saveRBFTransactionHistory(ctx, oldTxHash, newRBFTxHash); retErr != nil {
 			return fmt.Errorf("failed to saveRBFTransactionHistory: %s", retErr)
 		}
 

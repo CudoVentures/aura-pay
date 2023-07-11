@@ -57,6 +57,7 @@ type BtcWalletTransaction struct {
 	Timereceived      uint64                        `json:"timereceived"`
 	Bip125Replaceable string                        `json:"bip125-replaceable"`
 	ReplacedByTxid    string                        `json:"replaced_by_txid"`
+	ReplacesTxid      string                        `json:"replaces_txid"`
 	Details           []BtcWalletTransactionDetails `json:"details"`
 	Hex               string                        `json:"hex"`
 }
