@@ -45,3 +45,27 @@ type AmountInfo struct {
 	Amount           decimal.Decimal
 	ThresholdReached bool
 }
+
+type BtcWalletTransaction struct {
+	Amount            float64                       `json:"amount"`
+	Fee               float64                       `json:"fee"`
+	Confirmations     int64                         `json:"confirmations"`
+	Trusted           bool                          `json:"trusted"`
+	Txid              string                        `json:"txid"`
+	WalletConflicts   []string                      `json:"walletconflicts"`
+	Time              uint64                        `json:"time"`
+	Timereceived      uint64                        `json:"timereceived"`
+	Bip125Replaceable string                        `json:"bip125-replaceable"`
+	ReplacedByTxid    string                        `json:"replaced_by_txid"`
+	Details           []BtcWalletTransactionDetails `json:"details"`
+	Hex               string                        `json:"hex"`
+}
+
+type BtcWalletTransactionDetails struct {
+	Address   string  `json:"address"`
+	Category  string  `json:"category"`
+	Amount    float64 `json:"amount"`
+	Vout      uint64  `json:"vout"`
+	Fee       float64 `json:"fee"`
+	Abandoned bool    `json:"abandoned"`
+}

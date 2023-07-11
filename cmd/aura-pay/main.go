@@ -24,6 +24,8 @@ func runService(ctx context.Context) {
 		return
 	}
 
+	ctx, ctxCancel := context.WithCancel(ctx)
+
 	config := infrastructure.NewConfig()
 	provider := infrastructure.NewProvider(config)
 	requestClient := requesters.NewRequester(config)
@@ -40,9 +42,9 @@ func runService(ctx context.Context) {
 
 	retryService := services.NewRetryService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
-	go worker.Start(ctx, config, retryService, provider, &mutex, config.WorkerProcessIntervalPayment)
+	go worker.Start(ctx, ctxCancel, config, retryService, provider, &mutex, config.WorkerProcessIntervalPayment)
 
 	payService := services.NewPayService(config, requestClient, infrastructure.NewHelper(config), &btcNetworkParams)
 
-	worker.Start(ctx, config, payService, provider, &mutex, config.WorkerProcessIntervalRetry)
+	worker.Start(ctx, ctxCancel, config, payService, provider, &mutex, config.WorkerProcessIntervalRetry)
 }

@@ -6,17 +6,25 @@ import (
 
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
-	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/rs/zerolog/log"
 )
 
-func NewRetryService(config *infrastructure.Config, apiRequester ApiRequester, helper Helper, btcNetworkParams *types.BtcNetworkParams) *RetryService {
+type RetryService struct {
+	config                    *infrastructure.Config
+	helper                    InfrastructureHelper
+	btcNetworkParams          *types.BtcNetworkParams
+	apiRequester              ApiRequester
+	btcWalletOpenFailsPerFarm map[string]int
+}
+
+func NewRetryService(config *infrastructure.Config, apiRequester ApiRequester, helper InfrastructureHelper, btcNetworkParams *types.BtcNetworkParams) *RetryService {
 	return &RetryService{
-		config:           config,
-		helper:           helper,
-		btcNetworkParams: btcNetworkParams,
-		apiRequester:     apiRequester,
+		config:                    config,
+		helper:                    helper,
+		btcNetworkParams:          btcNetworkParams,
+		apiRequester:              apiRequester,
+		btcWalletOpenFailsPerFarm: make(map[string]int),
 	}
 }
 
@@ -48,9 +56,9 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 		return err
 	}
 
+	var confirmations int64
 	var txToConfirm []string
 	var txToRetry []types.TransactionHashWithStatus
-	var txToRetryRaw []*btcjson.TxRawResult
 
 	for _, tx := range unconfirmedTransactionHashes {
 		txHash, err := chainhash.NewHashFromStr(tx.TxHash)
@@ -58,16 +66,21 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 			return err
 		}
 
-		decodedTx, err := btcClient.GetRawTransactionVerbose(txHash)
+		decodedRawTx, err := btcClient.GetRawTransactionVerbose(txHash)
 		if err != nil {
-			return err
+			decodedWalletTx, err := s.getWalletTransaction(ctx, btcClient, tx)
+			if err != nil {
+				return err
+			}
+			confirmations = decodedWalletTx.Confirmations
+		} else {
+			confirmations = int64(decodedRawTx.Confirmations)
 		}
 
-		if decodedTx.Confirmations > 0 {
+		if confirmations > 0 {
 			txToConfirm = append(txToConfirm, tx.TxHash)
 		} else {
 			txToRetry = append(txToRetry, tx)
-			txToRetryRaw = append(txToRetryRaw, decodedTx)
 		}
 	}
 
@@ -78,9 +91,9 @@ func (s *RetryService) Execute(ctx context.Context, btcClient BtcClient, storage
 	}
 
 	// for all others - check if enough time has passed; if so - send bump fee tx
-	for i, tx := range txToRetry {
+	for _, tx := range txToRetry {
 		if s.helper.Unix() >= tx.TimeSent+int64(s.config.RBFTransactionRetryDelayInSeconds) {
-			err := s.retryTransaction(tx, txToRetryRaw[i], storage, ctx, btcClient)
+			err := s.retryTransaction(tx, storage, ctx, btcClient)
 			if err != nil {
 				return err
 			}
@@ -107,7 +120,7 @@ it creates a new transaction with a higher fee and saves it in the storage.
     and the new transaction as TransactionPending.
  7. Increment the retry count by 1.
 */
-func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, txRaw *btcjson.TxRawResult, storage Storage, ctx context.Context, btcClient BtcClient) error {
+func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, storage Storage, ctx context.Context, btcClient BtcClient) error {
 	retryCountExceeded, err := s.retryCountExceeded(tx, storage, ctx)
 	if err != nil {
 		return err
@@ -121,31 +134,19 @@ func (s *RetryService) retryTransaction(tx types.TransactionHashWithStatus, txRa
 		}
 		return nil
 	}
-	_, err = btcClient.LoadWallet(tx.FarmBtcWalletName)
-	if err != nil {
+	loaded, err := s.loadWallet(btcClient, tx.FarmBtcWalletName)
+	if err != nil || !loaded {
 		return err
 	}
-	log.Debug().Msgf("Farm Wallet: {%s} loaded", tx.FarmBtcWalletName)
-
-	defer func() {
-		if err := btcClient.WalletLock(); err != nil {
-			log.Error().Msgf("Failed to lock wallet %s: %s", tx.FarmBtcWalletName, err)
-		}
-		log.Debug().Msgf("Farm Wallet: {%s} locked", tx.FarmBtcWalletName)
-
-		err = btcClient.UnloadWallet(&tx.FarmBtcWalletName)
-		if err != nil {
-			log.Error().Msgf("Failed to unload wallet %s: %s", tx.FarmBtcWalletName, err)
-		}
-		log.Debug().Msgf("Farm Wallet: {%s} unloaded", tx.FarmBtcWalletName)
-	}()
+	defer unloadWallet(btcClient, tx.FarmBtcWalletName)
 
 	err = btcClient.WalletPassphrase(s.config.AuraPoolTestFarmWalletPassword, 60)
 	if err != nil {
 		return err
 	}
+	defer lockWallet(btcClient, tx.FarmBtcWalletName)
 
-	newRBFtxHash, err := s.apiRequester.BumpFee(ctx, txRaw.Txid)
+	newRBFtxHash, err := s.apiRequester.BumpFee(ctx, tx.TxHash)
 	if err != nil {
 		return err
 	}
@@ -180,11 +181,4 @@ func (s *RetryService) retryCountExceeded(tx types.TransactionHashWithStatus, st
 		return true, nil
 	}
 	return false, nil
-}
-
-type RetryService struct {
-	config           *infrastructure.Config
-	helper           Helper
-	btcNetworkParams *types.BtcNetworkParams
-	apiRequester     ApiRequester
 }

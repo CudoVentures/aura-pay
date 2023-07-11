@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/infrastructure"
 	"github.com/CudoVentures/tokenised-infrastructure-rewarder/internal/app/tokenised-infrastructure-rewarder/types"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
@@ -33,15 +32,6 @@ type NftProcessResult struct {
 	NftPeriodEnd                               int64
 }
 
-type PayService struct {
-	config                    *infrastructure.Config
-	helper                    Helper
-	btcNetworkParams          *types.BtcNetworkParams
-	apiRequester              ApiRequester
-	lastEmailTimestamp        int64
-	btcWalletOpenFailsPerFarm map[string]int
-}
-
 type ApiRequester interface {
 	GetChainNftMintTimestamp(ctx context.Context, denomId, tokenId string) (int64, error)
 
@@ -64,6 +54,8 @@ type ApiRequester interface {
 	SendMany(ctx context.Context, destinationAddressesWithAmount map[string]float64) (string, error)
 
 	BumpFee(ctx context.Context, txId string) (string, error)
+
+	GetWalletTransaction(ctx context.Context, txId string) (*types.BtcWalletTransaction, error)
 }
 
 type Provider interface {
@@ -117,7 +109,7 @@ type Storage interface {
 	GetFarmAuraPoolCollections(ctx context.Context, farmId int64) ([]types.AuraPoolCollection, error)
 }
 
-type Helper interface {
+type InfrastructureHelper interface {
 	DaysIn(m time.Month, year int) int
 	Unix() int64
 	Date() (year int, month time.Month, day int)

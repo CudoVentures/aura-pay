@@ -449,3 +449,52 @@ func (r *Requester) BumpFee(ctx context.Context, txId string) (string, error) {
 
 	return okStruct.TxHash, nil
 }
+
+func (r *Requester) GetWalletTransaction(ctx context.Context, txHash string) (*types.BtcWalletTransaction, error) {
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	formatedString := fmt.Sprintf("{\"jsonrpc\": \"1.0\", \"id\": \"curl\", \"method\": \"gettransaction\", \"params\": [\"%s\"]}", txHash)
+
+	body := strings.NewReader(formatedString)
+	endPointToCall := fmt.Sprintf("http://%s:%s", r.config.BitcoinNodeUrl, r.config.BitcoinNodePort)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", endPointToCall, body)
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(r.config.BitcoinNodeUserName, r.config.BitcoinNodePassword)
+	req.Header.Set("Content-Type", "text/plain;")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	bts, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != StatusCodeOK {
+		return nil, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", resp.Status, resp.StatusCode, string(bts))
+	}
+
+	okStruct := struct {
+		Result types.BtcWalletTransaction `json:"result"`
+		Error  *string                    `json:"error"`
+		Id     *string                    `json:"id"`
+	}{}
+
+	if err := json.Unmarshal(bts, &okStruct); err != nil {
+		return nil, err
+	}
+
+	if okStruct.Error != nil {
+		return nil, fmt.Errorf(*okStruct.Error)
+	}
+
+	return &okStruct.Result, nil
+}

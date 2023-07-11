@@ -14,7 +14,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func NewPayService(config *infrastructure.Config, apiRequester ApiRequester, helper Helper, btcNetworkParams *types.BtcNetworkParams) *PayService {
+type PayService struct {
+	config                    *infrastructure.Config
+	helper                    InfrastructureHelper
+	btcNetworkParams          *types.BtcNetworkParams
+	apiRequester              ApiRequester
+	lastEmailTimestamp        int64
+	btcWalletOpenFailsPerFarm map[string]int
+}
+
+func NewPayService(config *infrastructure.Config, apiRequester ApiRequester, helper InfrastructureHelper, btcNetworkParams *types.BtcNetworkParams) *PayService {
 	return &PayService{
 		config:                    config,
 		helper:                    helper,

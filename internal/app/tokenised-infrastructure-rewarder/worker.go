@@ -16,8 +16,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func Start(ctx context.Context, config *infrastructure.Config, s service, provider provider, mutex *sync.Mutex, interval time.Duration) {
-	log.Info().Msg("Application started")
+func Start(ctx context.Context, ctxCancel context.CancelFunc, config *infrastructure.Config, service Service, provider Provider, mutex *sync.Mutex, interval time.Duration) {
+	log.Info().Msg("Application worker starting")
 
 	retry := func(err error) {
 		log.Error().Msgf("retry error: %s", err)
@@ -58,7 +58,7 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 				select {
 				case <-ticker.C:
 					mutex.Lock()
-					processingError = s.Execute(ctx, rpcClient, sql_db.NewSqlDB(db))
+					processingError = service.Execute(ctx, rpcClient, sql_db.NewSqlDB(db))
 					mutex.Unlock()
 				case <-ctx.Done():
 					return
@@ -66,12 +66,12 @@ func Start(ctx context.Context, config *infrastructure.Config, s service, provid
 			}
 
 			// TODO: https://medium.com/htc-research-engineering-blog/handle-golang-errors-with-stacktrace-1caddf6dab07
-
 			if processingError != nil {
 				errorCount++
 				errorEncountered(config, processingError, errorCount)
 				if errorCount >= config.ServiceMaxErrorCount {
-					maxErrorCountReached(config, err)
+					maxErrorCountReached(config, processingError)
+					ctxCancel()
 					return
 				}
 			}
@@ -101,11 +101,11 @@ func sendMail(config *infrastructure.Config, message string) {
 	}
 }
 
-type provider interface {
+type Provider interface {
 	InitBtcRpcClient() (*rpcclient.Client, error)
 	InitDBConnection() (*sqlx.DB, error)
 }
 
-type service interface {
+type Service interface {
 	Execute(ctx context.Context, btcClient services.BtcClient, storage services.Storage) error
 }
