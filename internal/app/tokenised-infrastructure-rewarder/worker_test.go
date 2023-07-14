@@ -28,7 +28,7 @@ func TestWorkerShouldReturnIfContextIsCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	Start(ctx, &infrastructure.Config{}, nil, nil, &sync.Mutex{}, time.Second*1)
+	Start(ctx, cancel, &infrastructure.Config{}, nil, nil, &sync.Mutex{}, time.Second*1)
 
 	require.Error(t, ctx.Err())
 }
@@ -58,7 +58,7 @@ func TestWorkerShouldReturnIfContextIsCanceledDuringProcessPayment(t *testing.T)
 
 	mp.On("InitDBConnection").Return(db, nil)
 
-	Start(ctx, &infrastructure.Config{
+	Start(ctx, cancel, &infrastructure.Config{
 		WorkerFailureRetryDelay: 1 * time.Second,
 	}, mps, mp, &sync.Mutex{}, 1*time.Second)
 
@@ -80,7 +80,7 @@ func TestWorkerShouldRetryIfRpcConnectionFails(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go Start(ctx, &infrastructure.Config{
+	go Start(ctx, cancel, &infrastructure.Config{
 		WorkerFailureRetryDelay: 200 * time.Millisecond,
 	}, nil, mp, &sync.Mutex{}, 200*time.Millisecond)
 
@@ -111,7 +111,7 @@ func TestWorkerShouldRetryIfDbConnectionFails(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go Start(ctx, &infrastructure.Config{
+	go Start(ctx, cancel, &infrastructure.Config{
 		WorkerFailureRetryDelay: 200 * time.Millisecond,
 	}, nil, mp, &sync.Mutex{}, 200*time.Millisecond)
 

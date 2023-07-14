@@ -452,7 +452,7 @@ func TestCalculateHourlyMaintenanceFee(t *testing.T) {
 		desc                    string
 		farm                    types.Farm
 		currentHashPowerForFarm float64
-		helper                  Helper
+		helper                  InfrastructureHelper
 		expectedResult          decimal.Decimal
 	}{
 		{
@@ -907,4 +907,9 @@ func (mar *mockAPIRequester) SendMany(ctx context.Context, destinationAddressesW
 func (mar *mockAPIRequester) BumpFee(ctx context.Context, txId string) (string, error) {
 	args := mar.Called(ctx, txId)
 	return args.String(0), args.Error(1)
+}
+
+func (mar *mockAPIRequester) GetWalletTransaction(ctx context.Context, txId string) (*types.BtcWalletTransaction, error) {
+	args := mar.Called(ctx, txId)
+	return args.Get(0).(*types.BtcWalletTransaction), args.Error(1)
 }
