@@ -431,16 +431,22 @@ func (r *Requester) BumpFee(ctx context.Context, txId string) (string, error) {
 		return "", fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", resp.Status, resp.StatusCode, string(bts))
 	}
 
-	okStruct := struct {
+	type OkStruct struct {
 		TxHash      string   `json:"txid"`
 		Errors      []string `json:"errors"`
-		OriginalFee string   `json:"origfee"`
-		NewFee      string   `json:"fee"`
+		OriginalFee float64  `json:"origfee"`
+		NewFee      float64  `json:"fee"`
+	}
+
+	resultStruct := struct {
+		Result OkStruct `json:"result"`
 	}{}
 
-	if err := json.Unmarshal(bts, &okStruct); err != nil {
+	if err := json.Unmarshal(bts, &resultStruct); err != nil {
 		return "", err
 	}
+
+	okStruct := resultStruct.Result
 
 	if len(okStruct.Errors) != 0 {
 		errs := strings.Join(okStruct.Errors[:], ",")
