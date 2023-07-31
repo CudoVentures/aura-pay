@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -273,16 +274,21 @@ func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []s
 		Timeout: 60 * time.Second,
 	}
 
-	reqBody := struct {
-		DenomIds []string `json:"denom_ids"`
-	}{DenomIds: denomIds}
+	// reqBody := struct {
+	// 	DenomIds []string `json:"denom_ids"`
+	// }{DenomIds: denomIds}
 
-	reqBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, err
+	// reqBytes, err := json.Marshal(reqBody)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+"/cudosnode/nft/collectionsByDenomIds", bytes.NewBuffer(reqBytes))
+	var queryParams []string
+	for _, denomId := range denomIds {
+		queryParams = append(queryParams, fmt.Sprintf("denom_ids=%s", url.QueryEscape(denomId)))
 	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", r.config.NodeRestUrl+"/nft/collectionsByDenomIds", bytes.NewBuffer(reqBytes))
+	req, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+"/cudosnode/nft/collectionsByDenomIds?"+strings.Join(queryParams, "&"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -304,16 +310,17 @@ func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []s
 		return nil, fmt.Errorf("error! Request Failed: %s with StatusCode: %d. Error: %s", res.Status, res.StatusCode, string(bytes))
 	}
 
-	okStruct := types.CollectionResponse{}
+	// okStruct := types.CollectionResponse{}
+	okStruct := types.CollectionResult{}
 
 	if err := json.Unmarshal(bytes, &okStruct); err != nil {
 		return nil, err
 	}
 
-	for i := 0; i < len(okStruct.Result.Collections); i++ {
+	for i := 0; i < len(okStruct.Collections); i++ {
 		var parsedNfts []types.NFT
-		for j := 0; j < len(okStruct.Result.Collections[i].Nfts); j++ {
-			nft := okStruct.Result.Collections[i].Nfts[j]
+		for j := 0; j < len(okStruct.Collections[i].Nfts); j++ {
+			nft := okStruct.Collections[i].Nfts[j]
 			var nftDataJson types.NFTDataJson
 			err := json.Unmarshal([]byte(nft.Data), &nftDataJson)
 			if err != nil || nftDataJson.ExpirationDate == 0 || nftDataJson.HashRateOwned == 0 {
@@ -324,10 +331,10 @@ func (r *Requester) GetFarmCollectionsWithNFTs(ctx context.Context, denomIds []s
 			parsedNfts = append(parsedNfts, nft)
 		}
 
-		okStruct.Result.Collections[i].Nfts = parsedNfts
+		okStruct.Collections[i].Nfts = parsedNfts
 	}
 
-	return okStruct.Result.Collections, nil
+	return okStruct.Collections, nil
 }
 
 // SendMany Issues a curl request to the btc node to send funds to many addresses:

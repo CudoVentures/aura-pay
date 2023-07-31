@@ -140,7 +140,7 @@ func (r *Requester) getPeriodBlockBorders(ctx context.Context, periodStart, peri
 }
 
 func (r *Requester) getLatestBlock(ctx context.Context) (types.Block, error) {
-	request, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+"/blocks/latest", nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", r.config.NodeRestUrl+"/cosmos/base/tendermint/v1beta1/blocks/latest", nil)
 	if err != nil {
 		return types.Block{}, err
 	}
@@ -159,7 +159,7 @@ func (r *Requester) getLatestBlock(ctx context.Context) (types.Block, error) {
 }
 
 func (r *Requester) getBlockAtHeight(ctx context.Context, height int64) (types.Block, error) {
-	request, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/blocks/%d", r.config.NodeRestUrl, height), nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/blocks/%d", r.config.NodeRestUrl, height), nil)
 	if err != nil {
 		return types.Block{}, err
 	}

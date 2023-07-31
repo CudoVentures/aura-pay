@@ -88,10 +88,10 @@ type FarmHashRateElement struct {
 	HashrateRejected int64   `json:"hashrateRejected"`
 }
 
-type CollectionResponse struct {
-	Height string           `json:"height"`
-	Result CollectionResult `json:"result"`
-}
+// type CollectionResponse struct {
+// 	Height string           `json:"height"`
+// 	Result CollectionResult `json:"result"`
+// }
 
 type CollectionResult struct {
 	Collections []Collection `json:"collections"`
