@@ -178,7 +178,7 @@ func (r *Requester) getBlockAtHeight(ctx context.Context, height int64) (types.B
 }
 
 func (r *Requester) GetChainNftMintTimestamp(ctx context.Context, denomId, tokenId string) (int64, error) {
-	marketplaceModuletxs, err := r.getTxsByEvents(ctx, "marketplace_mint_nft.denom_id=%27"+tokenId+"%27%20AND%20marketplace_mint_nft.denom_id=%27"+denomId+"%27")
+	marketplaceModuletxs, err := r.getTxsByEvents(ctx, "marketplace_mint_nft.token_id=%27"+tokenId+"%27%20AND%20marketplace_mint_nft.denom_id=%27"+denomId+"%27")
 	if err != nil {
 		return 0, err
 	}
@@ -203,6 +203,61 @@ func (r *Requester) GetChainNftMintTimestamp(ctx context.Context, denomId, token
 	}
 
 	return timestamp, nil
+}
+
+func (r *Requester) getTxsByEventsLegacy(ctx context.Context, query []*TxQuerierLegacyParams, heights ...int64) ([]types.Tx, error) {
+	resultTxMapResult := make(map[string]types.Tx)
+
+	heightFrom := int64(-1)
+	heightTo := int64(-1)
+	if len(heights) >= 1 {
+		heightFrom = heights[0]
+	}
+	if len(heights) >= 2 {
+		heightFrom = heights[1]
+	}
+
+	for i, param := range query {
+		queryBuilder := []string{param.Key + "=%27" + param.Value + "%27"}
+		if heightFrom != -1 {
+			queryBuilder = append(queryBuilder, "tx.height%3E%3D"+strconv.FormatInt(heightFrom, 10))
+		}
+		if heightTo != -1 {
+			queryBuilder = append(queryBuilder, "tx.height%3C%3D"+strconv.FormatInt(heightTo, 10))
+		}
+
+		resultTxSearch, err := r.getTxsByEvents(ctx, strings.Join(queryBuilder, "%20AND%20"))
+		if err != nil {
+			return nil, err
+		}
+
+		if i == 0 {
+			for _, resultTx := range resultTxSearch {
+				resultTxMapResult[resultTx.Hash] = resultTx
+			}
+		} else {
+			resultTxMap := make(map[string]types.Tx)
+			for _, resultTx := range resultTxSearch {
+				_, found := resultTxMapResult[resultTx.Hash]
+				if found {
+					resultTxMap[resultTx.Hash] = resultTx
+				}
+			}
+			resultTxMapResult = resultTxMap
+		}
+
+		// no point to conitinue if resulting map already does not have any elements in
+		if len(resultTxMapResult) == 0 {
+			break
+		}
+	}
+
+	resultTxs := make([]types.Tx, 0, len(resultTxMapResult))
+	for _, value := range resultTxMapResult {
+		resultTxs = append(resultTxs, value)
+	}
+
+	return resultTxs, nil
 }
 
 func (r *Requester) getTxsByEvents(ctx context.Context, query string) ([]types.Tx, error) {
@@ -408,4 +463,9 @@ func convertTimeToTimestamp(timeString string) (int64, error) {
 	}
 
 	return t.Unix(), nil
+}
+
+type TxQuerierLegacyParams struct {
+	Key   string
+	Value string
 }
