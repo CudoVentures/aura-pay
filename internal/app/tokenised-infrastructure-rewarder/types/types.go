@@ -70,3 +70,8 @@ type BtcWalletTransactionDetails struct {
 	Fee       float64 `json:"fee"`
 	Abandoned bool    `json:"abandoned"`
 }
+
+type TxQuerierLegacyParams struct {
+	Key   string
+	Value string
+}

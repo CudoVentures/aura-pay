@@ -178,7 +178,11 @@ func (r *Requester) getBlockAtHeight(ctx context.Context, height int64) (types.B
 }
 
 func (r *Requester) GetChainNftMintTimestamp(ctx context.Context, denomId, tokenId string) (int64, error) {
-	marketplaceModuletxs, err := r.getTxsByEvents(ctx, "marketplace_mint_nft.token_id=%27"+tokenId+"%27%20AND%20marketplace_mint_nft.denom_id=%27"+denomId+"%27")
+	// marketplaceModuletxs, err := r.getTxsByEvents(ctx, "marketplace_mint_nft.token_id=%27"+tokenId+"%27%20AND%20marketplace_mint_nft.denom_id=%27"+denomId+"%27")
+	marketplaceModuletxs, err := r.getTxsByEventsLegacy(ctx, []*types.TxQuerierLegacyParams{
+		{Key: "marketplace_mint_nft.token_id", Value: tokenId},
+		{Key: "marketplace_mint_nft.denom_id", Value: denomId},
+	})
 	if err != nil {
 		return 0, err
 	}
@@ -205,7 +209,7 @@ func (r *Requester) GetChainNftMintTimestamp(ctx context.Context, denomId, token
 	return timestamp, nil
 }
 
-func (r *Requester) getTxsByEventsLegacy(ctx context.Context, query []*TxQuerierLegacyParams, heights ...int64) ([]types.Tx, error) {
+func (r *Requester) getTxsByEventsLegacy(ctx context.Context, query []*types.TxQuerierLegacyParams, heights ...int64) ([]types.Tx, error) {
 	resultTxMapResult := make(map[string]types.Tx)
 
 	heightFrom := int64(-1)
@@ -315,14 +319,20 @@ func (r *Requester) GetDenomNftTransferHistory(ctx context.Context, collectionDe
 	log.Debug().Msgf("Got block borders for period %d - %d: %d - %d", periodStart, periodEnd, periodStartHeight, periodEndHeight)
 	log.Debug().Msgf("Getting buy nft txs for period %d - %d", periodStart, periodEnd)
 	var allTxs []types.Tx
-	marketplaceModuletxs, err := r.getTxsByEvents(ctx, "buy_nft.denom_id=%27"+collectionDenomId+"%27%20AND%20tx.height%3E"+fmt.Sprint(periodStartHeight)+"%20AND%20tx.height%3C"+fmt.Sprint(periodEndHeight))
+	// marketplaceModuletxs, err := r.getTxsByEvents(ctx, "buy_nft.denom_id=%27"+collectionDenomId+"%27%20AND%20tx.height%3E"+fmt.Sprint(periodStartHeight)+"%20AND%20tx.height%3C"+fmt.Sprint(periodEndHeight))
+	marketplaceModuletxs, err := r.getTxsByEventsLegacy(ctx, []*types.TxQuerierLegacyParams{
+		{Key: "buy_nft.denom_id", Value: collectionDenomId},
+	}, periodStartHeight+1, periodEndHeight-1)
 	if err != nil {
 		return []types.NftTransferEvent{}, err
 	}
 	log.Debug().Msgf("Done!")
-	log.Debug().Msgf("Getting buy nft txs for period %d - %d", periodStart, periodEnd)
+	log.Debug().Msgf("Getting transfer nft txs for period %d - %d", periodStart, periodEnd)
 	allTxs = append(allTxs, marketplaceModuletxs...)
-	nftModuleTxs, err := r.getTxsByEvents(ctx, "transfer_nft.denom_id=%27"+collectionDenomId+"%27%20AND%20tx.height%3E"+fmt.Sprint(periodStartHeight)+"%20AND%20tx.height%3C"+fmt.Sprint(periodEndHeight))
+	// nftModuleTxs, err := r.getTxsByEvents(ctx, "transfer_nft.denom_id=%27"+collectionDenomId+"%27%20AND%20tx.height%3E"+fmt.Sprint(periodStartHeight)+"%20AND%20tx.height%3C"+fmt.Sprint(periodEndHeight))
+	nftModuleTxs, err := r.getTxsByEventsLegacy(ctx, []*types.TxQuerierLegacyParams{
+		{Key: "transfer_nft.denom_id", Value: collectionDenomId},
+	}, periodStartHeight+1, periodEndHeight-1)
 	if err != nil {
 		return []types.NftTransferEvent{}, err
 	}
@@ -463,9 +473,4 @@ func convertTimeToTimestamp(timeString string) (int64, error) {
 	}
 
 	return t.Unix(), nil
-}
-
-type TxQuerierLegacyParams struct {
-	Key   string
-	Value string
 }
