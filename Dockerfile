@@ -1,14 +1,14 @@
-FROM amd64/golang:1.18-buster AS builder
+FROM amd64/golang:1.19-buster AS builder
 USER root
 
 RUN apt-get update
 WORKDIR /go/src/github.com/CudoVentures/aura-pay
 COPY . ./
-RUN go mod tidy -compat=1.18
+RUN go mod tidy -compat=1.19
 RUN make build
 
 
-FROM amd64/golang:1.18-buster
+FROM amd64/golang:1.19-buster
 USER root
 
 WORKDIR /aura-pay
